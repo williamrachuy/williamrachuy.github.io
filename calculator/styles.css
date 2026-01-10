@@ -1,0 +1,136 @@
+/* CSS Variables for easy theming */
+:root {
+    --bg-body: #444444;
+    --bg-calculator: #888888;
+    --bg-display: #1a1a1a;
+    --text-display: #ffffff;
+    --text-display-secondary: #888888;
+    
+    --bg-number: #e0e0e0;
+    --bg-number-hover: #d0d0d0;
+    --bg-operator: #ff9500;
+    --bg-operator-hover: #ff8c00;
+    --bg-function: #a5a5a5;
+    --bg-function-hover: #8f8f8f;
+    --bg-equals: #ff9500;
+    --bg-equals-hover: #ff8c00;
+    
+    --text-button: #000000;
+    --text-operator: #ffffff;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--bg-body);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.calculator {
+    background-color: var(--bg-calculator);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+    width: 100%;
+    max-width: 400px;
+}
+
+.display {
+    background-color: var(--bg-display);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    text-align: right;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.previous-operand {
+    color: var(--text-display-secondary);
+    font-size: 1.2rem;
+    min-height: 1.5rem;
+}
+
+.current-operand {
+    color: var(--text-display);
+    font-size: 2.5rem;
+    font-weight: 300;
+}
+
+/* CSS Grid for button layout */
+.buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.button {
+    border: none;
+    border-radius: 8px;
+    font-size: 1.5rem;
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.1s ease;
+    font-weight: 500;
+}
+
+.button:hover {
+    transform: scale(1.05);
+}
+
+.button:active {
+    transform: scale(0.95);
+}
+
+/* Different button types */
+.button.number {
+    background-color: var(--bg-number);
+    color: var(--text-button);
+}
+
+.button.number:hover {
+    background-color: var(--bg-number-hover);
+}
+
+.button.operator {
+    background-color: var(--bg-operator);
+    color: var(--text-operator);
+}
+
+.button.operator:hover {
+    background-color: var(--bg-operator-hover);
+}
+
+.button.function {
+    background-color: var(--bg-function);
+    color: var(--text-operator);
+}
+
+.button.function:hover {
+    background-color: var(--bg-function-hover);
+}
+
+.button.equals {
+    background-color: var(--bg-equals);
+    color: var(--text-operator);
+}
+
+.button.equals:hover {
+    background-color: var(--bg-equals-hover);
+}
+
+/* Span 2 columns for wider buttons */
+.span-2 {
+    grid-column: span 2;
+}
