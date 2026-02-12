@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Elementary Cellular Automata</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: monospace;
+            color: #888;
+        }
+
+        #container {
+            text-align: center;
+        }
+
+        canvas {
+            border: 2px solid #333;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            background-color: #000;
+        }
+
+        #info {
+            margin-top: 20px;
+            font-size: 12px;
+            max-width: 640px;
+        }
+
+        #info h1 {
+            color: #fff;
+            font-size: 18px;
+            margin: 10px 0;
+        }
+
+        #info p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="canvas"></canvas>
+        <div id="info">
+            <h1>Elementary Cellular Automata Simulator</h1>
+            <p>Press <strong>Enter</strong> for Auto Mode or <strong>Space</strong> for Step Mode</p>
+            <p>Press <strong>ESC</strong> to open the menu</p>
+        </div>
+    </div>
+
+    <script>
+        'use strict';
+
+        // ============================================================================
+        // STATE MANAGEMENT
+        // ============================================================================
+
+        const state = {
+            ruleNumber: 30,
+            stepDelay: 0.1,
+            simulationMode: "none",  // "none" | "auto" | "step"
+            stepRequested: false,
+
+            menuOpen: false,
+            menuSelection: 0,
+            menuMode: "main",  // "main" | "ruleInput" | "delayInput"
+            menuInput: "",
+
+            grid: [],
+            currentRow: 0,
+
+            running: true,
+
+            width: 80,
+            height: 160,
+
+            ruleTransitions: []
+        };
+
+        // ============================================================================
+        // RULES MODULE (translated from automata/rules.py)
+        // ============================================================================
+
+        /**
+         * Convert a rule number (0-255) to a lookup table of 8 transitions.
+         *
+         * @param {number} ruleNumber - Integer 0-255 representing the CA rule
+         * @returns {number[]} Array of 8 integers (0 or 1) indexed by neighborhood value
+         */
+        function decodeRule(ruleNumber) {
+            const transitions = [];
+            for (let i = 0; i < 8; i++) {
+                transitions.push((ruleNumber >> i) & 1);
+            }
+            return transitions;
+        }
+
+        /**
+         * Convert a 3-cell neighborhood to an index 0-7.
+         *
+         * @param {number} left - Left cell value (0 or 1)
+         * @param {number} center - Center cell value (0 or 1)
+         * @param {number} right - Right cell value (0 or 1)
+         * @returns {number} Index 0-7 representing the neighborhood
+         */
+        function neighborhoodToIndex(left, center, right) {
+            return left * 4 + center * 2 + right;
+        }
+
+        /**
+         * Compute the next state of a cell given its neighborhood.
+         *
+         * @param {number[]} ruleTransitions - Lookup table from decodeRule()
+         * @param {number} left - Left neighbor value
+         * @param {number} center - Center cell value
+         * @param {number} right - Right neighbor value
+         * @returns {number} Next state of the center cell (0 or 1)
+         */
+        function getNextCell(ruleTransitions, left, center, right) {
+            const index = neighborhoodToIndex(left, center, right);
+            return ruleTransitions[index];
+        }
+
+        // ============================================================================
+        // SIMULATION MODULE (translated from automata/simulation.py)
+        // ============================================================================
+
+        /**
+         * Create an empty grid with a single cell in the center of the first row.
+         *
+         * @param {number} width - Number of columns
+         * @param {number} height - Number of rows
+         * @returns {number[][]} 2D grid with first row initialized, rest empty
+         */
+        function initializeGrid(width, height) {
+            const grid = Array(height).fill(null).map(() => Array(width).fill(0));
+            // Place a single cell at the center of the first row
+            grid[0][Math.floor(width / 2)] = 1;
+            return grid;
+        }
+
+        /**
+         * Compute the next generation row based on the current row.
+         * Uses toroidal boundary conditions where edges wrap around.
+         *
+         * @param {number[][]} grid - 2D grid to mutate
+         * @param {number} currentRow - Index of the current row (we compute currentRow + 1)
+         * @param {number[]} ruleTransitions - Lookup table from decodeRule()
+         * @param {number} width - Number of columns (for wraparound)
+         */
+        function evolveNextRow(grid, currentRow, ruleTransitions, width) {
+            const nextRowIdx = currentRow + 1;
+            if (nextRowIdx >= grid.length) {
+                return;
+            }
+
+            const current = grid[currentRow];
+            const nextRow = grid[nextRowIdx];
+
+            for (let x = 0; x < width; x++) {
+                // Use toroidal boundary conditions
+                const leftX = (x - 1 + width) % width;
+                const rightX = (x + 1) % width;
+
+                const leftVal = current[leftX];
+                const centerVal = current[x];
+                const rightVal = current[rightX];
+
+                nextRow[x] = getNextCell(ruleTransitions, leftVal, centerVal, rightVal);
+            }
+        }
+
+        /**
+         * Reinitialize the grid and apply the current rule.
+         *
+         * @param {object} state - State object to reset
+         */
+        function resetSimulation(state) {
+            state.grid = initializeGrid(state.width, state.height);
+            state.ruleTransitions = decodeRule(state.ruleNumber);
+            state.currentRow = 0;
+            state.stepRequested = false;
+        }
+
+        // ============================================================================
+        // RENDERING MODULE (translated from automata/ui/renderer.py)
+        // ============================================================================
+
+        let canvas, ctx;
+        const cellSize = 8;  // pixels per cell
+
+        /**
+         * Initialize canvas element and 2D context.
+         */
+        function initCanvas() {
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+
+            // Calculate canvas size based on grid dimensions
+            // +4 rows for UI panels (3 for rule panel, 1 for status line)
+            canvas.width = state.width * cellSize;
+            canvas.height = (state.height + 4) * cellSize;
+        }
+
+        /**
+         * Main render function - renders all components.
+         *
+         * @param {object} state - Current application state
+         */
+        function render(state) {
+            // Clear canvas
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Render components
+            renderRulePanel(state);
+            renderAutomataGrid(state);
+            renderStatusLine(state);
+
+            // Render menu overlay if open
+            if (state.menuOpen) {
+                renderMenu(state);
+            }
+        }
+
+        /**
+         * Render the rule panel at the top of the canvas.
+         * Shows current rule number and visual representation of all 8 neighborhoods.
+         *
+         * @param {object} state - Current application state
+         */
+        function renderRulePanel(state) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '14px monospace';
+
+            // Rule number
+            ctx.fillText(`Rule ${state.ruleNumber}`, 10, 20);
+
+            // Rule transitions visualization
+            const neighborhoods = [
+                [7, "111"], [6, "110"], [5, "101"], [4, "100"],
+                [3, "011"], [2, "010"], [1, "001"], [0, "000"]
+            ];
+
+            let x = 10;
+            ctx.font = '12px monospace';
+            for (const [idx, label] of neighborhoods) {
+                const result = state.ruleTransitions[idx] ? "█" : " ";
+                ctx.fillText(`${label}→${result}`, x, 40);
+                x += 70;
+            }
+        }
+
+        /**
+         * Render the cellular automata grid.
+         *
+         * @param {object} state - Current application state
+         */
+        function renderAutomataGrid(state) {
+            const gridStartY = 3 * cellSize;  // After rule panel
+
+            ctx.fillStyle = '#FFFFFF';  // White for alive cells
+
+            // Only render rows up to currentRow
+            for (let row = 0; row <= state.currentRow; row++) {
+                for (let col = 0; col < state.width; col++) {
+                    if (state.grid[row][col] === 1) {
+                        ctx.fillRect(
+                            col * cellSize,
+                            gridStartY + row * cellSize,
+                            cellSize,
+                            cellSize
+                        );
+                    }
+                }
+            }
+        }
+
+        /**
+         * Render the status line at the bottom of the canvas.
+         *
+         * @param {object} state - Current application state
+         */
+        function renderStatusLine(state) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '12px monospace';
+
+            let status = "";
+            if (state.simulationMode === "none") {
+                status = "[Enter] Auto Mode  [Space] Step Mode  [ESC] Menu";
+            } else if (state.simulationMode === "auto") {
+                status = "[ESC] Menu  Running (Auto)...";
+            } else {
+                status = "[Space] Next Step  [ESC] Menu  (Step Mode)";
+            }
+
+            const y = canvas.height - 10;
+            ctx.fillText(status, 10, y);
+        }
+
+        /**
+         * Render the menu overlay with semi-transparent background.
+         *
+         * @param {object} state - Current application state
+         */
+        function renderMenu(state) {
+            // Semi-transparent overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Menu box
+            const menuWidth = 400;
+            const menuHeight = 300;
+            const x = (canvas.width - menuWidth) / 2;
+            const y = (canvas.height - menuHeight) / 2;
+
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(x, y, menuWidth, menuHeight);
+
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, menuWidth, menuHeight);
+
+            // Render menu content based on mode
+            if (state.menuMode === "main") {
+                renderMainMenu(state, x, y, menuWidth, menuHeight);
+            } else if (state.menuMode === "ruleInput") {
+                renderRuleInput(state, x, y, menuWidth, menuHeight);
+            } else if (state.menuMode === "delayInput") {
+                renderDelayInput(state, x, y, menuWidth, menuHeight);
+            }
+        }
+
+        /**
+         * Render the main menu with all menu items.
+         *
+         * @param {object} state - Current application state
+         * @param {number} x - Menu x position
+         * @param {number} y - Menu y position
+         * @param {number} width - Menu width
+         * @param {number} height - Menu height
+         */
+        function renderMainMenu(state, x, y, width, height) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '16px monospace';
+
+            // Menu title
+            ctx.fillText("MENU", x + 20, y + 30);
+
+            // Menu items
+            const items = MENU_ITEMS;
+            const startY = y + 60;
+            const lineHeight = 30;
+
+            ctx.font = '14px monospace';
+            for (let i = 0; i < items.length; i++) {
+                const itemY = startY + i * lineHeight;
+
+                // Highlight selected item
+                if (i === state.menuSelection) {
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(x + 15, itemY - 18, width - 30, 22);
+                    ctx.fillStyle = '#000000';
+                    ctx.fillText(`> ${items[i]}`, x + 20, itemY);
+                } else {
+                    ctx.fillStyle = '#AAAAAA';
+                    ctx.fillText(`  ${items[i]}`, x + 20, itemY);
+                }
+            }
+        }
+
+        /**
+         * Render the rule input dialog.
+         *
+         * @param {object} state - Current application state
+         * @param {number} x - Menu x position
+         * @param {number} y - Menu y position
+         * @param {number} width - Menu width
+         * @param {number} height - Menu height
+         */
+        function renderRuleInput(state, x, y, width, height) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '16px monospace';
+
+            ctx.fillText("Set Rule Number (0-255)", x + 20, y + 30);
+
+            ctx.font = '14px monospace';
+            ctx.fillText("Enter rule number:", x + 20, y + 80);
+
+            // Input box
+            const inputBoxY = y + 100;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 20, inputBoxY, width - 40, 30);
+
+            // Input text
+            ctx.fillText(state.menuInput, x + 25, inputBoxY + 20);
+
+            // Cursor
+            const cursorX = x + 25 + ctx.measureText(state.menuInput).width;
+            ctx.fillRect(cursorX, inputBoxY + 5, 2, 20);
+
+            // Instructions
+            ctx.font = '12px monospace';
+            ctx.fillStyle = '#AAAAAA';
+            ctx.fillText("[Enter] Confirm  [ESC] Cancel", x + 20, y + height - 30);
+        }
+
+        /**
+         * Render the delay input dialog.
+         *
+         * @param {object} state - Current application state
+         * @param {number} x - Menu x position
+         * @param {number} y - Menu y position
+         * @param {number} width - Menu width
+         * @param {number} height - Menu height
+         */
+        function renderDelayInput(state, x, y, width, height) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '16px monospace';
+
+            ctx.fillText("Set Step Delay (seconds)", x + 20, y + 30);
+
+            ctx.font = '14px monospace';
+            ctx.fillText("Enter delay in seconds:", x + 20, y + 80);
+
+            // Input box
+            const inputBoxY = y + 100;
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 20, inputBoxY, width - 40, 30);
+
+            // Input text
+            ctx.fillText(state.menuInput, x + 25, inputBoxY + 20);
+
+            // Cursor
+            const cursorX = x + 25 + ctx.measureText(state.menuInput).width;
+            ctx.fillRect(cursorX, inputBoxY + 5, 2, 20);
+
+            // Instructions
+            ctx.font = '12px monospace';
+            ctx.fillStyle = '#AAAAAA';
+            ctx.fillText("[Enter] Confirm  [ESC] Cancel", x + 20, y + height - 30);
+        }
+
+        // ============================================================================
+        // MENU SYSTEM (translated from automata/ui/menu.py)
+        // ============================================================================
+
+        const MENU_ITEMS = [
+            "Set Rule Number",
+            "Set Step Delay",
+            "Toggle Mode",
+            "Reset Simulation",
+            "Resume",
+            "Quit"
+        ];
+
+        /**
+         * Open the menu and initialize menu state.
+         *
+         * @param {object} state - Current application state
+         */
+        function openMenu(state) {
+            state.menuOpen = true;
+            state.menuMode = "main";
+            state.menuSelection = 0;
+            state.menuInput = "";
+        }
+
+        /**
+         * Apply the selected menu action.
+         *
+         * @param {object} state - Current application state
+         */
+        function applyMenuSelection(state) {
+            const selection = MENU_ITEMS[state.menuSelection];
+
+            switch (selection) {
+                case "Set Rule Number":
+                    state.menuMode = "ruleInput";
+                    state.menuInput = String(state.ruleNumber);
+                    break;
+                case "Set Step Delay":
+                    state.menuMode = "delayInput";
+                    state.menuInput = String(state.stepDelay);
+                    break;
+                case "Toggle Mode":
+                    if (state.simulationMode === "auto") {
+                        state.simulationMode = "step";
+                    } else if (state.simulationMode === "step") {
+                        state.simulationMode = "auto";
+                    }
+                    break;
+                case "Reset Simulation":
+                    resetSimulation(state);
+                    state.menuOpen = false;
+                    break;
+                case "Resume":
+                    state.menuOpen = false;
+                    break;
+                case "Quit":
+                    state.running = false;
+                    state.menuOpen = false;
+                    break;
+            }
+        }
+
+        /**
+         * Confirm and apply text input from rule or delay input mode.
+         *
+         * @param {object} state - Current application state
+         */
+        function confirmTextInput(state) {
+            if (state.menuMode === "ruleInput") {
+                const rule = parseInt(state.menuInput, 10);
+                if (!isNaN(rule) && rule >= 0 && rule <= 255) {
+                    state.ruleNumber = rule;
+                    resetSimulation(state);
+                    state.menuMode = "main";
+                    state.menuInput = "";
+                }
+            } else if (state.menuMode === "delayInput") {
+                const delay = parseFloat(state.menuInput);
+                if (!isNaN(delay) && delay > 0) {
+                    state.stepDelay = delay;
+                    state.menuMode = "main";
+                    state.menuInput = "";
+                }
+            }
+        }
+
+        // ============================================================================
+        // INPUT HANDLING (translated from automata/ui/input.py)
+        // ============================================================================
+
+        /**
+         * Initialize keyboard input event listeners.
+         */
+        function initInput() {
+            document.addEventListener('keydown', (event) => {
+                handleKeydown(state, event);
+            });
+        }
+
+        /**
+         * Main keyboard event handler.
+         *
+         * @param {object} state - Current application state
+         * @param {KeyboardEvent} event - Keyboard event
+         */
+        function handleKeydown(state, event) {
+            if (state.menuOpen) {
+                handleMenuInput(state, event);
+            } else {
+                handleSimulationInput(state, event);
+            }
+        }
+
+        /**
+         * Handle keyboard input during simulation (not in menu).
+         *
+         * @param {object} state - Current application state
+         * @param {KeyboardEvent} event - Keyboard event
+         */
+        function handleSimulationInput(state, event) {
+            if (event.key === 'Escape') {
+                openMenu(state);
+            } else if (state.simulationMode === "none") {
+                if (event.key === 'Enter') {
+                    state.simulationMode = "auto";
+                } else if (event.key === ' ') {
+                    state.simulationMode = "step";
+                    event.preventDefault();  // Prevent page scroll
+                }
+            } else if (state.simulationMode === "step") {
+                if (event.key === ' ') {
+                    state.stepRequested = true;
+                    event.preventDefault();
+                }
+            }
+        }
+
+        /**
+         * Handle keyboard input in menu.
+         *
+         * @param {object} state - Current application state
+         * @param {KeyboardEvent} event - Keyboard event
+         */
+        function handleMenuInput(state, event) {
+            if (state.menuMode === "main") {
+                if (event.key === 'ArrowUp') {
+                    state.menuSelection = (state.menuSelection - 1 + MENU_ITEMS.length) % MENU_ITEMS.length;
+                } else if (event.key === 'ArrowDown') {
+                    state.menuSelection = (state.menuSelection + 1) % MENU_ITEMS.length;
+                } else if (event.key === 'Enter') {
+                    applyMenuSelection(state);
+                } else if (event.key === 'Escape') {
+                    state.menuOpen = false;
+                }
+            } else if (state.menuMode === "ruleInput" || state.menuMode === "delayInput") {
+                handleTextInput(state, event);
+            }
+        }
+
+        /**
+         * Handle text input for rule number or delay.
+         *
+         * @param {object} state - Current application state
+         * @param {KeyboardEvent} event - Keyboard event
+         */
+        function handleTextInput(state, event) {
+            if (event.key === 'Escape') {
+                state.menuMode = "main";
+                state.menuInput = "";
+            } else if (event.key === 'Enter') {
+                confirmTextInput(state);
+            } else if (event.key === 'Backspace') {
+                state.menuInput = state.menuInput.slice(0, -1);
+            } else if (/^[0-9]$/.test(event.key)) {
+                state.menuInput += event.key;
+            } else if (event.key === '.' && state.menuMode === "delayInput") {
+                if (!state.menuInput.includes('.')) {
+                    state.menuInput += '.';
+                }
+            }
+            event.preventDefault();
+        }
+
+        // ============================================================================
+        // MAIN LOOP (translated from automata/main.py)
+        // ============================================================================
+
+        let lastStepTime = 0;
+
+        /**
+         * Main animation loop using requestAnimationFrame.
+         *
+         * @param {number} timestamp - Current timestamp in milliseconds
+         */
+        function mainLoop(timestamp) {
+            // Auto mode evolution
+            if (state.simulationMode === "auto") {
+                if (timestamp - lastStepTime >= state.stepDelay * 1000) {
+                    if (state.currentRow < state.height - 1) {
+                        evolveNextRow(state.grid, state.currentRow, state.ruleTransitions, state.width);
+                        state.currentRow++;
+                    }
+                    lastStepTime = timestamp;
+                }
+            }
+
+            // Step mode evolution
+            if (state.simulationMode === "step" && state.stepRequested) {
+                if (state.currentRow < state.height - 1) {
+                    evolveNextRow(state.grid, state.currentRow, state.ruleTransitions, state.width);
+                    state.currentRow++;
+                }
+                state.stepRequested = false;
+            }
+
+            // Rendering
+            render(state);
+
+            // Continue loop
+            if (state.running) {
+                requestAnimationFrame(mainLoop);
+            }
+        }
+
+        /**
+         * Initialize application and start main loop.
+         */
+        function start() {
+            initCanvas();
+            initInput();
+            resetSimulation(state);
+            requestAnimationFrame(mainLoop);
+        }
+
+        // Start when page loads
+        window.addEventListener('load', start);
+    </script>
+</body>
+</html>

@@ -1,7 +1,3 @@
-# Claude Code files (local development aids only)
+# Claude Code files and directories
 CLAUDE.md
 .claude/
-
-# Local development scripts
-start-server.sh
-server.log
