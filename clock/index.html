@@ -24,16 +24,20 @@
             font-family: Cantarell, sans-serif;
             font-size: 6rem;
         }
+
+        #clock .sep {
+            display: inline-block;
+            transform: translateY(-0.1em);
+        }
     </style>
 </head>
 <body>
-    <div id="clock"></div>
+    <div id="clock"><span id="h"></span><span class="sep">:</span><span id="m"></span></div>
     <script>
         function tick() {
             const now = new Date();
-            let h = now.getHours() % 12 || 12;
-            const m = String(now.getMinutes()).padStart(2, '0');
-            document.getElementById('clock').textContent = `${h}:${m}`;
+            document.getElementById('h').textContent = now.getHours() % 12 || 12;
+            document.getElementById('m').textContent = String(now.getMinutes()).padStart(2, '0');
         }
         tick();
         setInterval(tick, 1000);
