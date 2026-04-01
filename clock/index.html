@@ -12,7 +12,7 @@
         }
 
         body {
-            background: #000;
+            background: #1d1d20;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -21,9 +21,8 @@
 
         #clock {
             color: #fff;
-            font-family: monospace;
+            font-family: Cantarell, sans-serif;
             font-size: 6rem;
-            letter-spacing: 0.05em;
         }
     </style>
 </head>
@@ -34,8 +33,7 @@
             const now = new Date();
             let h = now.getHours() % 12 || 12;
             const m = String(now.getMinutes()).padStart(2, '0');
-            const s = String(now.getSeconds()).padStart(2, '0');
-            document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+            document.getElementById('clock').textContent = `${h}:${m}`;
         }
         tick();
         setInterval(tick, 1000);
