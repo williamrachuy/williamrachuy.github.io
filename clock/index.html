@@ -28,11 +28,6 @@
             align-items: baseline;
         }
 
-        #h {
-            width: 2ch;
-            text-align: right;
-        }
-
         .sep {
             display: inline-block;
             transform: translateY(-0.1em);
@@ -40,11 +35,15 @@
     </style>
 </head>
 <body>
-    <div id="clock"><span id="h"></span><span class="sep">:</span><span id="m"></span></div>
+    <div id="clock"><span id="h0"></span><span id="h1"></span><span class="sep">:</span><span id="m"></span></div>
     <script>
         function tick() {
             const now = new Date();
-            document.getElementById('h').textContent = now.getHours() % 12 || 12;
+            const h = String(now.getHours() % 12 || 12).padStart(2, '0');
+            const h0 = document.getElementById('h0');
+            h0.textContent = h[0];
+            h0.style.opacity = h[0] === '0' ? '0.5' : '1';
+            document.getElementById('h1').textContent = h[1];
             document.getElementById('m').textContent = String(now.getMinutes()).padStart(2, '0');
         }
         tick();
