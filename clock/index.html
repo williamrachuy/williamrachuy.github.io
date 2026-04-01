@@ -42,7 +42,7 @@
             const h = String(now.getHours() % 12 || 12).padStart(2, '0');
             const h0 = document.getElementById('h0');
             h0.textContent = h[0];
-            h0.style.opacity = h[0] === '0' ? '0.5' : '1';
+            h0.style.opacity = h[0] === '0' ? '0.25' : '1';
             document.getElementById('h1').textContent = h[1];
             document.getElementById('m').textContent = String(now.getMinutes()).padStart(2, '0');
         }
