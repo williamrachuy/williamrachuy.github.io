@@ -3,627 +3,331 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="description" content="Adividiardi — a measured, reactive wordmark built with canvas text metrics and lightweight glyph motion.">
   <title>Adividiardi</title>
   <style>
     * { box-sizing: border-box; }
     :root {
       color-scheme: dark;
-      --bg: #040507;
-      --bg-2: #0a0d12;
-      --ink: #f3efe6;
-      --muted: rgba(243, 239, 230, 0.42);
-      --soft: rgba(243, 239, 230, 0.14);
-      --accent: #efe7d4;
-      --gold: #d2b170;
-      --gold-soft: rgba(210, 177, 112, 0.18);
-      --ring: rgba(210, 177, 112, 0.24);
-      --pill-bg: rgba(255, 255, 255, 0.05);
-      --pill-border: rgba(255, 255, 255, 0.09);
-      --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+      --bg: #060708;
+      --bg2: #0d1014;
+      --ink: #ebe4d7;
+      --ghost: rgba(235, 228, 215, 0.16);
+      --line: rgba(235, 228, 215, 0.08);
     }
-
     html, body {
-      min-height: 100%;
       margin: 0;
+      min-height: 100%;
+      overflow: hidden;
       background:
-        radial-gradient(circle at 50% 30%, rgba(210, 177, 112, 0.08), transparent 32%),
-        radial-gradient(circle at 50% 80%, rgba(110, 128, 170, 0.08), transparent 30%),
-        linear-gradient(180deg, var(--bg-2) 0%, var(--bg) 72%);
+        radial-gradient(circle at 50% 35%, rgba(255,255,255,0.03), transparent 28%),
+        linear-gradient(180deg, var(--bg2), var(--bg));
       color: var(--ink);
-      overflow: hidden;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
-
-    body {
-      display: flex;
-      justify-content: center;
-      align-items: stretch;
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-    }
-
-    .page {
-      width: min(100vw, 860px);
-      min-height: 100dvh;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      padding:
-        max(18px, env(safe-area-inset-top))
-        18px
-        max(18px, env(safe-area-inset-bottom))
-        18px;
-      position: relative;
-      isolation: isolate;
-    }
-
-    .topbar,
-    .footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      position: relative;
-      z-index: 5;
-    }
-
-    .eyebrow,
-    .hint {
-      font: 500 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .nav {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: flex-end;
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 34px;
-      padding: 0 13px;
-      border-radius: 999px;
-      border: 1px solid var(--pill-border);
-      background: var(--pill-bg);
-      backdrop-filter: blur(12px);
-      color: rgba(255,255,255,0.86);
-      text-decoration: none;
-      font: 500 12px/1 Helvetica, Arial, sans-serif;
-      letter-spacing: 0.03em;
-      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
-    }
-
-    .pill:active,
-    .pill:hover {
-      transform: translateY(-1px);
-      border-color: rgba(210, 177, 112, 0.34);
-      background: rgba(255,255,255,0.08);
-    }
-
-    .hero {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      gap: 18px;
-      position: relative;
-    }
-
-    .stage-wrap {
-      width: min(100%, 760px);
-      position: relative;
-    }
-
-    .stage {
-      position: relative;
-      width: 100%;
-      height: min(74dvh, 560px);
-      min-height: 380px;
-      border-radius: 28px;
-      overflow: hidden;
-      background: linear-gradient(180deg, rgba(255,255,255,0.015), rgba(255,255,255,0.01));
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), var(--shadow);
+      font-family: Cambria, Georgia, "Times New Roman", serif;
       touch-action: none;
+    }
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+    }
+    #stage {
+      position: relative;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
       user-select: none;
       -webkit-user-select: none;
+      cursor: default;
     }
-
-    .stage::before,
-    .stage::after {
-      content: "";
-      position: absolute;
-      inset: auto;
-      pointer-events: none;
-    }
-
-    .stage::before {
-      width: 70%;
-      height: 1px;
-      left: 15%;
-      top: 50%;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-      transform: translateY(-50%);
-    }
-
-    .stage::after {
-      inset: 18px;
-      border-radius: 20px;
-      border: 1px solid rgba(255,255,255,0.035);
-    }
-
-    .wordmark-layer,
-    .ring-layer,
-    .node-layer,
-    .burst-layer {
+    #field {
       position: absolute;
       inset: 0;
       pointer-events: none;
     }
-
-    .letter {
+    #field::before,
+    #field::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+    #field::before {
+      width: min(80vw, 720px);
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--line), transparent);
+    }
+    #field::after {
+      width: min(64vw, 560px);
+      height: min(18vw, 120px);
+      border-top: 1px solid rgba(255,255,255,0.025);
+      border-bottom: 1px solid rgba(255,255,255,0.025);
+      opacity: 0.45;
+    }
+    .letter,
+    .echo {
       position: absolute;
       top: 50%;
       left: 50%;
+      white-space: pre;
       transform: translate(-50%, -50%);
       transform-origin: center center;
-      font-family: Cambria, Georgia, "Times New Roman", serif;
-      font-weight: 700;
-      white-space: pre;
-      color: var(--accent);
-      text-shadow:
-        0 0 18px rgba(255,255,255,0.06),
-        0 0 34px rgba(210, 177, 112, 0.10);
-      will-change: transform, opacity, text-shadow;
-    }
-
-    .letter::selection { background: transparent; }
-
-    .ring {
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      border: 1px solid var(--ring);
-      box-shadow: 0 0 30px rgba(210, 177, 112, 0.08), inset 0 0 18px rgba(210, 177, 112, 0.05);
-      transform: translate(-50%, -50%);
-      opacity: 0.85;
       will-change: transform, opacity;
-    }
-
-    .node {
-      position: absolute;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transform: translate(-50%, -50%);
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.08);
-      background: rgba(255,255,255,0.04);
-      color: rgba(255,255,255,0.78);
-      will-change: transform, opacity;
-      box-shadow: 0 12px 24px rgba(0,0,0,0.22);
-      backdrop-filter: blur(8px);
-    }
-
-    .node.shape {
-      color: rgba(210, 177, 112, 0.92);
-      background: rgba(210, 177, 112, 0.08);
-      border-color: rgba(210, 177, 112, 0.18);
-    }
-
-    .node.glyph {
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-weight: 600;
-    }
-
-    .burst {
-      position: absolute;
-      transform: translate(-50%, -50%);
-      font-family: Cambria, Georgia, serif;
-      color: rgba(243, 239, 230, 0.88);
-      text-shadow: 0 0 16px rgba(210, 177, 112, 0.22);
-      animation: burstFade 900ms ease-out forwards;
       pointer-events: none;
-      white-space: pre;
     }
-
-    @keyframes burstFade {
-      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
-      14% { opacity: 0.95; }
-      100% { opacity: 0; transform: translate(-50%, calc(-50% - 18px)) scale(1.25); }
+    .letter {
+      color: var(--ink);
+      font-weight: 700;
+      text-shadow: 0 1px 0 rgba(255,255,255,0.03);
     }
-
-    .caption {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      text-align: center;
-      position: relative;
-      z-index: 5;
+    .echo {
+      color: var(--ghost);
+      font-weight: 600;
+      animation: echoFade 900ms cubic-bezier(.19,.72,.24,1) forwards;
     }
-
-    .title-copy {
-      font: 500 14px/1.45 Helvetica, Arial, sans-serif;
-      color: rgba(255,255,255,0.78);
-      max-width: 28ch;
-    }
-
-    .sub-copy {
-      font: 400 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-      letter-spacing: 0.04em;
-      color: var(--muted);
-      max-width: 34ch;
-    }
-
-    @media (min-width: 700px) {
-      .page {
-        padding-left: 28px;
-        padding-right: 28px;
-      }
-      .title-copy {
-        font-size: 15px;
-        max-width: 42ch;
-      }
-      .sub-copy {
-        font-size: 12px;
-      }
+    @keyframes echoFade {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.94); }
+      12% { opacity: 0.7; }
+      100% { opacity: 0; transform: translate(-50%, calc(-50% - 10px)) scale(1.02); }
     }
   </style>
 </head>
 <body>
-  <main class="page">
-    <header class="topbar">
-      <div class="eyebrow">Adividiardi</div>
-      <nav class="nav" aria-label="Site links">
-        <a class="pill" href="/pretext-demo/">Demos</a>
-        <a class="pill" href="/snake/">Snake</a>
-      </nav>
-    </header>
-
-    <section class="hero">
-      <div class="stage-wrap">
-        <div class="stage" id="stage" aria-label="Interactive Adividiardi wordmark">
-          <div class="ring-layer" id="rings"></div>
-          <div class="node-layer" id="nodes"></div>
-          <div class="wordmark-layer" id="wordmark"></div>
-          <div class="burst-layer" id="bursts"></div>
-        </div>
-      </div>
-
-      <div class="caption">
-        <div class="title-copy">Measured letters in the center. Glyphs and rings drift around them and react when you touch the field.</div>
-        <div class="sub-copy">Mobile-first. Lightweight. No layout thrash. Just a little arithmetic and some manners.</div>
-      </div>
-    </section>
-
-    <footer class="footer">
-      <div class="hint">Tap / drag the wordmark</div>
-      <div class="hint">canvas-measured layout</div>
-    </footer>
+  <main id="stage" aria-label="Interactive Adividiardi wordmark">
+    <div id="field"></div>
   </main>
 
   <script>
     (() => {
       const TEXT = 'ADIVIDIARDI';
-      const wordmarkEl = document.getElementById('wordmark');
-      const ringsEl = document.getElementById('rings');
-      const nodesEl = document.getElementById('nodes');
-      const burstsEl = document.getElementById('bursts');
-      const stageEl = document.getElementById('stage');
-
+      const stage = document.getElementById('stage');
       const measureCanvas = document.createElement('canvas');
       const measureCtx = measureCanvas.getContext('2d');
       if (!measureCtx) return;
 
       const letters = [];
-      const rings = [];
-      const nodes = [];
-      const pulses = [];
       const anchors = [];
-      const glyphPool = ['·', '+', ':', '◦', 'A', 'I', 'D', 'R'];
-      const shapePool = ['○', '◌', '◍', '◎'];
-      const ringIndices = [0, 3, 7, 10];
-      const pointer = { x: 0, y: 0, active: false, strength: 0, t: 0 };
+      const pointer = {
+        active: false,
+        x: 0,
+        y: 0,
+        vx: 0,
+        vy: 0,
+        lastX: 0,
+        lastY: 0,
+        time: 0,
+        strength: 0
+      };
 
       function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
       function lerp(a, b, t) { return a + (b - a) * t; }
+      function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 
       function fontPx() {
-        return clamp(Math.round(stageEl.clientWidth * 0.082), 34, 66);
+        return clamp(stage.clientWidth * 0.108, 38, 92);
+      }
+      function baseTracking() {
+        return clamp(stage.clientWidth * 0.0115, 5, 12);
       }
 
-      function tracking() {
-        return clamp(stageEl.clientWidth * 0.014, 6, 14);
-      }
-
-      function buildWordmark() {
-        wordmarkEl.innerHTML = '';
-        letters.length = 0;
-        for (let i = 0; i < TEXT.length; i++) {
-          const span = document.createElement('span');
-          span.className = 'letter';
-          span.textContent = TEXT[i];
-          wordmarkEl.appendChild(span);
+      function createLetters() {
+        for (const ch of TEXT) {
+          const el = document.createElement('span');
+          el.className = 'letter';
+          el.textContent = ch;
+          stage.appendChild(el);
           letters.push({
-            el: span,
-            char: TEXT[i],
+            ch,
+            el,
+            baseX: 0,
+            baseY: 0,
             x: 0,
             y: 0,
-            kick: 0,
+            vx: 0,
+            vy: 0,
             width: 0,
+            lift: 0,
+            phase: Math.random() * Math.PI * 2,
+            kick: 0,
           });
         }
       }
 
-      function buildRings() {
-        ringsEl.innerHTML = '';
-        rings.length = 0;
-        ringIndices.forEach((index, order) => {
-          const ring = document.createElement('div');
-          ring.className = 'ring';
-          ringsEl.appendChild(ring);
-          rings.push({ el: ring, anchorIndex: index, order });
-        });
-      }
-
-      function makeNode(index) {
-        const el = document.createElement('div');
-        const shape = index % 4 === 0;
-        el.className = `node ${shape ? 'shape' : 'glyph'}`;
-        el.textContent = shape ? shapePool[index % shapePool.length] : glyphPool[index % glyphPool.length];
-        nodesEl.appendChild(el);
-        return {
-          el,
-          shape,
-          glyph: el.textContent,
-          anchorIndex: index % TEXT.length,
-          angle: Math.random() * Math.PI * 2,
-          orbit: 22 + Math.random() * 84,
-          speed: (Math.random() * 0.7 + 0.35) * (Math.random() > 0.5 ? 1 : -1),
-          phase: Math.random() * Math.PI * 2,
-          x: stageEl.clientWidth * 0.5,
-          y: stageEl.clientHeight * 0.5,
-          vx: 0,
-          vy: 0,
-          size: shape ? 28 + Math.random() * 16 : 22 + Math.random() * 10,
-        };
-      }
-
-      function buildNodes() {
-        nodesEl.innerHTML = '';
-        nodes.length = 0;
-        const nodeCount = stageEl.clientWidth < 520 ? 13 : 17;
-        for (let i = 0; i < nodeCount; i++) nodes.push(makeNode(i));
-      }
-
-      function measureLayout() {
+      function layout() {
         const size = fontPx();
-        const gap = tracking();
+        const tracking = baseTracking();
         measureCtx.font = `700 ${size}px Cambria, Georgia, serif`;
 
-        let totalWidth = 0;
+        let total = 0;
         const widths = letters.map(letter => {
-          const width = measureCtx.measureText(letter.char).width;
-          totalWidth += width;
+          const width = measureCtx.measureText(letter.ch).width;
+          total += width;
           return width;
         });
-        totalWidth += gap * (letters.length - 1);
+        total += tracking * (letters.length - 1);
 
-        const centerX = stageEl.clientWidth / 2;
-        const centerY = stageEl.clientHeight / 2;
-        let cursor = centerX - totalWidth / 2;
+        const centerX = stage.clientWidth / 2;
+        const centerY = stage.clientHeight / 2;
+        let cursor = centerX - total / 2;
         anchors.length = 0;
 
-        letters.forEach((letter, index) => {
-          const width = widths[index];
+        letters.forEach((letter, i) => {
+          const width = widths[i];
           const x = cursor + width / 2;
           const y = centerY;
+          letter.baseX = letter.x = x;
+          letter.baseY = letter.y = y;
           letter.width = width;
-          letter.x = x;
-          letter.y = y;
-          letter.el.style.left = `${x}px`;
-          letter.el.style.top = `${y}px`;
+          letter.vx = 0;
+          letter.vy = 0;
           letter.el.style.fontSize = `${size}px`;
-          anchors.push({ x, y, width, char: letter.char });
-          cursor += width + gap;
+          anchors.push({ x, y, width, ch: letter.ch });
+          cursor += width + tracking;
         });
       }
 
-      function nearestAnchor(x, y) {
+      function spawnEcho(index, dx = 0, dy = 0) {
+        const anchor = anchors[index];
+        if (!anchor) return;
+        const echo = document.createElement('span');
+        echo.className = 'echo';
+        echo.textContent = anchor.ch;
+        echo.style.fontSize = `${fontPx() * 0.98}px`;
+        echo.style.left = `${anchor.x + dx}px`;
+        echo.style.top = `${anchor.y + dy}px`;
+        stage.appendChild(echo);
+        echo.addEventListener('animationend', () => echo.remove(), { once: true });
+      }
+
+      function nearestIndex(x) {
         let best = 0;
         let bestDist = Infinity;
         for (let i = 0; i < anchors.length; i++) {
-          const dx = anchors[i].x - x;
-          const dy = anchors[i].y - y;
-          const dist = dx * dx + dy * dy;
-          if (dist < bestDist) {
-            best = i;
-            bestDist = dist;
-          }
+          const d = Math.abs(anchors[i].x - x);
+          if (d < bestDist) { best = i; bestDist = d; }
         }
         return best;
       }
 
-      function burstAt(anchorIndex, power = 1) {
-        const anchor = anchors[anchorIndex];
-        if (!anchor) return;
-        for (let i = 0; i < 4; i++) {
-          const burst = document.createElement('div');
-          burst.className = 'burst';
-          burst.textContent = i % 2 === 0 ? anchor.char : glyphPool[(anchorIndex + i) % glyphPool.length];
-          burst.style.left = `${anchor.x + (Math.random() - 0.5) * 26}px`;
-          burst.style.top = `${anchor.y + (Math.random() - 0.5) * 26}px`;
-          burst.style.fontSize = `${14 + Math.random() * 14 * power}px`;
-          burstsEl.appendChild(burst);
-          burst.addEventListener('animationend', () => burst.remove(), { once: true });
+      function excite(x, y, velocity = 1) {
+        const index = nearestIndex(x);
+        const spread = clamp(velocity * 0.8, 0.5, 1.8);
+        for (let i = 0; i < letters.length; i++) {
+          const falloff = Math.max(0, 1 - Math.abs(i - index) / 4.5);
+          if (falloff <= 0) continue;
+          const direction = i < index ? -1 : 1;
+          letters[i].vx += direction * 1.3 * falloff * spread;
+          letters[i].vy += (i === index ? -2.4 : -1.1) * falloff * spread;
+          letters[i].kick = Math.max(letters[i].kick, 0.18 * falloff * spread);
         }
+        spawnEcho(index, 0, -4);
+        if (index > 0) spawnEcho(index - 1, -4, 2);
+        if (index < anchors.length - 1) spawnEcho(index + 1, 4, 2);
       }
 
-      function exciteAt(x, y, power = 1) {
+      function pointFromEvent(event) {
+        const rect = stage.getBoundingClientRect();
+        const p = event.touches ? event.touches[0] : event;
+        return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+      }
+
+      function setPointer(x, y) {
+        const now = performance.now();
+        if (pointer.time) {
+          pointer.vx = x - pointer.lastX;
+          pointer.vy = y - pointer.lastY;
+        }
+        pointer.active = true;
         pointer.x = x;
         pointer.y = y;
-        pointer.active = true;
-        pointer.strength = Math.max(pointer.strength, 1.1 * power);
-        pointer.t = performance.now();
-        const index = nearestAnchor(x, y);
-        letters[index].kick = Math.max(letters[index].kick, 0.55 * power);
-        burstAt(index, power);
-        for (const node of nodes) {
-          const dx = node.x - x;
-          const dy = node.y - y;
-          const d = Math.hypot(dx, dy) || 1;
-          if (d < 140) {
-            node.vx += dx / d * (2.2 * power);
-            node.vy += dy / d * (2.2 * power);
-          }
-        }
+        pointer.lastX = x;
+        pointer.lastY = y;
+        pointer.time = now;
+        pointer.strength = 1;
       }
 
-      function updatePointerFade(now) {
-        if (!pointer.active) return;
-        const age = now - pointer.t;
-        pointer.strength *= 0.97;
-        if (age > 900 || pointer.strength < 0.03) {
-          pointer.active = false;
-          pointer.strength = 0;
-        }
+      function clearPointerSoon() {
+        pointer.strength *= 0.92;
+        if (pointer.strength < 0.02) pointer.active = false;
       }
 
-      function render(now) {
-        updatePointerFade(now);
+      function tick(now) {
         const t = now * 0.001;
+        const sizePulse = 1 + Math.sin(t * 1.15) * 0.016;
 
         for (let i = 0; i < letters.length; i++) {
           const letter = letters[i];
-          const pulse = Math.sin(t * 1.7 + i * 0.45) * 0.5 + 0.5;
-          const scale = 1 + pulse * 0.12 + letter.kick;
-          const lift = Math.sin(t * 1.2 + i * 0.6) * 2.5 - letter.kick * 10;
-          letter.el.style.transform = `translate(-50%, -50%) translateY(${lift}px) scale(${scale})`;
-          letter.el.style.opacity = String(0.8 + pulse * 0.2);
-          letter.el.style.textShadow = `0 0 ${18 + pulse * 16}px rgba(255,255,255,0.06), 0 0 ${30 + pulse * 28}px rgba(210,177,112,${0.08 + pulse * 0.1})`;
-          letter.kick *= 0.9;
-        }
+          const anchor = anchors[i];
+          let tx = anchor.x;
+          let ty = anchor.y;
 
-        for (let i = 0; i < rings.length; i++) {
-          const ring = rings[i];
-          const anchor = anchors[ring.anchorIndex];
-          if (!anchor) continue;
-          const pulse = Math.sin(t * 1.25 + ring.order * 0.8) * 0.5 + 0.5;
-          const size = 34 + pulse * 46 + ring.order * 6;
-          ring.el.style.left = `${anchor.x}px`;
-          ring.el.style.top = `${anchor.y}px`;
-          ring.el.style.width = `${size}px`;
-          ring.el.style.height = `${size}px`;
-          ring.el.style.opacity = String(0.2 + pulse * 0.45);
-          ring.el.style.transform = `translate(-50%, -50%) scale(${1 + pulse * 0.08})`;
-        }
-
-        for (let i = 0; i < nodes.length; i++) {
-          const node = nodes[i];
-          const anchor = anchors[node.anchorIndex % anchors.length];
-          if (!anchor) continue;
-          const orbitAngle = t * node.speed + node.phase;
-          const radial = node.orbit + Math.sin(t * 1.6 + i) * 8;
-          const targetX = anchor.x + Math.cos(orbitAngle) * radial;
-          const targetY = anchor.y + Math.sin(orbitAngle * 1.2) * radial * 0.48;
-
-          let ax = (targetX - node.x) * 0.028;
-          let ay = (targetY - node.y) * 0.028;
+          const ambientY = Math.sin(t * 1.2 + i * 0.42 + letter.phase) * 2.2;
+          const ambientX = Math.sin(t * 0.9 + i * 0.31) * 0.8;
+          tx += ambientX;
+          ty += ambientY;
 
           if (pointer.active) {
-            const dx = node.x - pointer.x;
-            const dy = node.y - pointer.y;
-            const dist = Math.hypot(dx, dy) || 1;
-            const influence = Math.max(0, 1 - dist / 170) * pointer.strength;
-            ax += dx / dist * influence * 0.9;
-            ay += dy / dist * influence * 0.9;
+            const dx = letter.x - pointer.x;
+            const dy = letter.y - pointer.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const influence = Math.max(0, 1 - d / (stage.clientWidth < 700 ? 150 : 190)) * pointer.strength;
+            const sweep = clamp(pointer.vx * 0.18, -10, 10) * influence;
+            tx += sweep;
+            ty += (-18 * influence) + clamp(dy * 0.045, -8, 8) * influence;
+            letter.vx += (dx / d) * 0.22 * influence;
+            letter.vy += (dy / d) * 0.14 * influence;
           }
 
-          node.vx = (node.vx + ax) * 0.9;
-          node.vy = (node.vy + ay) * 0.9;
-          node.x += node.vx;
-          node.y += node.vy;
+          letter.vx += (tx - letter.x) * 0.04;
+          letter.vy += (ty - letter.y) * 0.07;
+          letter.vx *= 0.86;
+          letter.vy *= 0.8;
+          letter.x += letter.vx;
+          letter.y += letter.vy;
+          letter.kick *= 0.9;
 
-          const wobble = Math.sin(t * 2.2 + i) * 0.08;
-          const scale = 1 + wobble + (pointer.active ? Math.min(0.14, pointer.strength * 0.05) : 0);
-          node.el.style.left = `${node.x}px`;
-          node.el.style.top = `${node.y}px`;
-          node.el.style.width = `${node.size}px`;
-          node.el.style.height = `${node.size}px`;
-          node.el.style.fontSize = `${node.shape ? node.size * 0.46 : node.size * 0.42}px`;
-          node.el.style.opacity = node.shape ? '0.95' : '0.82';
-          node.el.style.transform = `translate(-50%, -50%) scale(${scale})`;
+          const skew = clamp(letter.vx * 1.6, -10, 10);
+          const scaleX = sizePulse + letter.kick * 0.12 + Math.abs(letter.vx) * 0.003;
+          const scaleY = sizePulse - letter.kick * 0.05;
+          letter.el.style.left = `${letter.x}px`;
+          letter.el.style.top = `${letter.y}px`;
+          letter.el.style.opacity = `${0.92 + Math.min(0.08, letter.kick)}`;
+          letter.el.style.transform = `translate(-50%, -50%) skewX(${skew}deg) scale(${scaleX}, ${scaleY})`;
         }
 
-        requestAnimationFrame(render);
+        clearPointerSoon();
+        requestAnimationFrame(tick);
       }
 
-      function relPoint(event) {
-        const rect = stageEl.getBoundingClientRect();
-        const point = event.touches ? event.touches[0] : event;
-        return {
-          x: point.clientX - rect.left,
-          y: point.clientY - rect.top,
-        };
-      }
-
-      function resize() {
-        measureLayout();
-        buildNodes();
-      }
-
-      stageEl.addEventListener('pointerdown', (event) => {
-        const p = relPoint(event);
-        exciteAt(p.x, p.y, 1.15);
+      stage.addEventListener('pointerdown', (event) => {
+        const p = pointFromEvent(event);
+        setPointer(p.x, p.y);
+        excite(p.x, p.y, 1.2);
       });
 
-      stageEl.addEventListener('pointermove', (event) => {
+      stage.addEventListener('pointermove', (event) => {
         if (event.pointerType === 'mouse' && event.buttons === 0) return;
-        const p = relPoint(event);
-        pointer.x = p.x;
-        pointer.y = p.y;
-        pointer.active = true;
-        pointer.strength = Math.max(pointer.strength, 0.42);
-        pointer.t = performance.now();
+        const p = pointFromEvent(event);
+        setPointer(p.x, p.y);
+        if (Math.abs(pointer.vx) + Math.abs(pointer.vy) > 6) {
+          excite(p.x, p.y, clamp((Math.abs(pointer.vx) + Math.abs(pointer.vy)) / 14, 0.6, 1.3));
+        }
       });
 
-      stageEl.addEventListener('touchstart', (event) => {
-        const p = relPoint(event);
-        exciteAt(p.x, p.y, 1.05);
+      stage.addEventListener('pointerup', () => { pointer.active = false; });
+      stage.addEventListener('pointercancel', () => { pointer.active = false; });
+      stage.addEventListener('touchstart', (event) => {
+        const p = pointFromEvent(event);
+        setPointer(p.x, p.y);
+        excite(p.x, p.y, 1.1);
       }, { passive: true });
 
-      stageEl.addEventListener('touchmove', (event) => {
-        const p = relPoint(event);
-        pointer.x = p.x;
-        pointer.y = p.y;
-        pointer.active = true;
-        pointer.strength = Math.max(pointer.strength, 0.48);
-        pointer.t = performance.now();
-      }, { passive: true });
+      window.addEventListener('resize', layout);
 
-      window.addEventListener('resize', () => {
-        measureLayout();
-      });
-
-      buildWordmark();
-      buildRings();
-      measureLayout();
-      buildNodes();
-      requestAnimationFrame(render);
-
-      setTimeout(() => {
-        const center = anchors[Math.floor(anchors.length / 2)];
-        if (center) exciteAt(center.x, center.y, 0.9);
-      }, 240);
+      createLetters();
+      layout();
+      requestAnimationFrame(tick);
     })();
   </script>
 </body>
