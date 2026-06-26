@@ -59,10 +59,21 @@
     #wordmark-wrap {
       display: grid;
       place-items: center;
+      pointer-events: none;
     }
     #wordmark {
       position: relative;
       display: inline-block;
+      will-change: transform;
+    }
+    .title-letter {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      white-space: pre;
+      will-change: transform;
+      pointer-events: none;
+    }
       color: var(--ink);
       font-weight: 700;
       letter-spacing: 0.08em;
@@ -87,11 +98,11 @@
     .quote {
       position: absolute;
       max-width: min(38vw, 320px);
-      color: rgba(232, 224, 209, 0.82);
+      color: rgba(232, 224, 209, 0.72);
       opacity: 0;
       filter: blur(0.2px);
-      transition: opacity 500ms ease, transform 900ms ease;
-      will-change: opacity, transform;
+      transition: opacity 900ms ease;
+      will-change: opacity;
     }
     .quote .body {
       font-size: clamp(13px, 1.45vw, 18px);
@@ -128,7 +139,7 @@
     <canvas id="particles"></canvas>
     <div id="veil"></div>
     <div id="quotes"></div>
-    <div id="wordmark-wrap"><div id="wordmark">ADIVIDIARDI</div></div>
+    <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
 
   <script>
@@ -153,8 +164,10 @@
       const activeQuotes = [];
       const lights = [];
       const particles = [];
+      const titleLetters = [];
       const MAX_QUOTES = 2;
       const PARTICLE_COUNT = 56;
+      const TITLE_TEXT = 'ADIVIDIARDI';
       let nextQuoteAt = 0;
       let lastFrame = 0;
 
@@ -163,6 +176,40 @@
       function rand(min, max) { return min + Math.random() * (max - min); }
       function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
 
+      function buildTitle() {
+        if (titleLetters.length) return;
+        const measureCanvas = document.createElement('canvas');
+        const measureCtx = measureCanvas.getContext('2d');
+        if (!measureCtx) return;
+        word.innerHTML = '';
+        const fontSize = clamp(stage.clientWidth * 0.105, 38, 108);
+        const tracking = fontSize * 0.08;
+        measureCtx.font = `700 ${fontSize}px Cambria, Georgia, Times New Roman, serif`;
+        const widths = [...TITLE_TEXT].map(ch => measureCtx.measureText(ch).width);
+        const total = widths.reduce((a,b)=>a+b,0) + tracking * (widths.length - 1);
+        word.style.width = `${Math.ceil(total)}px`;
+        word.style.height = `${Math.ceil(fontSize * 1.2)}px`;
+        let x = 0;
+        for (let i = 0; i < TITLE_TEXT.length; i++) {
+          const span = document.createElement('span');
+          span.className = 'title-letter';
+          span.textContent = TITLE_TEXT[i];
+          span.style.fontSize = `${fontSize}px`;
+          span.style.left = `${x + widths[i] / 2}px`;
+          word.appendChild(span);
+          titleLetters.push({
+            el: span,
+            baseX: x + widths[i] / 2,
+            x: x + widths[i] / 2,
+            y: 0,
+            vx: 0,
+            vy: 0,
+            kick: 0
+          });
+          x += widths[i] + tracking;
+        }
+      }
+
       function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
         canvas.width = Math.round(stage.clientWidth * dpr);
@@ -170,7 +217,8 @@
         canvas.style.width = stage.clientWidth + 'px';
         canvas.style.height = stage.clientHeight + 'px';
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        word.style.fontSize = clamp(stage.clientWidth * 0.105, 38, 108) + 'px';
+        titleLetters.length = 0;
+        buildTitle();
         buildZones();
       }
 
@@ -221,7 +269,7 @@
         el.style.top = zone.y + 'px';
         el.style.transform = zone.align === 'right' ? 'translate(-100%, -50%)' : 'translate(0, -50%)';
         quotesEl.appendChild(el);
-        activeQuotes.push({ ...quote, el, zoneIndex, x: zone.x, y: zone.y, born: performance.now(), life: rand(9000, 14000), reveal: 1, graceUntil: performance.now() + 2600, align: zone.align });
+        activeQuotes.push({ ...quote, el, zoneIndex, x: zone.x, y: zone.y, born: performance.now(), life: rand(9000, 14000), reveal: 1, graceUntil: performance.now() + 2600, align: zone.align, swayX: 0, swayY: 0, svx: 0, svy: 0 });
         while (activeQuotes.length > MAX_QUOTES) {
           const old = activeQuotes.shift();
           old.el.remove();
@@ -265,6 +313,10 @@
           reveal: 0,
           graceUntil: 0,
           align: zone.align,
+          swayX: 0,
+          swayY: 0,
+          svx: 0,
+          svy: 0,
         });
 
         while (activeQuotes.length > MAX_QUOTES) {
@@ -279,11 +331,11 @@
           particles.push({
             x: Math.random() * stage.clientWidth,
             y: Math.random() * stage.clientHeight,
-            vx: rand(-0.06, 0.06),
-            vy: rand(-0.035, 0.035),
+            vx: rand(-0.018, 0.018),
+            vy: rand(-0.012, 0.012),
             size: Math.random() > 0.84 ? 2 : 1,
             tw: Math.random() * Math.PI * 2,
-            alpha: rand(0.08, 0.28)
+            alpha: rand(0.1, 0.22)
           });
         }
       }
@@ -311,17 +363,13 @@
           quote.reveal = lerp(quote.reveal, light, 0.18);
           const fadeIn = clamp(age / 700, 0, 1);
           const fadeOut = clamp((quote.life - age) / 1800, 0, 1);
-          const opacity = Math.min(fadeIn, fadeOut) * (0.06 + quote.reveal * 0.94);
-          const driftY = (1 - quote.reveal) * 8;
+          const opacity = Math.min(fadeIn, fadeOut) * (0.02 + quote.reveal * 0.31);
           quote.el.style.opacity = opacity.toFixed(3);
-          quote.el.style.transform = quote.align === 'right'
-            ? `translate(-100%, calc(-50% + ${driftY}px))`
-            : `translate(0, calc(-50% + ${driftY}px))`;
         }
 
         if (now >= nextQuoteAt) {
           spawnQuote();
-          nextQuoteAt = now + rand(5000, 10000);
+          nextQuoteAt = now + rand(11000, 19000);
         }
       }
 
@@ -334,14 +382,14 @@
             const dx = p.x - light.x;
             const dy = p.y - light.y;
             const d = Math.hypot(dx, dy) || 1;
-            const influence = Math.max(0, 1 - d / 120) * light.strength * 0.09;
+            const influence = Math.max(0, 1 - d / 130) * light.strength * 0.03;
             p.vx += (dx / d) * influence;
             p.vy += (dy / d) * influence;
           }
-          p.vx *= 0.996;
-          p.vy *= 0.996;
-          p.x += p.vx * dt * 0.06;
-          p.y += p.vy * dt * 0.06;
+          p.vx *= 0.9985;
+          p.vy *= 0.9985;
+          p.x += p.vx * dt * 0.028;
+          p.y += p.vy * dt * 0.028;
           if (p.x < -6) p.x = w + 6;
           if (p.x > w + 6) p.x = -6;
           if (p.y < -6) p.y = h + 6;
@@ -354,7 +402,7 @@
         for (const p of particles) {
           const local = lightAt(p.x, p.y);
           const pulse = 0.5 + Math.sin(now * 0.0008 + p.tw) * 0.5;
-          const alpha = (p.alpha * 0.18) + local * (0.16 + pulse * 0.18);
+          const alpha = (p.alpha * 0.22) + local * (0.08 + pulse * 0.08);
           if (alpha < 0.03) continue;
           ctx.globalAlpha = alpha;
           ctx.fillStyle = '#f1eadc';
@@ -373,8 +421,62 @@
       function updateWordGlow() {
         let centerLight = lightAt(stage.clientWidth / 2, stage.clientHeight / 2);
         centerLight = clamp(centerLight, 0, 1);
-        word.style.textShadow = `0 1px 0 rgba(255,255,255,0.03), 0 0 ${14 + centerLight * 26}px rgba(232,224,209,${0.035 + centerLight * 0.09})`;
-        word.style.opacity = (0.92 + centerLight * 0.08).toFixed(3);
+        word.style.textShadow = `0 1px 0 rgba(255,255,255,0.03), 0 0 ${14 + centerLight * 18}px rgba(232,224,209,${0.03 + centerLight * 0.06})`;
+        word.style.opacity = (0.92 + centerLight * 0.06).toFixed(3);
+      }
+
+      function updateTitle(dt) {
+        const w = stage.clientWidth;
+        const h = stage.clientHeight;
+        for (const l of titleLetters) {
+          let fx = 0;
+          let fy = 0;
+          for (const light of lights) {
+            const dx = l.baseX + (w - word.offsetWidth) * 0.5 - light.x;
+            const dy = h * 0.5 - light.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const influence = Math.max(0, 1 - d / 170) * light.strength;
+            fx += (dx / d) * influence * 0.22;
+            fy += (dy / d) * influence * 0.16;
+          }
+          l.vx += fx;
+          l.vy += fy;
+          l.vx += (-l.x + l.baseX) * 0.028;
+          l.vy += (-l.y) * 0.032;
+          l.vx *= 0.86;
+          l.vy *= 0.84;
+          l.x += l.vx * dt * 0.06;
+          l.y += l.vy * dt * 0.06;
+          const rot = clamp(l.vx * 1.1, -4, 4);
+          const sx = 1 + Math.min(0.018, Math.abs(l.vx) * 0.003);
+          const sy = 1 - Math.min(0.01, Math.abs(l.vx) * 0.0015);
+          l.el.style.transform = `translate(-50%, -50%) translate(${l.x - l.baseX}px, ${l.y}px) rotate(${rot}deg) scale(${sx}, ${sy})`;
+        }
+      }
+
+      function updateQuoteSprings(dt) {
+        for (const q of activeQuotes) {
+          let fx = 0;
+          let fy = 0;
+          for (const light of lights) {
+            const dx = q.x - light.x;
+            const dy = q.y - light.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const influence = Math.max(0, 1 - d / 140) * light.strength;
+            fx += (dx / d) * influence * 0.01;
+            fy += (dy / d) * influence * 0.008;
+          }
+          q.svx += fx + (-q.swayX) * 0.02;
+          q.svy += fy + (-q.swayY) * 0.022;
+          q.svx *= 0.82;
+          q.svy *= 0.82;
+          q.swayX += q.svx * dt * 0.03;
+          q.swayY += q.svy * dt * 0.03;
+          q.swayX = clamp(q.swayX, -4, 4);
+          q.swayY = clamp(q.swayY, -3, 3);
+          const base = q.align === 'right' ? 'translate(-100%, -50%)' : 'translate(0, -50%)';
+          q.el.style.transform = `${base} translate(${q.swayX}px, ${q.swayY}px)`;
+        }
       }
 
       function frame(now) {
@@ -383,6 +485,8 @@
         updateLights(dt);
         updateParticles(dt);
         updateQuotes(now);
+        updateTitle(dt);
+        updateQuoteSprings(dt);
         updateWordGlow();
         drawParticles(now);
         requestAnimationFrame(frame);
@@ -401,7 +505,7 @@
       resize();
       seedParticles();
       addLight(stage.clientWidth * 0.5, stage.clientHeight * 0.5, 0.4, 2600);
-      nextQuoteAt = performance.now() + 1800;
+      nextQuoteAt = performance.now() + 6000;
       requestAnimationFrame(frame);
     })();
   </script>
