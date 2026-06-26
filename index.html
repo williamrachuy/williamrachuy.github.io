@@ -266,7 +266,7 @@
         const p = event.touches ? event.touches[0] : event;
         const x = p.clientX - rect.left;
         const y = p.clientY - rect.top;
-        const ttl = event.touches ? 1600 : 1200;
+        const ttl = 8000;
         const existing = lights.find(light => light.kind === 'pointer');
         if (existing) {
           existing.x = x;
@@ -274,20 +274,23 @@
           existing.strength = Math.max(existing.strength, strength);
           existing.ttl = ttl;
           existing.maxTtl = 8000;
+          existing.released = false;
         } else {
-          lights.push({ x, y, strength, ttl, maxTtl: 8000, kind: 'pointer' });
+          lights.push({ x, y, strength, ttl, maxTtl: 8000, kind: 'pointer', born: performance.now(), fadeInMs: 3000, released: false });
         }
         showQuoteAtZone(nearestZoneIndex(x, y), true);
       }
 
       function lightAt(x, y) {
         let total = 0;
+        const now = performance.now();
         for (const light of lights) {
           const d = dist(x, y, light.x, light.y);
           const radius = light.kind === 'pointer' ? (68 + light.strength * 62) : (96 + light.strength * 64);
           const life = clamp(light.ttl / light.maxTtl, 0, 1);
           const easedLife = Math.pow(life, 0.55);
-          total += Math.max(0, 1 - d / radius) * light.strength * easedLife;
+          const fadeIn = clamp((now - (light.born || now)) / (light.fadeInMs || 1), 0, 1);
+          total += Math.max(0, 1 - d / radius) * light.strength * easedLife * fadeIn;
         }
         return clamp(total, 0, 1);
       }
@@ -376,8 +379,13 @@
 
       function updateLights(dt) {
         for (let i = lights.length - 1; i >= 0; i--) {
-          lights[i].ttl -= dt;
-          if (lights[i].ttl <= 0) lights.splice(i, 1);
+          const light = lights[i];
+          if (light.kind === 'pointer' && !light.released) {
+            light.ttl = light.maxTtl;
+            continue;
+          }
+          light.ttl -= dt;
+          if (light.ttl <= 0) lights.splice(i, 1);
         }
       }
 
@@ -446,6 +454,17 @@
       });
       stage.addEventListener('touchstart', (event) => pointerLight(event, 1.0), { passive: true });
       stage.addEventListener('touchmove', (event) => pointerLight(event, 0.3), { passive: true });
+      const releasePointerLight = () => {
+        const existing = lights.find(light => light.kind === 'pointer');
+        if (existing) {
+          existing.released = true;
+          existing.ttl = 8000;
+          existing.maxTtl = 8000;
+        }
+      };
+      stage.addEventListener('pointerup', releasePointerLight);
+      stage.addEventListener('pointercancel', releasePointerLight);
+      stage.addEventListener('touchend', releasePointerLight, { passive: true });
       window.addEventListener('resize', resize);
 
       resize();
