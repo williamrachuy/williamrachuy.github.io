@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>BERZERK</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html, body {
+  height: 100%; background: #000; overflow: hidden;
+  touch-action: none; overscroll-behavior: none;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+}
+#wrap { position: relative; flex-shrink: 0; }
+canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+
+#controls {
+  display: none; width: 100%; flex-direction: row;
+  justify-content: space-between; align-items: center;
+  padding: 6px 24px; background: #000; flex-shrink: 0;
+}
+#joystick-area {
+  position: relative; width: 118px; height: 118px;
+  border-radius: 50%; background: rgba(255,255,255,0.04);
+  border: 2px solid rgba(0,255,255,0.2); touch-action: none;
+}
+#joystick-knob {
+  position: absolute; width: 46px; height: 46px; border-radius: 50%;
+  background: rgba(0,255,255,0.25); border: 2px solid rgba(0,255,255,0.6);
+  left: 50%; top: 50%; transform: translate(-50%,-50%);
+}
+#ctrl-mid { color: rgba(255,255,255,0.18); font-size: 9px; font-family: monospace;
+            text-align: center; letter-spacing: 1px; line-height: 1.7; }
+#fire-btn {
+  width: 82px; height: 82px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #ff6666, #880000);
+  border: 3px solid #cc0000; color: #fff; font-size: 11px; font-weight: 700;
+  font-family: 'Courier New', monospace; letter-spacing: 2px;
+  cursor: pointer; touch-action: none; user-select: none;
+  -webkit-user-select: none; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 12px rgba(255,0,0,0.4);
+}
+#fire-btn.pressed { background: radial-gradient(circle at 40% 35%, #ff9999, #ff2222);
+                    transform: scale(0.93); }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas></div>
+<div id="controls">
+  <div id="joystick-area"><div id="joystick-knob"></div></div>
+  <div id="ctrl-mid">HOLD FIRE<br>TO SHOOT<br>FREEZE+AIM</div>
+  <button id="fire-btn">FIRE</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CANVAS + SCALING
+// ═══════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const BASE_W = 640, BASE_H = 480;
+const GAME_W = 640, GAME_H = 448;
+const HUD_H = 32;
+const CELL = 32;
+const COLS = GAME_W / CELL; // 20
+const ROWS = GAME_H / CELL; // 14
+const BORDER = CELL;        // 1-cell electrified border
+
+const DOOR_SIZE = 2 * CELL; // 64px door opening
+const DOOR_X = (GAME_W - DOOR_SIZE) / 2; // 288 — N/S door x start
+const DOOR_Y = (GAME_H - DOOR_SIZE) / 2; // 192 — E/W door y start
+
+let scale = 1;
+const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+function resize() {
+  const ctrlH = isMobile ? 136 : 0;
+  const maxW = window.innerWidth;
+  const maxH = window.innerHeight - ctrlH;
+  scale = Math.min(maxW / BASE_W, maxH / BASE_H);
+  canvas.width = BASE_W; canvas.height = BASE_H;
+  canvas.style.width  = Math.floor(BASE_W * scale) + 'px';
+  canvas.style.height = Math.floor(BASE_H * scale) + 'px';
+  if (isMobile) {
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('wrap').style.width = Math.floor(BASE_W * scale) + 'px';
+  }
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════
+//  AUDIO (Web Audio API — fully synthesized)
+// ═══════════════════════════════════════════════════════
+let AC = null;
+function ensureAudio() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state === 'suspended') AC.resume();
+}
+
+function tone(freq, type, dur, vol, f0, f1) {
+  if (!AC) return;
+  const o = AC.createOscillator(), g = AC.createGain();
+  o.connect(g); g.connect(AC.destination);
+  o.type = type; o.frequency.value = f0 || freq;
+  if (f0 && f1) o.frequency.linearRampToValueAtTime(f1, AC.currentTime + dur);
+  g.gain.setValueAtTime(vol || 0.25, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  o.start(); o.stop(AC.currentTime + dur);
+}
+
+function noise(dur, vol) {
+  if (!AC) return;
+  const n = Math.ceil(AC.sampleRate * dur);
+  const buf = AC.createBuffer(1, n, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  const src = AC.createBufferSource(), g = AC.createGain();
+  src.buffer = buf; src.connect(g); g.connect(AC.destination);
+  g.gain.setValueAtTime(vol || 0.2, AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+  src.start();
+}
+
+const sfx = {
+  shoot:    () => { ensureAudio(); tone(900,'square',0.08,0.18,900,440); },
+  rshoot:   () => { ensureAudio(); tone(380,'sawtooth',0.11,0.12,500,180); },
+  explode:  () => { ensureAudio(); noise(0.35,0.38); tone(100,'square',0.32,0.18,180,35); },
+  wallzap:  () => { ensureAudio(); noise(0.2,0.55); tone(55,'sawtooth',0.22,0.28); },
+  die:      () => { ensureAudio(); noise(0.55,0.5); tone(350,'sawtooth',0.7,0.28,380,40); },
+  ottospin: () => { ensureAudio(); tone(180,'sine',0.9,0.28,650,90); },
+  clear:    () => {
+    ensureAudio();
+    [440,554,659,880].forEach((f,i)=>{
+      const t = AC.currentTime + i*0.11;
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.connect(g); g.connect(AC.destination);
+      o.type='square'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.18,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+      o.start(t); o.stop(t+0.12);
+    });
+  },
+  start: () => {
+    ensureAudio();
+    [220,330,440,330,440,660].forEach((f,i)=>{
+      const t = AC.currentTime + i*0.09;
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.connect(g); g.connect(AC.destination);
+      o.type='square'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.2,t);
+      g.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+      o.start(t); o.stop(t+0.1);
+    });
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+//  SPEECH (Web Speech API — real voice taunts)
+// ═══════════════════════════════════════════════════════
+let lastSpeak = 0;
+
+function speak(text, force) {
+  if (!window.speechSynthesis) return;
+  const now = Date.now();
+  if (!force && now - lastSpeak < 10000) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.88; u.pitch = 0.55; u.volume = 1.0;
+  speechSynthesis.speak(u);
+  lastSpeak = now;
+}
+
+const TAUNTS = [
+  'The humanoid must not escape!',
+  'Destroy the humanoid!',
+  'Attack! Attack!',
+  'Kill the intruder!',
+  'Get the humanoid!',
+  'Shoot the intruder!',
+];
+
+function maybeSpeak() {
+  if (Math.random() < 0.25) speak(TAUNTS[Math.floor(Math.random()*TAUNTS.length)]);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SEEDED RNG
+// ═══════════════════════════════════════════════════════
+function seededRng(seed) {
+  let s = (seed ^ 0xDEADBEEF) >>> 0;
+  return () => {
+    s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+    return (s >>> 0) / 0xFFFFFFFF;
+  };
+}
+
+// ═══════════════════════════════════════════════════════
+//  BORDER WALL SEGMENTS (8 rects around perimeter with door gaps)
+// ═══════════════════════════════════════════════════════
+function borderWalls() {
+  return [
+    // Top (split by N door)
+    {x:0,             y:0,            w:DOOR_X,               h:BORDER},
+    {x:DOOR_X+DOOR_SIZE, y:0,         w:GAME_W-DOOR_X-DOOR_SIZE, h:BORDER},
+    // Bottom (split by S door)
+    {x:0,             y:GAME_H-BORDER,w:DOOR_X,               h:BORDER},
+    {x:DOOR_X+DOOR_SIZE, y:GAME_H-BORDER, w:GAME_W-DOOR_X-DOOR_SIZE, h:BORDER},
+    // Left (split by W door)
+    {x:0,             y:0,            w:BORDER, h:DOOR_Y},
+    {x:0,             y:DOOR_Y+DOOR_SIZE, w:BORDER, h:GAME_H-DOOR_Y-DOOR_SIZE},
+    // Right (split by E door)
+    {x:GAME_W-BORDER, y:0,            w:BORDER, h:DOOR_Y},
+    {x:GAME_W-BORDER, y:DOOR_Y+DOOR_SIZE, w:BORDER, h:GAME_H-DOOR_Y-DOOR_SIZE},
+  ];
+}
+
+// ═══════════════════════════════════════════════════════
+//  ROOM GENERATION
+// ═══════════════════════════════════════════════════════
+function generateWalls(rx, ry) {
+  const rng = seededRng(rx * 8191 + ry * 1031 + 7);
+  const walls = [];
+  const count = 4 + Math.floor(rng() * 6);
+
+  for (let i = 0; i < count; i++) {
+    const horiz = rng() > 0.5;
+    for (let attempt = 0; attempt < 15; attempt++) {
+      if (horiz) {
+        const col = 1 + Math.floor(rng() * 14);
+        const row = 1 + Math.floor(rng() * 12);
+        const len = 2 + Math.floor(rng() * 4);
+        if (col + len > COLS - 1) continue;
+        const wy = row * CELL;
+        const wx1 = col * CELL, wx2 = (col + len) * CELL;
+        // Don't block E/W door corridor (rows 6-7)
+        if (row >= 6 && row <= 7) continue;
+        // Don't block N/S door approach (cols 9-10)
+        const doorClear = wx2 <= DOOR_X - CELL || wx1 >= DOOR_X + DOOR_SIZE + CELL;
+        // Keep away from center spawn area
+        const centerClear = Math.abs(wy - GAME_H/2) > CELL*2 || doorClear;
+        if (!centerClear) continue;
+        walls.push({x:wx1, y:wy, w:len*CELL, h:6, horiz:true});
+        break;
+      } else {
+        const col = 2 + Math.floor(rng() * 16);
+        const row = 1 + Math.floor(rng() * 10);
+        const len = 2 + Math.floor(rng() * 3);
+        if (row + len > ROWS - 1) continue;
+        const wx = col * CELL;
+        const wy1 = row * CELL, wy2 = (row + len) * CELL;
+        // Don't block N/S door corridor (cols 9-10)
+        if (col >= 9 && col <= 10) continue;
+        // Don't block E/W door approach (rows 6-7)
+        const doorClear = wy2 <= DOOR_Y - CELL || wy1 >= DOOR_Y + DOOR_SIZE + CELL;
+        const centerClear = Math.abs(wx - GAME_W/2) > CELL*2 || doorClear;
+        if (!centerClear) continue;
+        walls.push({x:wx, y:wy1, w:6, h:len*CELL, horiz:false});
+        break;
+      }
+    }
+  }
+  return walls;
+}
+
+function generateRobots(rx, ry, roomNum) {
+  const rng = seededRng(rx * 4093 + ry * 2053 + roomNum * 23 + 99);
+  const count = Math.min(3 + Math.floor(rng() * 5), 7);
+  const robots = [];
+  for (let i = 0; i < count; i++) {
+    // Keep robots away from center spawn area
+    let rx_, ry_;
+    for (let a = 0; a < 20; a++) {
+      rx_ = BORDER + CELL + rng() * (GAME_W - 2*BORDER - 2*CELL);
+      ry_ = BORDER + CELL + rng() * (GAME_H - 2*BORDER - 2*CELL);
+      if (Math.abs(rx_ - GAME_W/2) > CELL*3 || Math.abs(ry_ - GAME_H/2) > CELL*3) break;
+    }
+    const t = rng();
+    robots.push({
+      x: rx_, y: ry_,
+      w: 18, h: 24,
+      type: t < 0.3 ? 0 : t < 0.72 ? 1 : 2,  // 0=yellow/dumb, 1=red, 2=white/fast
+      alive: true,
+      vx: 0, vy: 0,
+      moveTimer: rng() * 800,
+      shootTimer: 2000 + rng() * 3000,
+    });
+  }
+  return robots;
+}
+
+// ═══════════════════════════════════════════════════════
+//  AABB COLLISION
+// ═══════════════════════════════════════════════════════
+function rectsOverlap(ax,ay,aw,ah,bx,by,bw,bh) {
+  return ax < bx+bw && ax+aw > bx && ay < by+bh && ay+ah > by;
+}
+
+function hitWall(ex,ey,ew,eh,intWalls) {
+  const bw = borderWalls();
+  for (const w of bw) if (rectsOverlap(ex,ey,ew,eh,w.x,w.y,w.w,w.h)) return true;
+  for (const w of intWalls) {
+    const wx = w.horiz ? w.x : w.x-3, wy = w.horiz ? w.y-3 : w.y;
+    const ww = w.horiz ? w.w : 6, wh = w.horiz ? 6 : w.h;
+    if (rectsOverlap(ex,ey,ew,eh,wx,wy,ww,wh)) return true;
+  }
+  return false;
+}
+
+function getExit(ex,ey,ew,eh) {
+  const cx = ex+ew/2, cy = ey+eh/2;
+  if (cy < 0 && cx >= DOOR_X && cx <= DOOR_X+DOOR_SIZE) return 'north';
+  if (cy > GAME_H && cx >= DOOR_X && cx <= DOOR_X+DOOR_SIZE) return 'south';
+  if (cx < 0 && cy >= DOOR_Y && cy <= DOOR_Y+DOOR_SIZE) return 'west';
+  if (cx > GAME_W && cy >= DOOR_Y && cy <= DOOR_Y+DOOR_SIZE) return 'east';
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════
+let state = 'title'; // title | playing | dying | gameover
+let score = 0, hiScore = +localStorage.getItem('berzerk-hi') || 0;
+let lives = 3;
+let roomX = 0, roomY = 0, roomNum = 0;
+let intWalls = [], robots = [], bullets = [];
+let evilOtto = null, ottoTimer = 0;
+let roomKills = 0, roomTotal = 0, roomCleared = false;
+let msgText = '', msgTimer = 0;
+let screenFlash = 0;
+let dyingTimer = 0;
+
+const player = {
+  x:0, y:0, w:18, h:24,
+  vx:0, vy:0,
+  dx:1, dy:0,   // last move direction (determines fire direction)
+  alive:true, fireCd:0,
+  speed:175,
+};
+
+function msg(text, ms) { msgText = text; msgTimer = ms || 2000; }
+
+function initRoom(entryDir) {
+  intWalls = generateWalls(roomX, roomY);
+  robots    = generateRobots(roomX, roomY, roomNum);
+  bullets   = [];
+  evilOtto  = null; ottoTimer = 0;
+  roomTotal = robots.length; roomKills = 0; roomCleared = false;
+
+  // Position player based on entry direction
+  const cx = GAME_W/2 - player.w/2, cy = GAME_H/2 - player.h/2;
+  if (!entryDir) { player.x = cx; player.y = cy; }
+  else if (entryDir === 'north') { player.x = cx; player.y = GAME_H - BORDER - player.h - 6; player.dx=0; player.dy=-1; }
+  else if (entryDir === 'south') { player.x = cx; player.y = BORDER + 6; player.dx=0; player.dy=1; }
+  else if (entryDir === 'west')  { player.x = GAME_W - BORDER - player.w - 6; player.y = GAME_H/2 - player.h/2; player.dx=1; player.dy=0; }
+  else if (entryDir === 'east')  { player.x = BORDER + 6; player.y = GAME_H/2 - player.h/2; player.dx=-1; player.dy=0; }
+}
+
+function startGame() {
+  state = 'playing';
+  score = 0; lives = 3; roomX = 0; roomY = 0; roomNum = 0;
+  player.alive = true; player.fireCd = 0;
+  player.dx = 1; player.dy = 0;
+  initRoom();
+  lastSpeak = 0;
+  sfx.start();
+}
+
+function killPlayer(cause) {
+  if (state !== 'playing') return;
+  sfx.die();
+  state = 'dying'; dyingTimer = 1.6; screenFlash = 12;
+  player.alive = false;
+}
+
+function respawn() {
+  lives--;
+  if (lives <= 0) {
+    state = 'gameover';
+    if (score > hiScore) { hiScore = score; localStorage.setItem('berzerk-hi', hiScore); }
+    speak('The humanoid is destroyed!', true);
+    return;
+  }
+  player.alive = true; player.fireCd = 0;
+  initRoom();
+  state = 'playing';
+}
+
+function leaveRoom(dir) {
+  if (roomCleared) {
+    const bonus = roomTotal * 10;
+    score += bonus;
+    sfx.clear();
+    msg('+' + bonus + ' ROOM BONUS!', 1400);
+  } else if (roomKills === 0) {
+    speak('Chicken! Fight like a robot!', true);
+  }
+  roomNum++;
+  const opp = {north:'south',south:'north',west:'east',east:'west'}[dir];
+  if (dir==='north') roomY--; else if (dir==='south') roomY++;
+  else if (dir==='west') roomX--; else roomX++;
+  initRoom(opp);
+}
+
+// ═══════════════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════════════
+const K = {};
+document.addEventListener('keydown', e => {
+  K[e.key] = true;
+  ensureAudio();
+  if (e.key === ' ' || e.key === 'Enter') {
+    if (state === 'title' || state === 'gameover') startGame();
+  }
+  // Prevent page scroll
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { K[e.key] = false; });
+
+// Mobile joystick + fire
+let mobDx = 0, mobDy = 0, mobFire = false;
+const joyArea  = document.getElementById('joystick-area');
+const joyKnob  = document.getElementById('joystick-knob');
+const fireBtn  = document.getElementById('fire-btn');
+
+if (joyArea) {
+  let jId = null, jox = 0, joy_ = 0;
+  joyArea.addEventListener('touchstart', e => {
+    ensureAudio();
+    if (state !== 'playing') startGame();
+    const t = e.changedTouches[0]; jId = t.identifier;
+    const r = joyArea.getBoundingClientRect();
+    jox = r.left + r.width/2; joy_ = r.top + r.height/2;
+    e.preventDefault();
+  }, {passive:false});
+  joyArea.addEventListener('touchmove', e => {
+    for (const t of e.changedTouches) {
+      if (t.identifier !== jId) continue;
+      const dx = t.clientX - jox, dy = t.clientY - joy_;
+      const dist = Math.sqrt(dx*dx+dy*dy), max = 44;
+      const cl = Math.min(dist, max);
+      const nx = dist > 0 ? dx/dist : 0, ny = dist > 0 ? dy/dist : 0;
+      joyKnob.style.left = (50 + nx*cl/max*50) + '%';
+      joyKnob.style.top  = (50 + ny*cl/max*50) + '%';
+      const dead = 0.28;
+      mobDx = Math.abs(nx) > dead ? nx : 0;
+      mobDy = Math.abs(ny) > dead ? ny : 0;
+      if (mobDx||mobDy) {
+        const m = Math.sqrt(mobDx*mobDx+mobDy*mobDy);
+        mobDx /= m; mobDy /= m;
+      }
+    }
+    e.preventDefault();
+  }, {passive:false});
+  const jEnd = e => {
+    mobDx = 0; mobDy = 0;
+    joyKnob.style.left='50%'; joyKnob.style.top='50%';
+    e.preventDefault();
+  };
+  joyArea.addEventListener('touchend', jEnd, {passive:false});
+  joyArea.addEventListener('touchcancel', jEnd, {passive:false});
+}
+
+if (fireBtn) {
+  fireBtn.addEventListener('touchstart', e => {
+    ensureAudio(); mobFire = true;
+    fireBtn.classList.add('pressed');
+    if (state !== 'playing') startGame();
+    e.preventDefault();
+  }, {passive:false});
+  const fbEnd = e => { mobFire = false; fireBtn.classList.remove('pressed'); e.preventDefault(); };
+  fireBtn.addEventListener('touchend', fbEnd, {passive:false});
+  fireBtn.addEventListener('touchcancel', fbEnd, {passive:false});
+}
+
+function getMov() {
+  let dx=0, dy=0;
+  if (K['ArrowLeft']||K['a']||K['A']) dx -= 1;
+  if (K['ArrowRight']||K['d']||K['D']) dx += 1;
+  if (K['ArrowUp']||K['w']||K['W']) dy -= 1;
+  if (K['ArrowDown']||K['s']||K['S']) dy += 1;
+  if (mobDx||mobDy) { dx=mobDx; dy=mobDy; }
+  if (dx&&dy) { dx*=0.7071; dy*=0.7071; }
+  return {dx,dy};
+}
+function isFiring() { return K[' ']||K['z']||K['Z']||K['x']||K['X']||mobFire; }
+
+// ═══════════════════════════════════════════════════════
+//  UPDATE
+// ═══════════════════════════════════════════════════════
+function update(dt) {
+  if (state === 'title' || state === 'gameover') return;
+
+  if (screenFlash > 0) screenFlash--;
+
+  if (state === 'dying') {
+    dyingTimer -= dt;
+    if (dyingTimer <= 0) respawn();
+    return;
+  }
+
+  if (msgTimer > 0) msgTimer -= dt * 1000;
+
+  const firing = isFiring();
+  const {dx, dy} = getMov();
+
+  // ── Player movement (freeze while firing) ──────────
+  if (!firing && (dx||dy)) {
+    player.dx = dx; player.dy = dy;
+    const spd = player.speed;
+    const nx = player.x + dx*spd*dt;
+    const ny = player.y + dy*spd*dt;
+    const hx = hitWall(nx, player.y, player.w, player.h, intWalls);
+    const hy = hitWall(player.x, ny, player.w, player.h, intWalls);
+    if (hx) { sfx.wallzap(); killPlayer('wall'); return; }
+    if (hy) { sfx.wallzap(); killPlayer('wall'); return; }
+    if (!hx) player.x = nx;
+    if (!hy) player.y = ny;
+
+    const ex = getExit(player.x, player.y, player.w, player.h);
+    if (ex) { leaveRoom(ex); return; }
+  }
+
+  // ── Player fire ─────────────────────────────────────
+  if (player.fireCd > 0) player.fireCd -= dt;
+  if (firing && player.fireCd <= 0 && (player.dx||player.dy)) {
+    const bx = player.x + player.w/2, by = player.y + player.h/2;
+    bullets.push({x:bx, y:by, vx:player.dx, vy:player.dy, spd:380, owner:'P', alive:true});
+    sfx.shoot();
+    player.fireCd = 0.22;
+  }
+
+  // ── Robots ─────────────────────────────────────────
+  const alive = robots.filter(r=>r.alive);
+  if (alive.length === 0 && !roomCleared) {
+    roomCleared = true;
+    sfx.clear();
+  }
+
+  for (const r of alive) {
+    r.moveTimer -= dt*1000;
+    if (r.moveTimer <= 0) {
+      r.moveTimer = 300 + Math.random()*600;
+      const tx = (player.x+player.w/2) - (r.x+r.w/2);
+      const ty = (player.y+player.h/2) - (r.y+r.h/2);
+      const td = Math.sqrt(tx*tx+ty*ty);
+      if (td > 0) {
+        const ang = Math.atan2(ty,tx) + (Math.random()-0.5)*0.9;
+        r.vx = Math.cos(ang); r.vy = Math.sin(ang);
+      }
+    }
+
+    const rspd = r.type===2 ? 85 : 60;
+    const nx = r.x + r.vx*rspd*dt;
+    const ny = r.y + r.vy*rspd*dt;
+    const hx = hitWall(nx, r.y, r.w, r.h, intWalls);
+    const hy = hitWall(r.x, ny, r.w, r.h, intWalls);
+
+    // Robots die on wall contact (authentic Berzerk behavior)
+    if (hx || hy) {
+      r.alive = false; score += 50; roomKills++; sfx.explode();
+      continue;
+    }
+    // Keep robots inside playfield (shouldn't normally happen)
+    r.x = Math.max(BORDER+1, Math.min(GAME_W-BORDER-r.w-1, nx));
+    r.y = Math.max(BORDER+1, Math.min(GAME_H-BORDER-r.h-1, ny));
+
+    // Robot-robot collision → both die (friendly fire)
+    for (const o of alive) {
+      if (o===r||!o.alive) continue;
+      if (rectsOverlap(r.x,r.y,r.w,r.h,o.x,o.y,o.w,o.h)) {
+        r.alive=false; o.alive=false;
+        score+=100; roomKills+=2; sfx.explode();
+        break;
+      }
+    }
+    if (!r.alive) continue;
+
+    // Robot shoots (types 1 and 2)
+    if (r.type > 0) {
+      r.shootTimer -= dt*1000;
+      if (r.shootTimer <= 0) {
+        const tx = (player.x+player.w/2)-(r.x+r.w/2);
+        const ty = (player.y+player.h/2)-(r.y+r.h/2);
+        const td = Math.sqrt(tx*tx+ty*ty);
+        if (td > 0) {
+          bullets.push({x:r.x+r.w/2, y:r.y+r.h/2, vx:tx/td, vy:ty/td, spd:210, owner:'R', alive:true});
+          sfx.rshoot();
+        }
+        r.shootTimer = r.type===2 ? 1200+Math.random()*1000 : 2200+Math.random()*1800;
+      }
+    }
+
+    // Robot touches player → death
+    if (r.alive && rectsOverlap(player.x,player.y,player.w,player.h,r.x,r.y,r.w,r.h)) {
+      killPlayer('robot'); return;
+    }
+  }
+
+  // ── Bullets ────────────────────────────────────────
+  for (const b of bullets) {
+    if (!b.alive) continue;
+    b.x += b.vx*b.spd*dt;
+    b.y += b.vy*b.spd*dt;
+
+    if (b.x<0||b.x>GAME_W||b.y<0||b.y>GAME_H) { b.alive=false; continue; }
+    if (hitWall(b.x-2,b.y-2,4,4,intWalls)) { b.alive=false; continue; }
+
+    if (b.owner==='P') {
+      for (const r of robots) {
+        if (!r.alive) continue;
+        if (b.x>r.x&&b.x<r.x+r.w&&b.y>r.y&&b.y<r.y+r.h) {
+          r.alive=false; b.alive=false;
+          score+=50; roomKills++;
+          sfx.explode();
+          maybeSpeak();
+          break;
+        }
+      }
+    } else {
+      if (player.alive && b.x>player.x&&b.x<player.x+player.w&&b.y>player.y&&b.y<player.y+player.h) {
+        b.alive=false; killPlayer('bullet'); return;
+      }
+    }
+  }
+  bullets = bullets.filter(b=>b.alive);
+
+  // ── Evil Otto ──────────────────────────────────────
+  ottoTimer += dt;
+  const ottoDelay = roomCleared ? 8 : 12;
+  if (!evilOtto && ottoTimer > ottoDelay) {
+    // Spawn from opposite side of room from player
+    const ox = player.x < GAME_W/2 ? GAME_W - BORDER*1.5 : BORDER*1.5;
+    evilOtto = {
+      x: ox - 14, y: GAME_H/2 - 14,
+      w: 28, h: 28,
+      phase: 0,
+      spd: 82 + roomNum * 8,
+    };
+    sfx.ottospin();
+    speak('Intruder alert! Intruder alert!', true);
+  }
+
+  if (evilOtto) {
+    evilOtto.phase += dt * 5.5;
+    const tx = (player.x+player.w/2) - (evilOtto.x+evilOtto.w/2);
+    const ty = (player.y+player.h/2) - (evilOtto.y+evilOtto.h/2);
+    const td = Math.sqrt(tx*tx+ty*ty);
+    if (td > 0) {
+      evilOtto.x += (tx/td)*evilOtto.spd*dt;
+      evilOtto.y += (ty/td)*evilOtto.spd*dt + Math.sin(evilOtto.phase)*1.8;
+    }
+
+    // Evil Otto kills robots (authentic — Otto destroys everything)
+    for (const r of robots) {
+      if (!r.alive) continue;
+      if (rectsOverlap(evilOtto.x,evilOtto.y,evilOtto.w,evilOtto.h,r.x,r.y,r.w,r.h)) {
+        r.alive=false; score+=50; sfx.explode();
+      }
+    }
+
+    // Evil Otto kills player
+    if (player.alive && rectsOverlap(evilOtto.x,evilOtto.y,evilOtto.w,evilOtto.h,
+                                       player.x,player.y,player.w,player.h)) {
+      killPlayer('otto'); return;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  DRAWING
+// ═══════════════════════════════════════════════════════
+const RCOLORS = ['#ffff00','#ff4444','#eeeeee'];
+const RGLOW   = ['rgba(255,255,50,0.4)','rgba(255,68,68,0.4)','rgba(230,230,230,0.35)'];
+
+function drawHUD() {
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,BASE_W,HUD_H);
+  // Score
+  ctx.fillStyle='#00ff00'; ctx.font='bold 18px "Courier New",monospace';
+  ctx.textAlign='left';
+  ctx.fillText('SCORE '+String(score).padStart(6,'0'), 12, 22);
+  // Title
+  ctx.fillStyle='#ff4400'; ctx.textAlign='center';
+  ctx.shadowBlur=8; ctx.shadowColor='#ff4400';
+  ctx.fillText('BERZERK', BASE_W/2, 22);
+  ctx.shadowBlur=0;
+  // Hi score
+  ctx.fillStyle='#888'; ctx.textAlign='right';
+  ctx.font='12px "Courier New",monospace';
+  ctx.fillText('HI '+String(hiScore).padStart(6,'0'), BASE_W-80, 22);
+  // Lives (mini humanoids)
+  for (let i=0; i<lives; i++) drawMiniMan(BASE_W-12 - i*18, 16, '#00ff00');
+}
+
+function drawMiniMan(cx,cy,col) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.arc(cx,cy-6,3.5,0,Math.PI*2); ctx.fill();
+  ctx.fillRect(cx-3,cy-2,6,7);
+  ctx.fillRect(cx-4,cy-1,4,3); ctx.fillRect(cx+1,cy-1,4,3); // arms
+  ctx.fillRect(cx-3,cy+5,3,4); ctx.fillRect(cx+1,cy+5,3,4); // legs
+}
+
+function drawBorderWalls() {
+  ctx.shadowBlur=10; ctx.shadowColor='rgba(0,220,255,0.55)';
+  ctx.fillStyle='#00ccdd';
+  for (const w of borderWalls()) ctx.fillRect(w.x,w.y,w.w,w.h);
+  // Door frame highlights
+  ctx.fillStyle='rgba(0,220,255,0.3)';
+  // North door frame
+  ctx.fillRect(DOOR_X-2,0,4,BORDER); ctx.fillRect(DOOR_X+DOOR_SIZE-2,0,4,BORDER);
+  // South
+  ctx.fillRect(DOOR_X-2,GAME_H-BORDER,4,BORDER); ctx.fillRect(DOOR_X+DOOR_SIZE-2,GAME_H-BORDER,4,BORDER);
+  // West
+  ctx.fillRect(0,DOOR_Y-2,BORDER,4); ctx.fillRect(0,DOOR_Y+DOOR_SIZE-2,BORDER,4);
+  // East
+  ctx.fillRect(GAME_W-BORDER,DOOR_Y-2,BORDER,4); ctx.fillRect(GAME_W-BORDER,DOOR_Y+DOOR_SIZE-2,BORDER,4);
+  ctx.shadowBlur=0;
+}
+
+function drawInternalWalls() {
+  ctx.shadowBlur=7; ctx.shadowColor='rgba(0,220,255,0.5)';
+  ctx.fillStyle='#00eeff';
+  for (const w of intWalls) {
+    if (w.horiz) ctx.fillRect(w.x, w.y-3, w.w, 6);
+    else         ctx.fillRect(w.x-3, w.y, 6, w.h);
+  }
+  ctx.shadowBlur=0;
+}
+
+function drawPlayer() {
+  if (!player.alive) return;
+  const {x,y,w,h,dx,dy} = player;
+  ctx.shadowBlur=7; ctx.shadowColor='rgba(0,255,60,0.6)';
+  // Head
+  ctx.fillStyle='#00ff44';
+  ctx.beginPath(); ctx.arc(x+w/2, y+5, 5, 0, Math.PI*2); ctx.fill();
+  // Body
+  ctx.fillStyle='#00cc33';
+  ctx.fillRect(x+w/2-5, y+10, 10, 9);
+  // Arms (extend toward fire direction)
+  ctx.fillStyle='#00ff44';
+  if (dx > 0) {
+    ctx.fillRect(x+w/2+4, y+11, 7, 3);
+    ctx.fillRect(x+w/2-8, y+12, 4, 3);
+  } else if (dx < 0) {
+    ctx.fillRect(x+w/2-11, y+11, 7, 3);
+    ctx.fillRect(x+w/2+4, y+12, 4, 3);
+  } else {
+    ctx.fillRect(x+w/2-8, y+11, 4, 3);
+    ctx.fillRect(x+w/2+4, y+11, 4, 3);
+  }
+  // Legs
+  ctx.fillRect(x+w/2-5, y+19, 4, 5);
+  ctx.fillRect(x+w/2+1, y+19, 4, 5);
+  ctx.shadowBlur=0;
+}
+
+function drawRobot(r) {
+  if (!r.alive) return;
+  const col = RCOLORS[r.type], glow = RGLOW[r.type];
+  ctx.shadowBlur=7; ctx.shadowColor=glow; ctx.fillStyle=col;
+  // Head box
+  ctx.fillRect(r.x+3, r.y, r.w-6, 7);
+  // Neck
+  ctx.fillRect(r.x+r.w/2-2, r.y+7, 4, 3);
+  // Torso
+  ctx.fillRect(r.x+1, r.y+10, r.w-2, 9);
+  // Arms
+  ctx.fillRect(r.x-4, r.y+11, 5, 3);
+  ctx.fillRect(r.x+r.w-1, r.y+11, 5, 3);
+  // Legs
+  ctx.fillRect(r.x+2, r.y+19, 4, 5);
+  ctx.fillRect(r.x+r.w-6, r.y+19, 4, 5);
+  // Eyes
+  ctx.fillStyle = r.type===0 ? '#332200' : '#ff0000';
+  ctx.fillRect(r.x+5, r.y+2, 2, 2);
+  ctx.fillRect(r.x+r.w-7, r.y+2, 2, 2);
+  ctx.shadowBlur=0;
+}
+
+function drawEvilOtto() {
+  if (!evilOtto) return;
+  const {x,y,w,h,phase} = evilOtto;
+  ctx.shadowBlur=18; ctx.shadowColor='rgba(255,220,0,0.9)';
+  // Face
+  ctx.fillStyle='#ffdd00';
+  ctx.beginPath(); ctx.arc(x+w/2,y+h/2,w/2,0,Math.PI*2); ctx.fill();
+  // Eyes (blink on phase)
+  const blink = Math.sin(phase) > 0.85;
+  ctx.fillStyle='#000';
+  if (!blink) {
+    ctx.beginPath(); ctx.arc(x+w/2-7,y+h/2-4,3.5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+7,y+h/2-4,3.5,0,Math.PI*2); ctx.fill();
+  } else {
+    ctx.fillRect(x+w/2-10,y+h/2-5,7,2); ctx.fillRect(x+w/2+3,y+h/2-5,7,2);
+  }
+  // Smile
+  ctx.strokeStyle='#000'; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  ctx.arc(x+w/2, y+h/2+1, 8, 0.15, Math.PI-0.15); ctx.stroke();
+  ctx.shadowBlur=0;
+}
+
+function drawBullets() {
+  for (const b of bullets) {
+    if (!b.alive) continue;
+    ctx.shadowBlur=7;
+    if (b.owner==='P') {
+      ctx.shadowColor='#ffffff'; ctx.fillStyle='#ffffff';
+    } else {
+      ctx.shadowColor='#ff6600'; ctx.fillStyle='#ff8800';
+    }
+    ctx.beginPath(); ctx.arc(b.x,b.y,3.5,0,Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur=0;
+}
+
+function drawExplosion() {
+  if (state!=='dying') return;
+  const t = 1 - Math.max(0, dyingTimer/1.6);
+  const r = t*65;
+  const cx = player.x+player.w/2, cy = player.y+player.h/2;
+  ctx.shadowBlur=14; ctx.shadowColor='#ff4400';
+  for (let i=0;i<8;i++) {
+    const ang = (i/8)*Math.PI*2 + t*1.5;
+    const len = r * (0.6 + 0.4*Math.sin(i*2.1));
+    ctx.strokeStyle=`rgba(255,${Math.floor(180*(1-t))},0,${1-t*0.7})`;
+    ctx.lineWidth=3;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy);
+    ctx.lineTo(cx+Math.cos(ang)*len, cy+Math.sin(ang)*len);
+    ctx.stroke();
+  }
+  // Debris particles
+  ctx.fillStyle=`rgba(255,200,0,${0.8*(1-t)})`;
+  for (let i=0;i<6;i++) {
+    const ang2 = (i/6)*Math.PI*2 + t*3;
+    const d = r*0.7;
+    ctx.beginPath(); ctx.arc(cx+Math.cos(ang2)*d, cy+Math.sin(ang2)*d, 3,0,Math.PI*2); ctx.fill();
+  }
+  ctx.shadowBlur=0;
+}
+
+function drawScanlines() {
+  ctx.fillStyle='rgba(0,0,0,0.07)';
+  for (let y=0; y<BASE_H; y+=3) ctx.fillRect(0,y,BASE_W,1);
+}
+
+function drawDoorArrows() {
+  ctx.fillStyle='rgba(0,220,255,0.35)';
+  ctx.font='bold 14px monospace'; ctx.textAlign='center';
+  // N arrow
+  ctx.fillText('▲', GAME_W/2, BORDER-2);
+  // S
+  ctx.fillText('▼', GAME_W/2, GAME_H-2);
+  // W
+  ctx.save(); ctx.translate(BORDER-2, GAME_H/2); ctx.fillText('◀',0,4); ctx.restore();
+  // E
+  ctx.save(); ctx.translate(GAME_W-BORDER+4, GAME_H/2); ctx.fillText('▶',0,4); ctx.restore();
+}
+
+function drawTitle() {
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,BASE_W,BASE_H);
+  // Subtle grid
+  ctx.strokeStyle='rgba(0,60,80,0.4)'; ctx.lineWidth=1;
+  for (let x=0;x<BASE_W;x+=32) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,BASE_H); ctx.stroke(); }
+  for (let y=0;y<BASE_H;y+=32) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(BASE_W,y); ctx.stroke(); }
+  // Title
+  ctx.shadowBlur=28; ctx.shadowColor='#ff4400';
+  ctx.fillStyle='#ff4400';
+  ctx.font='bold 78px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('BERZERK', BASE_W/2, 165);
+  ctx.shadowBlur=0;
+  // Subtitle
+  ctx.fillStyle='#00ccdd'; ctx.font='bold 16px "Courier New",monospace';
+  ctx.fillText('— ARCADE RECREATION —', BASE_W/2, 200);
+  // Instructions
+  ctx.fillStyle='#ffff00'; ctx.font='15px "Courier New",monospace';
+  ctx.fillText('MOVE:  WASD  /  ARROW KEYS', BASE_W/2, 250);
+  ctx.fillText('FIRE:  SPACE  (freezes movement)', BASE_W/2, 274);
+  ctx.fillText('', BASE_W/2, 298);
+  ctx.fillStyle='rgba(255,180,0,0.85)'; ctx.font='13px "Courier New",monospace';
+  ctx.fillText('Robots die on walls  ·  Avoid Evil Otto!', BASE_W/2, 310);
+  ctx.fillText('Yellow = dumb  ·  Red = shoots  ·  White = fast', BASE_W/2, 330);
+  // Blink start
+  ctx.fillStyle=Math.floor(Date.now()/520)%2?'#00ff55':'#006622';
+  ctx.font='bold 19px "Courier New",monospace';
+  ctx.fillText(isMobile?'TAP FIRE OR JOYSTICK TO START':'PRESS SPACE OR ENTER TO START', BASE_W/2, 385);
+  // Credit
+  ctx.fillStyle='#333'; ctx.font='11px "Courier New",monospace';
+  ctx.fillText('© 1980 STERN ELECTRONICS · RECREATION', BASE_W/2, BASE_H-14);
+  drawScanlines();
+}
+
+function drawGameOver() {
+  ctx.fillStyle='rgba(0,0,0,0.88)'; ctx.fillRect(0,0,BASE_W,BASE_H);
+  ctx.shadowBlur=22; ctx.shadowColor='#ff0000';
+  ctx.fillStyle='#ff2200'; ctx.font='bold 64px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.fillText('GAME OVER', BASE_W/2, BASE_H/2-50);
+  ctx.shadowBlur=0;
+  ctx.fillStyle='#ffff00'; ctx.font='22px "Courier New",monospace';
+  ctx.fillText('SCORE: '+String(score).padStart(6,'0'), BASE_W/2, BASE_H/2+10);
+  if (score===hiScore && score>0) {
+    ctx.fillStyle='#ff8800'; ctx.font='16px "Courier New",monospace';
+    ctx.fillText('NEW HIGH SCORE!', BASE_W/2, BASE_H/2+38);
+  }
+  ctx.fillStyle=Math.floor(Date.now()/520)%2?'#00ff55':'#004411';
+  ctx.font='16px "Courier New",monospace';
+  ctx.fillText(isMobile?'TAP FIRE TO PLAY AGAIN':'PRESS SPACE TO PLAY AGAIN', BASE_W/2, BASE_H/2+75);
+  drawScanlines();
+}
+
+function drawStatusMsg() {
+  if (msgTimer <= 0) return;
+  ctx.fillStyle='rgba(255,255,0,0.92)';
+  ctx.font='bold 20px "Courier New",monospace'; ctx.textAlign='center';
+  ctx.shadowBlur=8; ctx.shadowColor='#ff8800';
+  ctx.fillText(msgText, GAME_W/2, GAME_H/2 - 30);
+  ctx.shadowBlur=0;
+}
+
+function drawRoomInfo() {
+  ctx.fillStyle='rgba(0,180,220,0.45)';
+  ctx.font='10px "Courier New",monospace'; ctx.textAlign='right';
+  ctx.fillText('R:'+roomX+','+roomY, GAME_W-BORDER-4, BORDER+12);
+  ctx.textAlign='left';
+  const alive = robots.filter(r=>r.alive).length;
+  ctx.fillStyle = alive > 0 ? '#ff4444' : '#00ff44';
+  ctx.fillText('× '+alive, BORDER+4, BORDER+12);
+}
+
+function draw() {
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,BASE_W,BASE_H);
+  if (state==='title') { drawTitle(); return; }
+  if (state==='gameover') { drawGameOver(); return; }
+
+  // Game area offset by HUD
+  ctx.save(); ctx.translate(0, HUD_H);
+
+  // Flash overlay
+  if (screenFlash > 0) {
+    ctx.fillStyle=`rgba(255,255,255,${screenFlash/12*0.45})`;
+    ctx.fillRect(0,0,GAME_W,GAME_H);
+  }
+
+  drawBorderWalls();
+  drawDoorArrows();
+  drawInternalWalls();
+  drawBullets();
+  robots.forEach(drawRobot);
+  drawEvilOtto();
+  drawPlayer();
+  drawExplosion();
+  drawStatusMsg();
+  drawRoomInfo();
+
+  ctx.restore();
+  drawHUD();
+  drawScanlines();
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════
+let lastTs = 0;
+function loop(ts) {
+  const dt = Math.min((ts - lastTs) / 1000, 0.05);
+  lastTs = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+lastTs = performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
