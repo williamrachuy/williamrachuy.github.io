@@ -10,7 +10,6 @@
       color-scheme: dark;
       --bg: #040507;
       --bg2: #090b10;
-      --ink: #e8e0d1;
     }
     html, body {
       margin: 0;
@@ -33,7 +32,7 @@
       cursor: default;
       isolation: isolate;
     }
-    #particles, #quotes, #wordmark-wrap, #veil {
+    #particles, #wordmark-wrap, #veil {
       position: absolute;
       inset: 0;
       pointer-events: none;
@@ -41,17 +40,13 @@
     #veil::before {
       content: "";
       position: absolute;
-      left: 50%;
-      top: 50%;
+      left: 50%; top: 50%;
       width: min(78vw, 760px);
       height: 1px;
       transform: translate(-50%, -50%);
       background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
     }
-    #wordmark-wrap {
-      display: grid;
-      place-items: center;
-    }
+    #wordmark-wrap { display: grid; place-items: center; }
     #wordmark {
       position: relative;
       display: inline-block;
@@ -67,7 +62,7 @@
       opacity: var(--after-opacity, 0.04);
       filter: blur(22px);
       z-index: -1;
-      will-change: opacity, transform;
+      will-change: opacity;
     }
     .title-letter {
       position: absolute;
@@ -79,35 +74,9 @@
       text-shadow: 0 1px 0 rgba(255,255,255,0.02);
       will-change: transform, color, text-shadow;
     }
-    .quote {
-      position: absolute;
-      max-width: min(38vw, 320px);
-      color: rgba(232,224,209,1);
-      opacity: 0;
-      filter: blur(1.4px);
-      will-change: opacity, filter;
-    }
-    .quote.left { text-align: left; }
-    .quote.right { text-align: right; }
-    .quote .body {
-      font-size: clamp(13px, 1.4vw, 18px);
-      line-height: 1.42;
-      letter-spacing: 0.01em;
-    }
-    .quote .cite {
-      margin-top: 8px;
-      font-size: clamp(11px, 1vw, 13px);
-      color: rgba(232,224,209,1);
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-    }
     @keyframes breathe {
       0%, 100% { transform: scale(0.95); }
-      50% { transform: scale(1.05); }
-    }
-    @media (max-width: 720px) {
-      .quote { max-width: min(62vw, 260px); }
+      50%       { transform: scale(1.05); }
     }
   </style>
 </head>
@@ -115,50 +84,31 @@
   <main id="stage" aria-label="Interactive Adividiardi landing page">
     <canvas id="particles"></canvas>
     <div id="veil"></div>
-    <div id="quotes"></div>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
 
   <script>
     (() => {
       const TITLE = 'ADIVIDIARDI';
-      const QUOTES = [
-        { body: '"The world is my representation."', cite: 'Arthur Schopenhauer' },
-        { body: '"The eternal silence of these infinite spaces terrifies me."', cite: 'Blaise Pascal' },
-        { body: '"No man ever steps in the same river twice."', cite: 'Heraclitus' },
-        { body: '"Be patient toward all that is unsolved in your heart."', cite: 'Rainer Maria Rilke' },
-        { body: '"The mystery of life is not a problem to be solved but a reality to be experienced."', cite: 'Søren Kierkegaard' },
-        { body: '"To live is to suffer; to survive is to find meaning in the suffering."', cite: 'Friedrich Nietzsche' },
-        { body: '"The present moment always will have been."', cite: 'Alan Watts' },
-        { body: '"In the depth of winter I finally learned that within me there lay an invincible summer."', cite: 'Albert Camus' }
-      ];
 
-      const stage = document.getElementById('stage');
+      const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
-      const pctx = particlesCanvas.getContext('2d');
-      const word = document.getElementById('wordmark');
-      const quotesEl = document.getElementById('quotes');
+      const pctx           = particlesCanvas.getContext('2d');
+      const word           = document.getElementById('wordmark');
       if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
-      const measureCtx = measureCanvas.getContext('2d');
-      const titleLetters = [];
-      const particles = [];
-      const lights = [];
-      const zones = [];
-
-      // One quote staged at a time. Only illuminated by proximity to lights.
-      let stagedQuote = null;
-      let nextStageAt = 0;
-      let lastUsedQuoteIndex = -1;
-      let lastFrame = 0;
-
-      const QUOTE_FADE_MS = 7000;   // 7s fade in / out
-      const QUOTE_COOLDOWN_MS = 28000; // gap before staging a new one
+      const measureCtx    = measureCanvas.getContext('2d');
+      const titleLetters  = [];
+      const particles     = [];
+      const lights        = [];
+      let lastFrame       = 0;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-      function rand(lo, hi) { return lo + Math.random() * (hi - lo); }
+      function rand(lo, hi)     { return lo + Math.random() * (hi - lo); }
       function dist(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
+
+      // ─── Canvas sizing ──────────────────────────────────────────────────────
 
       function setCanvasSize(canvas, ctx) {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -169,14 +119,7 @@
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       }
 
-      function buildZones() {
-        const w = stage.clientWidth, h = stage.clientHeight;
-        zones.length = 0;
-        zones.push({ x: w * 0.18, y: h * 0.24, align: 'left'  });
-        zones.push({ x: w * 0.79, y: h * 0.29, align: 'right' });
-        zones.push({ x: w * 0.18, y: h * 0.71, align: 'left'  });
-        zones.push({ x: w * 0.80, y: h * 0.68, align: 'right' });
-      }
+      // ─── Title ─────────────────────────────────────────────────────────────
 
       function buildTitle() {
         titleLetters.length = 0;
@@ -185,13 +128,13 @@
         const tracking = fontSize * 0.08;
         measureCtx.font = `700 ${fontSize}px Cambria, Georgia, Times New Roman, serif`;
         const widths = [...TITLE].map(ch => measureCtx.measureText(ch).width);
-        const total = widths.reduce((a, b) => a + b, 0) + tracking * (widths.length - 1);
+        const total  = widths.reduce((a, b) => a + b, 0) + tracking * (widths.length - 1);
         word.style.width  = `${Math.ceil(total)}px`;
         word.style.height = `${Math.ceil(fontSize * 1.2)}px`;
         let x = 0;
         for (let i = 0; i < TITLE.length; i++) {
           const span = document.createElement('span');
-          span.className = 'title-letter';
+          span.className   = 'title-letter';
           span.textContent = TITLE[i];
           span.style.fontSize = `${fontSize}px`;
           const baseX = x + widths[i] / 2;
@@ -202,32 +145,84 @@
         }
       }
 
+      // ─── Particles ─────────────────────────────────────────────────────────
+
       function seedParticles() {
         particles.length = 0;
         for (let i = 0; i < 72; i++) {
           particles.push({
-            x: Math.random() * stage.clientWidth,
-            y: Math.random() * stage.clientHeight,
+            x:  Math.random() * stage.clientWidth,
+            y:  Math.random() * stage.clientHeight,
             vx: rand(-0.012, 0.012),
             vy: rand(-0.008, 0.008),
             size: Math.random() > 0.86 ? 2 : 1,
-            tw: Math.random() * Math.PI * 2,
+            tw:   Math.random() * Math.PI * 2,
             alpha: rand(0.16, 0.34)
           });
         }
       }
 
+      // Blend cool-white (#f1eadc) → hot-orange (#ff8c40) based on heat [0,1]
+      function heatColor(heat) {
+        const h = heat * heat; // square = more dramatic near source
+        const r = Math.round(241 + (255 - 241) * h);
+        const g = Math.round(234 + (140 - 234) * h);
+        const b = Math.round(220 + ( 64 - 220) * h);
+        return `rgb(${r},${g},${b})`;
+      }
+
+      function updateParticles(dt) {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        for (const p of particles) {
+          p.tw += dt * 0.00045;
+          for (const l of lights) {
+            const dx = p.x - l.x, dy = p.y - l.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            // Steeper falloff (^1.8) so close particles get much more pressure
+            const prox = Math.max(0, 1 - d / 140);
+            const inf  = Math.pow(prox, 1.8) * l.strength * 0.038;
+            p.vx += (dx / d) * inf;
+            p.vy += (dy / d) * inf;
+          }
+          p.vx *= 0.9988; p.vy *= 0.9988;
+          p.x  += p.vx * dt * 0.026;
+          p.y  += p.vy * dt * 0.026;
+          if (p.x < -6) p.x = w + 6; if (p.x > w + 6) p.x = -6;
+          if (p.y < -6) p.y = h + 6; if (p.y > h + 6) p.y = -6;
+        }
+      }
+
+      function drawParticles(now) {
+        pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
+        for (const p of particles) {
+          const local = lightAt(p.x, p.y);
+          const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
+          const alpha  = (p.alpha * 0.44) + local * (0.32 + pulse * 0.18);
+          const color  = heatColor(local);
+          pctx.globalAlpha = alpha;
+          pctx.shadowBlur  = local > 0.01 ? (3 + local * 16) : 0;
+          pctx.shadowColor = color;
+          pctx.fillStyle   = color;
+          pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+        }
+        pctx.globalAlpha = 1;
+        pctx.shadowBlur  = 0;
+      }
+
       // ─── Light system ───────────────────────────────────────────────────────
+      // Pointer lights: 3s fade-in on press, 8s fade-out on release.
 
       function lightAt(x, y) {
         let total = 0;
         const now = performance.now();
         for (const l of lights) {
-          const d = dist(x, y, l.x, l.y);
-          const radius = l.kind === 'pointer' ? (68 + l.strength * 62) : (96 + l.strength * 64);
-          const life = clamp(l.ttl / l.maxTtl, 0, 1);
+          const d      = dist(x, y, l.x, l.y);
+          const radius = l.kind === 'pointer' ? (72 + l.strength * 64) : (96 + l.strength * 64);
+          const life   = clamp(l.ttl / l.maxTtl, 0, 1);
+          // Eased decay: fades out more slowly at first (perceptually matches 8s feel)
           const easedLife = Math.pow(life, 0.55);
-          const fadeIn = clamp((now - (l.born || now)) / (l.fadeInMs || 1), 0, 1);
+          // 3-second linear fade-in
+          const fadeIn = clamp((now - (l.born || now)) / 3000, 0, 1);
           total += Math.max(0, 1 - d / radius) * l.strength * easedLife * fadeIn;
         }
         return clamp(total, 0, 1);
@@ -244,9 +239,9 @@
 
       function pointerLight(event, strength) {
         const rect = stage.getBoundingClientRect();
-        const p = event.touches ? event.touches[0] : event;
-        const x = p.clientX - rect.left;
-        const y = p.clientY - rect.top;
+        const p    = event.touches ? event.touches[0] : event;
+        const x    = p.clientX - rect.left;
+        const y    = p.clientY - rect.top;
         const existing = lights.find(l => l.kind === 'pointer');
         if (existing) {
           existing.x = x; existing.y = y;
@@ -255,132 +250,24 @@
           existing.released = false;
         } else {
           lights.push({ x, y, strength, ttl: 8000, maxTtl: 8000,
-            kind: 'pointer', born: performance.now(), fadeInMs: 3000, released: false });
+            kind: 'pointer', born: performance.now(), released: false });
         }
       }
 
       const releasePointerLight = () => {
         const l = lights.find(li => li.kind === 'pointer');
+        // On release: keep full ttl of 8s and let it decay
         if (l) { l.released = true; l.ttl = 8000; l.maxTtl = 8000; }
       };
 
-      // ─── Quote system ───────────────────────────────────────────────────────
-      // One quote staged at a time. Opacity is PURELY driven by light proximity.
-      // 7s linear fade-in when illuminated, 7s linear fade-out when dark.
-      // Never visible without a nearby light source.
-
-      function stageNewQuote() {
-        if (stagedQuote) { stagedQuote.el.remove(); stagedQuote = null; }
-
-        const zi = Math.floor(Math.random() * zones.length);
-        const zone = zones[zi];
-
-        // Avoid repeating the same quote back-to-back
-        let qi;
-        do { qi = Math.floor(Math.random() * QUOTES.length); }
-        while (QUOTES.length > 1 && qi === lastUsedQuoteIndex);
-        lastUsedQuoteIndex = qi;
-        const q = QUOTES[qi];
-
-        const el = document.createElement('div');
-        el.className = `quote ${zone.align}`;
-        el.innerHTML = `<div class="body">${q.body}</div><div class="cite">${q.cite}</div>`;
-        el.style.left = `${zone.x}px`;
-        el.style.top  = `${zone.y}px`;
-        el.style.transform = zone.align === 'right' ? 'translate(-100%,-50%)' : 'translate(0,-50%)';
-        el.style.opacity = '0';
-        quotesEl.appendChild(el);
-
-        stagedQuote = {
-          el, zone, reveal: 0,
-          wasLit: false, lastLitAt: 0,
-          staleAt: performance.now() + 90000  // replace if never lit after 90s
-        };
-      }
-
-      function updateQuotes(now, dt) {
-        // Stage the first quote 20s after load; thereafter controlled by cooldown
-        if (!stagedQuote) {
-          if (now >= nextStageAt) stageNewQuote();
-          return;
-        }
-
-        const q = stagedQuote;
-        // Sample light at the quote's position (slightly inward from edge)
-        const sampleX = q.zone.x + (q.zone.align === 'right' ? -40 : 40);
-        const light = lightAt(sampleX, q.zone.y);
-
-        // Linear ramp toward light level — 7s to fully reveal, 7s to fully hide
-        const target = light > 0.04 ? clamp(light, 0, 1) : 0;
-        const step = dt / QUOTE_FADE_MS;
-        if (q.reveal < target) q.reveal = Math.min(target, q.reveal + step);
-        else                   q.reveal = Math.max(target, q.reveal - step);
-
-        if (light > 0.04) { q.wasLit = true; q.lastLitAt = now; }
-
-        // Opacity: only non-zero via reveal. Max ~0.20 so they stay dim.
-        const opacity = q.reveal * 0.20;
-        q.el.style.opacity = opacity < 0.001 ? '0' : opacity.toFixed(4);
-        q.el.style.filter  = `blur(${1.4 - q.reveal * 1.1}px)`;
-        q.el.style.textShadow = q.reveal > 0.02
-          ? `0 0 ${4 + q.reveal * 16}px rgba(232,224,209,${q.reveal * 0.12})`
-          : 'none';
-
-        // Retire quote when: was lit, now fully dark for 10s — or stale (never lit, 90s)
-        const done = (q.wasLit && q.reveal < 0.005 && now - q.lastLitAt > 10000)
-                  || (now > q.staleAt);
-        if (done) {
-          q.el.remove();
-          stagedQuote = null;
-          nextStageAt = now + QUOTE_COOLDOWN_MS;
-        }
-      }
-
-      // ─── Particles ──────────────────────────────────────────────────────────
-
-      function updateParticles(now, dt) {
-        const w = stage.clientWidth, h = stage.clientHeight;
-        for (const p of particles) {
-          p.tw += dt * 0.00045;
-          for (const l of lights) {
-            const dx = p.x - l.x, dy = p.y - l.y;
-            const d = Math.hypot(dx, dy) || 1;
-            const inf = Math.max(0, 1 - d / 165) * l.strength * 0.0105;
-            p.vx += (dx / d) * inf;
-            p.vy += (dy / d) * inf;
-          }
-          p.vx *= 0.99915; p.vy *= 0.99915;
-          p.x += p.vx * dt * 0.026;
-          p.y += p.vy * dt * 0.026;
-          if (p.x < -6) p.x = w + 6; if (p.x > w + 6) p.x = -6;
-          if (p.y < -6) p.y = h + 6; if (p.y > h + 6) p.y = -6;
-        }
-      }
-
-      function drawParticles(now) {
-        pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
-        for (const p of particles) {
-          const local = lightAt(p.x, p.y);
-          const pulse = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const alpha = (p.alpha * 0.44) + local * (0.28 + pulse * 0.18);
-          pctx.globalAlpha = alpha;
-          pctx.shadowBlur  = local > 0.01 ? (3 + local * 13) : 0;
-          pctx.shadowColor = `rgba(241,234,220,${local * 0.24})`;
-          pctx.fillStyle   = '#f1eadc';
-          pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
-        }
-        pctx.globalAlpha = 1;
-        pctx.shadowBlur  = 0;
-      }
-
       // ─── Title letters ──────────────────────────────────────────────────────
-      // Letters drift slowly away from tap center (oil viscosity).
-      // High damping, weak force, weak spring — deliberate floating motion.
+      // Springy but viscous: pushed away from tap, spring back to rest.
+      // Higher spring + push than before, same high damping = lively but damped.
 
       function updateTitle(dt) {
-        const w = stage.clientWidth, h = stage.clientHeight;
+        const w        = stage.clientWidth, h = stage.clientHeight;
         const wordLeft = (w - word.offsetWidth) * 0.5;
-        let titleGlow = 0;
+        let titleGlow  = 0;
 
         for (const l of titleLetters) {
           let fx = 0, fy = 0, localLight = 0;
@@ -389,55 +276,51 @@
             const ly = h * 0.5;
             const dx = lx - light.x;
             const dy = ly - light.y;
-            const d = Math.hypot(dx, dy) || 1;
-            // Influence: push letter away from light source
-            const inf = Math.max(0, 1 - d / 200) * light.strength;
+            const d  = Math.hypot(dx, dy) || 1;
+            const inf = Math.max(0, 1 - d / 210) * light.strength;
             localLight = Math.max(localLight, inf);
-            // Gentle push force — oil viscosity: slow buildup, slow drift
-            fx += (dx / d) * inf * 0.006;
-            fy += (dy / d) * inf * 0.004;
+            // Push away from light — more force than before for visible spring response
+            fx += (dx / d) * inf * 0.016;
+            fy += (dy / d) * inf * 0.010;
           }
           titleGlow = Math.max(titleGlow, localLight);
 
-          // Weak spring back to base — also slow and viscous
-          l.vx += fx + (l.baseX - l.x) * 0.030;
-          l.vy += fy + (0      - l.y)  * 0.032;
+          // Spring toward rest (stronger spring = snappier return, still damped)
+          l.vx += fx + (l.baseX - l.x) * 0.065;
+          l.vy += fy + (0       - l.y) * 0.068;
 
-          // High damping — letters feel like they move through oil
-          l.vx *= 0.91;
-          l.vy *= 0.91;
+          // Viscous damping — motion feels thick, not bouncy
+          l.vx *= 0.90;
+          l.vy *= 0.90;
 
           l.x += l.vx * dt * 0.038;
           l.y += l.vy * dt * 0.038;
 
           const glow = clamp(localLight, 0, 1);
           l.el.style.color      = `rgba(232,224,209,${(0.24 + glow * 0.76).toFixed(3)})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${glow * 20}px rgba(232,224,209,${(glow * 0.15).toFixed(3)})`;
-          l.el.style.transform  = `translate(-50%,-50%) translate(${(l.x - l.baseX).toFixed(2)}px,${l.y.toFixed(2)}px) scale(${1 + glow * 0.018},${1 - glow * 0.006})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${(glow * 22).toFixed(1)}px rgba(232,224,209,${(glow * 0.16).toFixed(3)})`;
+          l.el.style.transform  = `translate(-50%,-50%) translate(${(l.x - l.baseX).toFixed(2)}px,${l.y.toFixed(2)}px) scale(${(1 + glow * 0.02).toFixed(4)},${(1 - glow * 0.007).toFixed(4)})`;
         }
 
         word.style.filter     = `blur(${(titleGlow * 0.18).toFixed(2)}px)`;
         word.style.opacity    = (0.72 + titleGlow * 0.28).toFixed(3);
-        word.style.textShadow = `0 0 ${titleGlow * 18}px rgba(232,224,209,${(titleGlow * 0.08).toFixed(3)})`;
-        word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.08).toFixed(3));
+        word.style.textShadow = `0 0 ${(titleGlow * 20).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.09).toFixed(3)})`;
+        word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.10).toFixed(3));
       }
 
       // ─── Main loop ──────────────────────────────────────────────────────────
 
       function resize() {
         setCanvasSize(particlesCanvas, pctx);
-        buildZones();
         buildTitle();
         seedParticles();
-        if (stagedQuote) { stagedQuote.el.remove(); stagedQuote = null; }
       }
 
       function frame(now) {
         const dt = Math.min(32, now - (lastFrame || now));
         lastFrame = now;
         updateLights(dt);
-        updateParticles(now, dt);
-        updateQuotes(now, dt);
+        updateParticles(dt);
         updateTitle(dt);
         drawParticles(now);
         requestAnimationFrame(frame);
@@ -446,7 +329,7 @@
       stage.addEventListener('pointerdown', e => pointerLight(e, 1.05));
       stage.addEventListener('pointermove', e => {
         if (e.pointerType === 'mouse') pointerLight(e, 0.14);
-        else if (e.buttons)           pointerLight(e, 0.28);
+        else if (e.buttons)            pointerLight(e, 0.28);
       });
       stage.addEventListener('touchstart', e => pointerLight(e, 1.0), { passive: true });
       stage.addEventListener('touchmove',  e => pointerLight(e, 0.3),  { passive: true });
@@ -456,7 +339,6 @@
       window.addEventListener('resize', resize);
 
       resize();
-      nextStageAt = performance.now() + 20000; // first quote staged 20s after load
       requestAnimationFrame(frame);
     })();
   </script>
