@@ -266,16 +266,16 @@
         const p = event.touches ? event.touches[0] : event;
         const x = p.clientX - rect.left;
         const y = p.clientY - rect.top;
-        const ttl = event.touches ? 1700 : 1300;
+        const ttl = event.touches ? 1600 : 1200;
         const existing = lights.find(light => light.kind === 'pointer');
         if (existing) {
           existing.x = x;
           existing.y = y;
           existing.strength = Math.max(existing.strength, strength);
           existing.ttl = ttl;
-          existing.maxTtl = ttl * 5;
+          existing.maxTtl = 8000;
         } else {
-          lights.push({ x, y, strength, ttl, maxTtl: ttl * 5, kind: 'pointer' });
+          lights.push({ x, y, strength, ttl, maxTtl: 8000, kind: 'pointer' });
         }
         showQuoteAtZone(nearestZoneIndex(x, y), true);
       }
