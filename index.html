@@ -149,7 +149,7 @@
 
       function seedParticles() {
         particles.length = 0;
-        for (let i = 0; i < 72; i++) {
+        for (let i = 0; i < 216; i++) {
           particles.push({
             x:  Math.random() * stage.clientWidth,
             y:  Math.random() * stage.clientHeight,
@@ -157,7 +157,8 @@
             vy: rand(-0.008, 0.008),
             size: Math.random() > 0.86 ? 2 : 1,
             tw:   Math.random() * Math.PI * 2,
-            alpha: rand(0.16, 0.34)
+            alpha: rand(0.16, 0.34),
+            trail: []  // comet tail positions
           });
         }
       }
@@ -178,13 +179,15 @@
           for (const l of lights) {
             const dx = p.x - l.x, dy = p.y - l.y;
             const d  = Math.hypot(dx, dy) || 1;
-            // Steeper falloff (^1.8) so close particles get much more pressure
             const prox = Math.max(0, 1 - d / 140);
-            const inf  = Math.pow(prox, 1.8) * l.strength * 0.038;
+            const inf  = Math.pow(prox, 1.8) * l.strength * 0.057; // +50% pressure
             p.vx += (dx / d) * inf;
             p.vy += (dy / d) * inf;
           }
           p.vx *= 0.9988; p.vy *= 0.9988;
+          // Record trail before moving (tail evaporates oldest first)
+          p.trail.unshift({ x: p.x, y: p.y });
+          if (p.trail.length > 10) p.trail.pop();
           p.x  += p.vx * dt * 0.026;
           p.y  += p.vy * dt * 0.026;
           if (p.x < -6) p.x = w + 6; if (p.x > w + 6) p.x = -6;
@@ -199,8 +202,29 @@
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
           const alpha  = (p.alpha * 0.44) + local * (0.32 + pulse * 0.18);
           const color  = heatColor(local);
+          const speed  = Math.hypot(p.vx, p.vy);
+
+          // Comet tail — evaporates from tip outward, only visible when moving + lit
+          if (local > 0.04 && speed > 0.002 && p.trail.length > 1) {
+            const tailLen = p.trail.length;
+            for (let t = 0; t < tailLen; t++) {
+              const frac = (t + 1) / tailLen;          // 0=head, 1=tail tip
+              const evap  = Math.pow(1 - frac, 1.6);   // nonlinear evaporation
+              const tAlpha = alpha * evap * local * 0.55;
+              if (tAlpha < 0.005) break;
+              pctx.globalAlpha = tAlpha;
+              // Tail dims shadow as it evaporates
+              pctx.shadowBlur  = local * (8 - frac * 7);
+              pctx.shadowColor = color;
+              pctx.fillStyle   = color;
+              pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.size, p.size);
+            }
+          }
+
+          // Particle head — self-emission glow scales with heat squared
+          const heatSq = local * local;
           pctx.globalAlpha = alpha;
-          pctx.shadowBlur  = local > 0.01 ? (3 + local * 16) : 0;
+          pctx.shadowBlur  = local > 0.01 ? (3 + heatSq * 32) : 0; // radiating glow
           pctx.shadowColor = color;
           pctx.fillStyle   = color;
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
