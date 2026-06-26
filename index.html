@@ -55,7 +55,7 @@
     #wordmark {
       position: relative;
       display: inline-block;
-      animation: breathe 6.8s ease-in-out infinite;
+      animation: breathe 15s ease-in-out infinite;
       will-change: opacity, filter, transform;
     }
     #wordmark::after {
@@ -104,8 +104,8 @@
       font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
     @keyframes breathe {
-      0%, 100% { transform: scale(0.994); }
-      50% { transform: scale(1.012); }
+      0%, 100% { transform: scale(0.95); }
+      50% { transform: scale(1.05); }
     }
     @media (max-width: 720px) {
       .quote { max-width: min(62vw, 260px); }
@@ -413,7 +413,6 @@
         }
         word.style.filter = `blur(${titleGlow * 0.18}px)`;
         word.style.opacity = (0.72 + titleGlow * 0.28).toFixed(3);
-        word.style.transform = 'translateY(0)';
         word.style.textShadow = `0 0 ${titleGlow * 18}px rgba(232,224,209,${titleGlow * 0.08})`;
         word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.08).toFixed(3));
       }
