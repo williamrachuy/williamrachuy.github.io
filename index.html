@@ -261,7 +261,7 @@
         };
       }
 
-      function addLight(x, y, strength = 1, ttl = 1800) {
+      function addLight(x, y, strength = 1, ttl = 1500) {
         lights.push({ x, y, strength, ttl, maxTtl: ttl });
       }
 
@@ -270,7 +270,17 @@
         const p = event.touches ? event.touches[0] : event;
         const x = p.clientX - rect.left;
         const y = p.clientY - rect.top;
-        addLight(x, y, strength, event.touches ? 2200 : 1500);
+        const ttl = event.touches ? 1700 : 1300;
+        const existing = lights.find(light => light.kind === 'pointer');
+        if (existing) {
+          existing.x = x;
+          existing.y = y;
+          existing.strength = Math.max(existing.strength, strength);
+          existing.ttl = ttl;
+          existing.maxTtl = ttl * 5;
+        } else {
+          lights.push({ x, y, strength, ttl, maxTtl: ttl * 5, kind: 'pointer' });
+        }
         showQuoteAtZone(nearestZoneIndex(x, y), true);
       }
 
@@ -278,8 +288,10 @@
         let total = 0;
         for (const light of lights) {
           const d = dist(x, y, light.x, light.y);
-          const radius = 140 + light.strength * 110;
-          total += Math.max(0, 1 - d / radius) * light.strength * (light.ttl / light.maxTtl);
+          const radius = light.kind === 'pointer' ? (78 + light.strength * 72) : (120 + light.strength * 90);
+          const life = clamp(light.ttl / light.maxTtl, 0, 1);
+          const easedLife = Math.pow(life, 0.55);
+          total += Math.max(0, 1 - d / radius) * light.strength * easedLife;
         }
         return clamp(total, 0, 1);
       }
@@ -363,11 +375,13 @@
       function drawGlow() {
         gctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         for (const light of lights) {
-          const life = light.ttl / light.maxTtl;
-          const radius = 70 + light.strength * 90;
+          const life = clamp(light.ttl / light.maxTtl, 0, 1);
+          const easedLife = Math.pow(life, 0.45);
+          const radius = light.kind === 'pointer' ? (42 + light.strength * 54) : (54 + light.strength * 48);
           const grad = gctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
-          grad.addColorStop(0, `rgba(232,224,209,${0.08 * life})`);
-          grad.addColorStop(0.35, `rgba(232,224,209,${0.04 * life})`);
+          grad.addColorStop(0, `rgba(232,224,209,${0.12 * easedLife})`);
+          grad.addColorStop(0.22, `rgba(232,224,209,${0.06 * easedLife})`);
+          grad.addColorStop(0.55, `rgba(232,224,209,${0.018 * easedLife})`);
           grad.addColorStop(1, 'rgba(232,224,209,0)');
           gctx.fillStyle = grad;
           gctx.beginPath();
@@ -445,15 +459,15 @@
 
       stage.addEventListener('pointerdown', (event) => pointerLight(event, 1.05));
       stage.addEventListener('pointermove', (event) => {
-        if (event.pointerType === 'mouse') pointerLight(event, 0.26);
-        else if (event.buttons) pointerLight(event, 0.52);
+        if (event.pointerType === 'mouse') pointerLight(event, 0.14);
+        else if (event.buttons) pointerLight(event, 0.28);
       });
       stage.addEventListener('touchstart', (event) => pointerLight(event, 1.0), { passive: true });
-      stage.addEventListener('touchmove', (event) => pointerLight(event, 0.56), { passive: true });
+      stage.addEventListener('touchmove', (event) => pointerLight(event, 0.3), { passive: true });
       window.addEventListener('resize', resize);
 
       resize();
-      addLight(stage.clientWidth * 0.5, stage.clientHeight * 0.5, 0.32, 1800);
+      lights.push({ x: stage.clientWidth * 0.5, y: stage.clientHeight * 0.5, strength: 0.18, ttl: 900, maxTtl: 2200, kind: 'ambient' });
       nextQuoteAt = performance.now() + 10000;
       requestAnimationFrame(frame);
     })();
