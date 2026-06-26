@@ -74,7 +74,7 @@
       top: 50%;
       transform: translate(-50%, -50%);
       white-space: pre;
-      color: rgba(232,224,209,0.34);
+      color: rgba(232,224,209,0.24);
       font-weight: 700;
       text-shadow: 0 1px 0 rgba(255,255,255,0.02);
       will-change: transform, color, text-shadow;
@@ -300,14 +300,14 @@
             q.el.remove();
             activeQuote = null;
           } else {
-            const light = lightAt(q.x + (q.align === 'right' ? -30 : 30), q.y);
-            q.reveal = lerp(q.reveal, light, 0.12);
+            const light = clamp(lightAt(q.x + (q.align === 'right' ? -30 : 30), q.y) * 4.2, 0, 1);
+            q.reveal = lerp(q.reveal, light, 0.18);
             const fadeIn = clamp(age / 900, 0, 1);
             const fadeOut = clamp((q.life - age) / 1800, 0, 1);
-            const opacity = Math.min(fadeIn, fadeOut) * (q.reveal * 0.055);
+            const opacity = Math.min(fadeIn, fadeOut) * (q.reveal * 0.34);
             q.el.style.opacity = opacity.toFixed(3);
-            q.el.style.filter = `blur(${0.9 - q.reveal * 0.45}px)`;
-            q.el.style.textShadow = `0 0 ${2 + q.reveal * 10}px rgba(232,224,209,${q.reveal * 0.06})`;
+            q.el.style.filter = `blur(${0.9 - q.reveal * 0.65}px)`;
+            q.el.style.textShadow = `0 0 ${4 + q.reveal * 18}px rgba(232,224,209,${q.reveal * 0.16})`;
 
             let fx = 0, fy = 0;
             for (const lightObj of lights) {
@@ -342,14 +342,14 @@
             const dx = p.x - light.x;
             const dy = p.y - light.y;
             const d = Math.hypot(dx, dy) || 1;
-            const influence = Math.max(0, 1 - d / 150) * light.strength * 0.02;
+            const influence = Math.max(0, 1 - d / 165) * light.strength * 0.0105;
             p.vx += (dx / d) * influence;
             p.vy += (dy / d) * influence;
           }
-          p.vx *= 0.9988;
-          p.vy *= 0.9988;
-          p.x += p.vx * dt * 0.035;
-          p.y += p.vy * dt * 0.035;
+          p.vx *= 0.99915;
+          p.vy *= 0.99915;
+          p.x += p.vx * dt * 0.026;
+          p.y += p.vy * dt * 0.026;
           if (p.x < -6) p.x = w + 6;
           if (p.x > w + 6) p.x = -6;
           if (p.y < -6) p.y = h + 6;
@@ -362,10 +362,10 @@
         for (const p of particles) {
           const local = lightAt(p.x, p.y);
           const pulse = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const alpha = (p.alpha * 0.42) + local * (0.18 + pulse * 0.12);
+          const alpha = (p.alpha * 0.44) + local * (0.28 + pulse * 0.18);
           pctx.globalAlpha = alpha;
-          pctx.shadowBlur = local > 0.01 ? (2 + local * 10) : 0;
-          pctx.shadowColor = `rgba(241,234,220,${local * 0.16})`;
+          pctx.shadowBlur = local > 0.01 ? (3 + local * 13) : 0;
+          pctx.shadowColor = `rgba(241,234,220,${local * 0.24})`;
           pctx.fillStyle = '#f1eadc';
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
         }
@@ -394,27 +394,27 @@
             const dx = lx - light.x;
             const dy = ly - light.y;
             const d = Math.hypot(dx, dy) || 1;
-            const influence = Math.max(0, 1 - d / 145) * light.strength;
+            const influence = Math.max(0, 1 - d / 160) * light.strength;
             localLight = Math.max(localLight, influence);
-            fx += (dx / d) * influence * 0.03;
-            fy += (dy / d) * influence * 0.02;
+            fx += (dx / d) * influence * 0.05;
+            fy += (dy / d) * influence * 0.034;
           }
           titleGlow = Math.max(titleGlow, localLight);
-          l.vx += fx + (l.baseX - l.x) * 0.16;
-          l.vy += fy + (0 - l.y) * 0.18;
-          l.vx *= 0.5;
-          l.vy *= 0.5;
-          l.x += l.vx * dt * 0.04;
-          l.y += l.vy * dt * 0.04;
+          l.vx += fx + (l.baseX - l.x) * 0.17;
+          l.vy += fy + (0 - l.y) * 0.19;
+          l.vx *= 0.53;
+          l.vy *= 0.53;
+          l.x += l.vx * dt * 0.045;
+          l.y += l.vy * dt * 0.045;
           const glow = clamp(localLight, 0, 1);
-          l.el.style.color = `rgba(232,224,209,${0.34 + glow * 0.66})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${glow * 16}px rgba(232,224,209,${glow * 0.12})`;
-          l.el.style.transform = `translate(-50%, -50%) translate(${l.x - l.baseX}px, ${l.y}px) scale(${1 + glow * 0.01}, ${1 - glow * 0.004})`;
+          l.el.style.color = `rgba(232,224,209,${0.24 + glow * 0.76})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${glow * 20}px rgba(232,224,209,${glow * 0.15})`;
+          l.el.style.transform = `translate(-50%, -50%) translate(${l.x - l.baseX}px, ${l.y}px) scale(${1 + glow * 0.018}, ${1 - glow * 0.006})`;
         }
         word.style.filter = `blur(${titleGlow * 0.18}px)`;
-        word.style.opacity = (0.8 + titleGlow * 0.2).toFixed(3);
+        word.style.opacity = (0.72 + titleGlow * 0.28).toFixed(3);
         word.style.transform = 'translateY(0)';
-        word.style.textShadow = `0 0 ${titleGlow * 14}px rgba(232,224,209,${titleGlow * 0.06})`;
+        word.style.textShadow = `0 0 ${titleGlow * 18}px rgba(232,224,209,${titleGlow * 0.08})`;
         word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.08).toFixed(3));
       }
 
