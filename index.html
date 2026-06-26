@@ -33,7 +33,7 @@
       cursor: default;
       isolation: isolate;
     }
-    #particles, #glow, #quotes, #wordmark-wrap, #veil {
+    #particles, #quotes, #wordmark-wrap, #veil {
       position: absolute;
       inset: 0;
       pointer-events: none;
@@ -63,8 +63,8 @@
       position: absolute;
       inset: -20px -24px;
       border-radius: 999px;
-      background: radial-gradient(circle, rgba(232,224,209,0.09), rgba(232,224,209,0.02) 36%, transparent 74%);
-      opacity: 0.1;
+      background: radial-gradient(circle, rgba(232,224,209,0.06), rgba(232,224,209,0.015) 36%, transparent 74%);
+      opacity: var(--after-opacity, 0.04);
       filter: blur(22px);
       z-index: -1;
       will-change: opacity, transform;
@@ -74,7 +74,7 @@
       top: 50%;
       transform: translate(-50%, -50%);
       white-space: pre;
-      color: rgba(232,224,209,0.67);
+      color: rgba(232,224,209,0.34);
       font-weight: 700;
       text-shadow: 0 1px 0 rgba(255,255,255,0.02);
       will-change: transform, color, text-shadow;
@@ -82,7 +82,7 @@
     .quote {
       position: absolute;
       max-width: min(38vw, 320px);
-      color: rgba(232,224,209,0.7);
+      color: rgba(232,224,209,1);
       opacity: 0;
       filter: blur(0.7px);
       transition: opacity 1000ms ease;
@@ -98,7 +98,7 @@
     .quote .cite {
       margin-top: 8px;
       font-size: clamp(11px, 1vw, 13px);
-      color: rgba(232,224,209,0.28);
+      color: rgba(232,224,209,1);
       letter-spacing: 0.05em;
       text-transform: uppercase;
       font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
@@ -115,7 +115,6 @@
 <body>
   <main id="stage" aria-label="Interactive Adividiardi landing page">
     <canvas id="particles"></canvas>
-    <canvas id="glow"></canvas>
     <div id="veil"></div>
     <div id="quotes"></div>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
@@ -134,12 +133,10 @@
 
       const stage = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
-      const glowCanvas = document.getElementById('glow');
       const pctx = particlesCanvas.getContext('2d');
-      const gctx = glowCanvas.getContext('2d');
       const word = document.getElementById('wordmark');
       const quotesEl = document.getElementById('quotes');
-      if (!pctx || !gctx) return;
+      if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
       const measureCtx = measureCanvas.getContext('2d');
@@ -227,7 +224,6 @@
         if (!zone) return;
         if (activeQuote && activeQuote.zoneIndex === zoneIndex) {
           activeQuote.born = performance.now();
-          activeQuote.graceUntil = performance.now() + 2200;
           return;
         }
         if (activeQuote) {
@@ -253,7 +249,7 @@
           born: performance.now(),
           life: forced ? rand(8000, 12000) : rand(10000, 15000),
           reveal: 0,
-          graceUntil: performance.now() + (forced ? 2200 : 0),
+          graceUntil: 0,
           swayX: 0,
           swayY: 0,
           svx: 0,
@@ -288,7 +284,7 @@
         let total = 0;
         for (const light of lights) {
           const d = dist(x, y, light.x, light.y);
-          const radius = light.kind === 'pointer' ? (78 + light.strength * 72) : (120 + light.strength * 90);
+          const radius = light.kind === 'pointer' ? (68 + light.strength * 62) : (96 + light.strength * 64);
           const life = clamp(light.ttl / light.maxTtl, 0, 1);
           const easedLife = Math.pow(life, 0.55);
           total += Math.max(0, 1 - d / radius) * light.strength * easedLife;
@@ -304,12 +300,14 @@
             q.el.remove();
             activeQuote = null;
           } else {
-            const light = Math.max(lightAt(q.x + (q.align === 'right' ? -30 : 30), q.y), now < q.graceUntil ? 1 : 0);
+            const light = lightAt(q.x + (q.align === 'right' ? -30 : 30), q.y);
             q.reveal = lerp(q.reveal, light, 0.12);
             const fadeIn = clamp(age / 900, 0, 1);
             const fadeOut = clamp((q.life - age) / 1800, 0, 1);
-            const opacity = Math.min(fadeIn, fadeOut) * (0.01 + q.reveal * 0.09);
+            const opacity = Math.min(fadeIn, fadeOut) * (q.reveal * 0.055);
             q.el.style.opacity = opacity.toFixed(3);
+            q.el.style.filter = `blur(${0.9 - q.reveal * 0.45}px)`;
+            q.el.style.textShadow = `0 0 ${2 + q.reveal * 10}px rgba(232,224,209,${q.reveal * 0.06})`;
 
             let fx = 0, fy = 0;
             for (const lightObj of lights) {
@@ -364,31 +362,17 @@
         for (const p of particles) {
           const local = lightAt(p.x, p.y);
           const pulse = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const alpha = (p.alpha * 0.36) + local * (0.10 + pulse * 0.12);
+          const alpha = (p.alpha * 0.42) + local * (0.18 + pulse * 0.12);
           pctx.globalAlpha = alpha;
+          pctx.shadowBlur = local > 0.01 ? (2 + local * 10) : 0;
+          pctx.shadowColor = `rgba(241,234,220,${local * 0.16})`;
           pctx.fillStyle = '#f1eadc';
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
         }
         pctx.globalAlpha = 1;
+        pctx.shadowBlur = 0;
       }
 
-      function drawGlow() {
-        gctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
-        for (const light of lights) {
-          const life = clamp(light.ttl / light.maxTtl, 0, 1);
-          const easedLife = Math.pow(life, 0.45);
-          const radius = light.kind === 'pointer' ? (42 + light.strength * 54) : (54 + light.strength * 48);
-          const grad = gctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
-          grad.addColorStop(0, `rgba(232,224,209,${0.12 * easedLife})`);
-          grad.addColorStop(0.22, `rgba(232,224,209,${0.06 * easedLife})`);
-          grad.addColorStop(0.55, `rgba(232,224,209,${0.018 * easedLife})`);
-          grad.addColorStop(1, 'rgba(232,224,209,0)');
-          gctx.fillStyle = grad;
-          gctx.beginPath();
-          gctx.arc(light.x, light.y, radius, 0, Math.PI * 2);
-          gctx.fill();
-        }
-      }
 
       function updateLights(dt) {
         for (let i = lights.length - 1; i >= 0; i--) {
@@ -400,13 +384,8 @@
       function updateTitle(dt) {
         const w = stage.clientWidth;
         const h = stage.clientHeight;
-        let centerLight = lightAt(w * 0.5, h * 0.5);
-        word.style.opacity = (0.86 + centerLight * 0.14).toFixed(3);
-        word.style.filter = `blur(${centerLight * 0.2}px)`;
-        word.style.transform = `translateY(${centerLight * -0.4}px)`;
-        word.style.setProperty('--after-opacity', (0.10 + centerLight * 0.12).toFixed(3));
-        word.style.textShadow = `0 1px 0 rgba(255,255,255,0.02), 0 0 ${10 + centerLight * 18}px rgba(232,224,209,${0.03 + centerLight * 0.08})`;
         const wordLeft = (w - word.offsetWidth) * 0.5;
+        let titleGlow = 0;
         for (const l of titleLetters) {
           let fx = 0, fy = 0, localLight = 0;
           for (const light of lights) {
@@ -415,27 +394,32 @@
             const dx = lx - light.x;
             const dy = ly - light.y;
             const d = Math.hypot(dx, dy) || 1;
-            const influence = Math.max(0, 1 - d / 150) * light.strength;
+            const influence = Math.max(0, 1 - d / 145) * light.strength;
             localLight = Math.max(localLight, influence);
-            fx += (dx / d) * influence * 0.05;
-            fy += (dy / d) * influence * 0.035;
+            fx += (dx / d) * influence * 0.03;
+            fy += (dy / d) * influence * 0.02;
           }
-          l.vx += fx + (l.baseX - l.x) * 0.14;
-          l.vy += fy + (0 - l.y) * 0.16;
-          l.vx *= 0.58;
-          l.vy *= 0.58;
-          l.x += l.vx * dt * 0.045;
-          l.y += l.vy * dt * 0.045;
+          titleGlow = Math.max(titleGlow, localLight);
+          l.vx += fx + (l.baseX - l.x) * 0.16;
+          l.vy += fy + (0 - l.y) * 0.18;
+          l.vx *= 0.5;
+          l.vy *= 0.5;
+          l.x += l.vx * dt * 0.04;
+          l.y += l.vy * dt * 0.04;
           const glow = clamp(localLight, 0, 1);
-          l.el.style.color = `rgba(232,224,209,${0.67 + glow * 0.33})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.02), 0 0 ${2 + glow * 12}px rgba(232,224,209,${0.02 + glow * 0.08})`;
-          l.el.style.transform = `translate(-50%, -50%) translate(${l.x - l.baseX}px, ${l.y}px) scale(${1 + glow * 0.012}, ${1 - glow * 0.005})`;
+          l.el.style.color = `rgba(232,224,209,${0.34 + glow * 0.66})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${glow * 16}px rgba(232,224,209,${glow * 0.12})`;
+          l.el.style.transform = `translate(-50%, -50%) translate(${l.x - l.baseX}px, ${l.y}px) scale(${1 + glow * 0.01}, ${1 - glow * 0.004})`;
         }
+        word.style.filter = `blur(${titleGlow * 0.18}px)`;
+        word.style.opacity = (0.8 + titleGlow * 0.2).toFixed(3);
+        word.style.transform = 'translateY(0)';
+        word.style.textShadow = `0 0 ${titleGlow * 14}px rgba(232,224,209,${titleGlow * 0.06})`;
+        word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.08).toFixed(3));
       }
 
       function resize() {
         setCanvasSize(particlesCanvas, pctx);
-        setCanvasSize(glowCanvas, gctx);
         buildZones();
         buildTitle();
         seedParticles();
@@ -453,7 +437,6 @@
         updateQuotes(now, dt);
         updateTitle(dt);
         drawParticles(now);
-        drawGlow();
         requestAnimationFrame(frame);
       }
 
