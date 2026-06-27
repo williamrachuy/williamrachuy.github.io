@@ -107,6 +107,7 @@
       const appParticles  = []; // living particles — one per sub-page, immune to ablation
       const hotParticles  = []; // subset of particles with heat≥0.3 — rebuilt each frame
       let lastFrame       = 0;
+      let holdActive      = false; // true while mouse/touch is held down
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
       function rand(lo, hi)     { return lo + Math.random() * (hi - lo); }
@@ -467,6 +468,7 @@
       }
 
       const releasePointerLight = () => {
+        holdActive = false;
         ve.active = false;
         // Inherit cursor velocity at moment of release — this is the "throw"
         ve.vx = ve.cvx * 0.45;
@@ -540,12 +542,13 @@
           ap.vy += Math.sin(ap.wAngle) * 0.001;
           // Attracted to light sources — gravity-style, stronger when close
           const mass = ap.r0 * ap.r0 * ap.r0;
+          const accelBoost = holdActive ? 1.6 : 1.0;
           for (const l of lights) {
             const dx = ap.x - l.x, dy = ap.y - l.y;
             const d  = Math.hypot(dx, dy) || 1;
             const intensity = lightIntensity(l, now);
-            const pull = intensity * 100 / (d * 0.055 + 1);
-            ap.vx -= (dx / d) * pull / mass; // negative = toward light
+            const pull = intensity * 100 / (d * 0.055 + 1) * accelBoost;
+            ap.vx -= (dx / d) * pull / mass;
             ap.vy -= (dy / d) * pull / mass;
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
@@ -802,6 +805,7 @@
       }
 
       stage.addEventListener('pointerdown', e => {
+        holdActive = true;
         // Spike to 100%, settle to 70% (mouse click) or 30% (touch hold)
         const touch = e.pointerType === 'touch';
         pointerLight(e, 1.0, touch ? 0.30 : 0.70);
