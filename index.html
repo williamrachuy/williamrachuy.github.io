@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.17 · 9344edd';
+      const VERSION = '20260626.18 · 4228a3b';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -608,6 +608,20 @@
               ap.vy -= (dy / d) * pull / mass;
             }
           }
+          // Orbs flee from Volta arcs — each active arc repels nearby orbs from its midpoint
+          if (volta.active && !ap.audio) {
+            for (const arc of volta.arcs) {
+              if (arc.veNode || arc.freeNode) continue; // only traversal arcs scare orbs
+              const mx = (arc.a.x + arc.b.x) * 0.5, my = (arc.a.y + arc.b.y) * 0.5;
+              const dx = ap.x - mx, dy = ap.y - my;
+              const d  = Math.hypot(dx, dy) || 1;
+              if (d < 180) {
+                const fright = (1 - d / 180) * (1 - d / 180) * 0.12 / mass;
+                ap.vx += (dx / d) * fright;
+                ap.vy += (dy / d) * fright;
+              }
+            }
+          }
           ap.vx *= 0.988; ap.vy *= 0.988;
           // Edge repulsion only: zero force in the inner 95%, grows in outer 5%
           const ew = w * 0.05, eh = h * 0.05;
@@ -731,9 +745,13 @@
           ve.ωx += (tensionDy / tNorm) * tTorque;
         }
         // Strain dims and shrinks VE — floor at 65% scale, 60% alpha
-        const strainDim = 1 - ve.strain * 0.35;
-        ve.alpha        = ve.alphaP * 0.88 * (0.60 + strainDim * 0.40);
-        ve.scaleCurrent = ve.scale * ve.scaleP * strainDim;
+        const strainDim  = 1 - ve.strain * 0.35;
+        // Volta drains VE energy: scale and brightness shrink as charge builds
+        const voltaDrain = (volta.state === 'infecting' && !ve.liberated)
+          ? Math.max(0.15, 1 - volta.charge * 0.85)
+          : 1;
+        ve.alpha        = ve.alphaP * 0.88 * (0.60 + strainDim * 0.40) * voltaDrain;
+        ve.scaleCurrent = ve.scale * ve.scaleP * strainDim * (1 - volta.charge * 0.55 * (volta.state === 'infecting' && !ve.liberated ? 1 : 0));
 
         // Count orbs inside VE footprint → drive excitement
         const captureR = ve.scaleCurrent * 1.2;
@@ -757,6 +775,12 @@
             const p = _f / (_f + z2 * _S);
             return { px: ve.x + x3*_S*p, py: ve.y + y3*_S*p };
           });
+          // Persistent {x,y} objects for Volta arc endpoints (updated in-place so arc refs stay valid)
+          if (!ve.vertNodes) ve.vertNodes = Array.from({length: 12}, () => ({x: 0, y: 0}));
+          for (let i = 0; i < 12; i++) {
+            ve.vertNodes[i].x = ve.projCache[i].px;
+            ve.vertNodes[i].y = ve.projCache[i].py;
+          }
         }
 
         // Stochastic edge deterioration during Volta infection
@@ -825,9 +849,7 @@
         const ex = ve.excitement;
         // As orbs fill VE: center of each property rises, jitter amplitude collapses
         const stability = 1 - ex * 0.90;  // 1.0 → 0.10 as excitement grows
-        // Volta infection multiplies jitter speed dramatically
-        const voltaWild = volta.state === 'infecting' ? volta.charge * 12.0 : 0;
-        const now2 = performance.now() * (2.0 + ex * 3.0 + voltaWild);
+        const now2 = performance.now() * (2.0 + ex * 3.0);
         const elec = (
           Math.sin(now2 * 0.0284) * 0.38 +
           Math.sin(now2 * 0.0548) * 0.28 +
@@ -960,7 +982,7 @@
       const VOLTA_ARC_DIST = 130; // max px between particle nodes for an arc to form
       const VOLTA_SEARCH_R = 105; // radius around creature center for harvesting nodes
       const VOLTA_SPEED    = 28;  // px/s toward target
-      const VOLTA_MAX_ARCS = 8;
+      const VOLTA_MAX_ARCS = 5;   // limited arc budget — more focused, less omnipresent
 
       function scheduleVoltaSpawn() {
         const delay = Math.max(20000, gaussianRandom(120000, 60000));
@@ -1054,53 +1076,105 @@
         // ── Arc management ──────────────────────────────────────────────────
         volta.arcs = volta.arcs.filter(arc => now - arc.born < arc.maxAge);
 
-        // Post-liberation: arc between free VE nodes + magnetic attraction
-        if (ve.liberated && ve.freeNodes && ve.freeNodes.length >= 2) {
-          // Apply magnetic pull on existing free-node arcs
-          for (const arc of volta.arcs) {
-            if (arc.freeNode) {
-              const na = arc.a, nb = arc.b;
-              const dx = nb.x - na.x, dy = nb.y - na.y;
-              const d  = Math.hypot(dx, dy) || 1;
-              const f  = 0.0006 * dt;
-              na.vx += (dx / d) * f; na.vy += (dy / d) * f;
-              nb.vx -= (dx / d) * f; nb.vy -= (dy / d) * f;
-            }
+        // Magnetic pull: particle arcs draw their two nodes together while alive
+        for (const arc of volta.arcs) {
+          if (!arc.freeNode && !arc.veNode) {
+            const dx = arc.b.x - arc.a.x, dy = arc.b.y - arc.a.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            const f  = 0.00038 * dt;
+            arc.a.vx += (dx / d) * f; arc.a.vy += (dy / d) * f;
+            arc.b.vx -= (dx / d) * f; arc.b.vy -= (dy / d) * f;
           }
-          // Spawn new arcs between random free node pairs
-          if (volta.arcs.length < VOLTA_MAX_ARCS) {
-            const fn = ve.freeNodes;
-            const ni = Math.floor(Math.random() * fn.length);
-            const nj = Math.floor(Math.random() * fn.length);
-            if (ni !== nj && fn[ni].alpha > 0.05 && fn[nj].alpha > 0.05) {
-              const d = Math.hypot(fn[ni].x - fn[nj].x, fn[ni].y - fn[nj].y);
-              if (d < 220 && !volta.arcs.some(a => (a.a === fn[ni] && a.b === fn[nj]) || (a.a === fn[nj] && a.b === fn[ni]))) {
-                volta.arcs.push({ a: fn[ni], b: fn[nj], born: now, maxAge: rand(80, 260), freeNode: true });
-              }
-            }
-          }
-          return; // skip particle arc logic when liberated
         }
 
-        // Harvest particle nodes near creature center
-        const nearby = [];
-        for (const p of particles) {
-          if (p.r >= 0.05 && Math.hypot(p.x - volta.cx, p.y - volta.cy) < VOLTA_SEARCH_R) nearby.push(p);
+        // Post-liberation: arc between free VE nodes with magnetic pull
+        if (ve.liberated && ve.freeNodes && ve.freeNodes.length >= 2) {
+          for (const arc of volta.arcs) {
+            if (arc.freeNode) {
+              const dx = arc.b.x - arc.a.x, dy = arc.b.y - arc.a.y;
+              const d  = Math.hypot(dx, dy) || 1;
+              const f  = 0.0006 * dt;
+              arc.a.vx += (dx / d) * f; arc.a.vy += (dy / d) * f;
+              arc.b.vx -= (dx / d) * f; arc.b.vy -= (dy / d) * f;
+            }
+          }
+          if (volta.arcs.length < VOLTA_MAX_ARCS) {
+            const fn = ve.freeNodes;
+            const ni = Math.floor(Math.random() * fn.length), nj = Math.floor(Math.random() * fn.length);
+            if (ni !== nj && fn[ni].alpha > 0.05 && fn[nj].alpha > 0.05) {
+              const d = Math.hypot(fn[ni].x - fn[nj].x, fn[ni].y - fn[nj].y);
+              if (d < 220 && !volta.arcs.some(a => (a.a === fn[ni] && a.b === fn[nj]) || (a.a === fn[nj] && a.b === fn[ni])))
+                volta.arcs.push({ a: fn[ni], b: fn[nj], born: now, maxAge: rand(80, 260), freeNode: true });
+            }
+          }
+          return;
         }
-        // Spawn new arcs to fill slots
-        if (volta.arcs.length < VOLTA_MAX_ARCS && nearby.length >= 2) {
-          const shuffled = nearby.slice().sort(() => Math.random() - 0.5);
-          outer:
-          for (let i = 0; i < shuffled.length; i++) {
-            for (let j = i + 1; j < shuffled.length; j++) {
-              if (volta.arcs.length >= VOLTA_MAX_ARCS) break outer;
-              const a = shuffled[i], b = shuffled[j];
-              const d = Math.hypot(a.x - b.x, a.y - b.y);
-              if (d > 12 && d < VOLTA_ARC_DIST &&
-                  !volta.arcs.some(arc => (arc.a === a && arc.b === b) || (arc.a === b && arc.b === a))) {
-                volta.arcs.push({ a, b, born: now, maxAge: rand(80, 280) });
+
+        // Infecting (pre-liberation): primarily arc within VE vertices; small outer-particle chance
+        if (volta.state === 'infecting' && !ve.liberated && ve.vertNodes) {
+          // Particle pressure: blow particles outward from VE as energy is consumed
+          if (Math.random() < 0.3) {
+            for (const p of particles) {
+              const dx = p.x - ve.x, dy = p.y - ve.y;
+              const d  = Math.hypot(dx, dy) || 1;
+              if (d < 160) { const f = volta.charge * (1 - d/160) * 0.025 / Math.max(p.mass, 0.05); p.vx += (dx/d)*f; p.vy += (dy/d)*f; }
+            }
+          }
+          if (volta.arcs.length < VOLTA_MAX_ARCS) {
+            if (Math.random() < 0.80) {
+              // Internal VE arc: between two random vertices
+              const ni = Math.floor(Math.random() * 12), nj = Math.floor(Math.random() * 12);
+              if (ni !== nj) {
+                const a = ve.vertNodes[ni], b = ve.vertNodes[nj];
+                const d = Math.hypot(a.x - b.x, a.y - b.y);
+                if (d > 5 && d < ve.scaleCurrent * 1.9 && !volta.arcs.some(arc => arc.a === a && arc.b === b))
+                  volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200), veNode: true });
+              }
+            } else {
+              // Outer particle arc: creature still has a small outer life
+              const outerNearby = [];
+              for (const p of particles) {
+                if (p.r >= 0.05 && Math.hypot(p.x - ve.x, p.y - ve.y) < VOLTA_SEARCH_R * 2.2) outerNearby.push(p);
+              }
+              if (outerNearby.length >= 2) {
+                const a = outerNearby[Math.floor(Math.random() * outerNearby.length)];
+                const b = outerNearby.find(p => p !== a && Math.hypot(p.x - a.x, p.y - a.y) < VOLTA_ARC_DIST);
+                if (b) volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200) });
               }
             }
+          }
+          return;
+        }
+
+        // Traversal: organic arc search toward VE
+        const w = stage.clientWidth, h = stage.clientHeight;
+        const veX = ve.scaleCurrent > 5 ? ve.x : w * 0.5;
+        const veY = ve.scaleCurrent > 5 ? ve.y : h * 0.5;
+        const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
+
+        // Harvest nearby particles, score each by proximity toward VE + noise
+        const nearby = [];
+        for (const p of particles) {
+          if (p.r >= 0.05 && Math.hypot(p.x - volta.cx, p.y - volta.cy) < VOLTA_SEARCH_R) {
+            const toVE = Math.hypot(p.x - veX, p.y - veY);
+            nearby.push({ p, score: (1 - toVE / veDist) * 0.65 + Math.random() * 0.35 });
+          }
+        }
+
+        // Attempt ONE new arc per frame — more organic than filling all slots at once
+        if (volta.arcs.length < VOLTA_MAX_ARCS && nearby.length >= 2) {
+          nearby.sort((a, b) => b.score - a.score);
+          // Pick source from top-scoring half (biased toward VE direction)
+          const srcPool = nearby.slice(0, Math.max(2, Math.ceil(nearby.length * 0.5)));
+          const src = srcPool[Math.floor(Math.random() * srcPool.length)].p;
+          // Find a valid target near the source
+          const targets = nearby.filter(({p}) => p !== src && Math.hypot(p.x - src.x, p.y - src.y) < VOLTA_ARC_DIST
+                          && Math.hypot(p.x - src.x, p.y - src.y) > 12
+                          && !volta.arcs.some(arc => (arc.a === src && arc.b === p) || (arc.a === p && arc.b === src)));
+          if (targets.length > 0) {
+            targets.sort((a, b) => b.score - a.score);
+            const tgt = targets[Math.floor(Math.random() * Math.min(3, targets.length))].p;
+            volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(80, 280) });
           }
         }
       }
