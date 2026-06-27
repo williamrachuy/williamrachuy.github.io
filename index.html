@@ -494,12 +494,21 @@
             ap.vy -= (dy / d) * pull / mass;
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
-          // Soft boundary repulsion
-          const mg = ap.r0 + 4;
-          if (ap.x < mg)     ap.vx += (mg - ap.x) * 0.008;
-          if (ap.x > w - mg) ap.vx -= (ap.x - (w - mg)) * 0.008;
-          if (ap.y < mg)     ap.vy += (mg - ap.y) * 0.008;
-          if (ap.y > h - mg) ap.vy -= (ap.y - (h - mg)) * 0.008;
+          // Soft center bias: quadratic potential well — zero at center, grows outward.
+          // Orbs wander freely in the middle, resist the periphery, never aggregate.
+          const cx = w * 0.5, cy = h * 0.5;
+          const edx = ap.x - cx, edy = ap.y - cy;
+          const distC = Math.hypot(edx, edy) || 1;
+          const R = Math.min(w, h) * 0.42;
+          const bias = Math.pow(distC / R, 2.0) * 0.007;
+          ap.vx -= (edx / distC) * bias;
+          ap.vy -= (edy / distC) * bias;
+          // Hard backstop at actual screen edge
+          const mg = ap.r0 + 2;
+          if (ap.x < mg)     ap.vx += (mg - ap.x) * 0.05;
+          if (ap.x > w - mg) ap.vx -= (ap.x - (w - mg)) * 0.05;
+          if (ap.y < mg)     ap.vy += (mg - ap.y) * 0.05;
+          if (ap.y > h - mg) ap.vy -= (ap.y - (h - mg)) * 0.05;
           ap.x += ap.vx * dt * 0.026;
           ap.y += ap.vy * dt * 0.026;
         }
