@@ -98,16 +98,18 @@
     <div id="veil"></div>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
+  <audio id="nautilus-audio" src="audio/Nautilus.mp3" preload="metadata"></audio>
 
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.13 · 7459650';
+      const VERSION = '20260626.14 · 2dbffdb';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
       const pctx           = particlesCanvas.getContext('2d');
       const word           = document.getElementById('wordmark');
+      const nautilusAudio  = document.getElementById('nautilus-audio');
       if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
@@ -209,6 +211,7 @@
           { path: 'blog',             color: '#5c3333' }, // dark dusty rose
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
+          { audio: true,              color: '#32465f' }, // Nautilus — fast, cursor-independent
         ];
         const w = stage.clientWidth, h = stage.clientHeight;
         const margin = 40;
@@ -224,6 +227,8 @@
             wAngle:      Math.random() * Math.PI * 2,
             breathPhase: Math.random() * Math.PI * 2,
             breathRate:  0.0006 + Math.random() * 0.0004,
+            speed: page.audio ? 2.2 : 1,
+            playing: false,
           });
         }
       }
@@ -299,7 +304,8 @@
             const ad  = Math.hypot(adx, ady) || 1;
             const apr = Math.max(0, 1 - ad / (ap.r0 * 6));
             if (apr > 0 && p.mass > 0.01) {
-              const ainf = apr * apr * 0.0012 / p.mass;
+              const pressure = ap.audio && ap.playing ? 1.30 : 1;
+              const ainf = apr * apr * 0.0012 * pressure / p.mass;
               p.vx += (adx / ad) * ainf;
               p.vy += (ady / ad) * ainf;
             }
@@ -548,20 +554,28 @@
         const w = stage.clientWidth, h = stage.clientHeight;
         const now = performance.now();
         for (const ap of appParticles) {
+          if (ap.audio && ap.playing) {
+            // Sound-producing orb holds position; rendering supplies the violent jitter.
+            ap.vx = 0;
+            ap.vy = 0;
+            continue;
+          }
           // Slow wander: direction drifts gradually
-          ap.wAngle += (Math.random() - 0.5) * 0.0008 * dt;
-          ap.vx += Math.cos(ap.wAngle) * 0.001;
-          ap.vy += Math.sin(ap.wAngle) * 0.001;
+          ap.wAngle += (Math.random() - 0.5) * 0.0008 * dt * ap.speed;
+          ap.vx += Math.cos(ap.wAngle) * 0.001 * ap.speed;
+          ap.vy += Math.sin(ap.wAngle) * 0.001 * ap.speed;
           // Attracted to light sources — gravity-style, stronger when close
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          for (const l of lights) {
-            const dx = ap.x - l.x, dy = ap.y - l.y;
-            const d  = Math.hypot(dx, dy) || 1;
-            const intensity = lightIntensity(l, now);
-            const pull = intensity * 100 / (d * 0.055 + 1) * accelBoost;
-            ap.vx -= (dx / d) * pull / mass;
-            ap.vy -= (dy / d) * pull / mass;
+          if (!ap.audio) {
+            for (const l of lights) {
+              const dx = ap.x - l.x, dy = ap.y - l.y;
+              const d  = Math.hypot(dx, dy) || 1;
+              const intensity = lightIntensity(l, now);
+              const pull = intensity * 100 / (d * 0.055 + 1) * accelBoost;
+              ap.vx -= (dx / d) * pull / mass;
+              ap.vy -= (dy / d) * pull / mass;
+            }
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
           // Edge repulsion only: zero force in the inner 95%, grows in outer 5%
@@ -578,29 +592,38 @@
       function drawAppParticles(now) {
         for (const ap of appParticles) {
           const local  = lightAt(ap.x, ap.y, now);
-          const pulse  = Math.sin(now * ap.breathRate + ap.breathPhase);
+          const unstable = ap.audio && ap.playing;
+          const vibration = unstable
+            ? Math.sin(now * 0.105) * 0.52 + Math.sin(now * 0.173 + 1.7) * 0.31 + Math.sin(now * 0.247) * 0.17
+            : 0;
+          const pulse  = unstable ? vibration : Math.sin(now * ap.breathRate + ap.breathPhase);
           const t      = (pulse + 1) * 0.5;     // 0=contracted/dim, 1=expanded/bright
-          const rDraw  = ap.r0 * (1 + 0.22 * pulse); // ±22% scale
+          const rDraw  = ap.r0 * (1 + (unstable ? 0.34 : 0.22) * pulse);
+          const jitter = unstable ? ap.r0 * 0.24 : 0;
+          const drawX  = ap.x + Math.sin(now * 0.39) * jitter;
+          const drawY  = ap.y + Math.cos(now * 0.47 + 0.8) * jitter;
           // Dark base — always present
-          pctx.globalAlpha = 0.70 + t * 0.17 + local * 0.03;
-          pctx.shadowBlur  = 1 + t * 5 + local * 8;
+          pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1);
+          pctx.shadowBlur  = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0));
           pctx.shadowColor = ap.brightColor;
           pctx.fillStyle   = ap.color;
           pctx.beginPath();
-          pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
+          pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
           pctx.fill();
           // Bright color overlay: expands with pulse
           pctx.globalAlpha = t * 0.34 + local * 0.23;  // reduced max overlay brightness
           pctx.shadowBlur  = 0;
           pctx.fillStyle   = ap.brightColor;
           pctx.beginPath();
-          pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
+          pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
           pctx.fill();
           // 3D highlight — brightens at peak expansion
           pctx.globalAlpha = 0.05 + t * 0.09 + local * 0.09;
           pctx.fillStyle   = '#fff';
           pctx.beginPath();
-          pctx.arc(ap.x - rDraw * 0.28, ap.y - rDraw * 0.30, rDraw * 0.38, 0, Math.PI * 2);
+          pctx.arc(drawX - rDraw * (0.28 + (unstable ? vibration * 0.12 : 0)),
+                   drawY - rDraw * (0.30 - (unstable ? vibration * 0.10 : 0)),
+                   rDraw * (0.38 + (unstable ? vibration * 0.12 : 0)), 0, Math.PI * 2);
           pctx.fill();
         }
         pctx.globalAlpha = 1;
@@ -855,11 +878,24 @@
         const cy = e.clientY - rect.top;
         for (const ap of appParticles) {
           if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) {
+            if (ap.audio) {
+              if (nautilusAudio.paused) nautilusAudio.play().catch(() => { ap.playing = false; });
+              else nautilusAudio.pause();
+              return;
+            }
             window.location.href = '/' + ap.path;
             return;
           }
         }
       });
+
+      const syncNautilusOrb = () => {
+        const orb = appParticles.find(ap => ap.audio);
+        if (orb) orb.playing = !nautilusAudio.paused && !nautilusAudio.ended;
+      };
+      nautilusAudio.addEventListener('play', syncNautilusOrb);
+      nautilusAudio.addEventListener('pause', syncNautilusOrb);
+      nautilusAudio.addEventListener('ended', syncNautilusOrb);
 
       document.getElementById('ver-stamp').textContent = VERSION;
       resize();
