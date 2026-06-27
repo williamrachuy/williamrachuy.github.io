@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.21 · 8409446';
+      const VERSION = '20260627.22 · b8d80db';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -1225,9 +1225,24 @@
           const dd  = Math.hypot(ddx, ddy) || 1;
           volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * dt * 0.001, dd);
           volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * dt * 0.001, dd);
-          // Check infection trigger: creature reaches VE
+          // Check infection trigger: creature reaches VE — burst of attack arcs at the moment of contact
           if (ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
+            // Stinger burst: connect every arc endpoint to nearest VE vertex
+            if (ve.vertNodes) {
+              const pts = new Set();
+              for (const arc of volta.arcs) { pts.add(arc.a); pts.add(arc.b); }
+              for (const pt of pts) {
+                let bestVN = null, bestD = Infinity;
+                for (let vi = 0; vi < 12; vi++) {
+                  const d = Math.hypot(pt.x - ve.vertNodes[vi].x, pt.y - ve.vertNodes[vi].y);
+                  if (d < bestD) { bestD = d; bestVN = ve.vertNodes[vi]; }
+                }
+                if (bestVN && bestD < VOLTA_ARC_DIST * 2.5) {
+                  volta.arcs.push({ a: pt, b: bestVN, born: now, maxAge: rand(200, 500), strength: 1.0, veNode: true });
+                }
+              }
+            }
           }
           if (volta.state === 'entering') volta.state = 'traversing';
           // Slow energy drain while traversing (~80s to exhaust without finding VE)
@@ -1302,25 +1317,32 @@
         const veY = ve.scaleCurrent > 5 ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
 
-        // Harvest nearby particles — blend: proximity, closeness-to-VE, velocity-toward-VE, mass
+        // Volta's forward direction (toward VE)
+        const voltaFwdX = veX - volta.cx, voltaFwdY = veY - volta.cy;
+        const voltaFwdL = Math.hypot(voltaFwdX, voltaFwdY) || 1;
+
+        // Harvest nearby particles — bias strongly forward; backward particles are excluded
         const nearby = [];
         for (const p of particles) {
           if (p.r >= 0.05) {
-            const distFromVolta = Math.hypot(p.x - volta.cx, p.y - volta.cy);
+            const dpx = p.x - volta.cx, dpy = p.y - volta.cy;
+            const distFromVolta = Math.hypot(dpx, dpy) || 1;
             if (distFromVolta < VOLTA_SEARCH_R) {
+              // Forwardness: +1 = directly ahead, -1 = directly behind Volta toward VE
+              const forwardness = (dpx * voltaFwdX + dpy * voltaFwdY) / (distFromVolta * voltaFwdL);
+              if (forwardness < -0.25) continue; // hard-exclude particles >105° behind Volta
               const prox    = 1 - distFromVolta / VOLTA_SEARCH_R;
               const toVE    = Math.hypot(p.x - veX, p.y - veY);
               const closerToVE = Math.max(0, 1 - toVE / veDist);
-              // Velocity alignment: how closely is this particle already moving toward VE?
               const toDirX  = veX - p.x, toDirY = veY - p.y;
               const toDirL  = Math.hypot(toDirX, toDirY) || 1;
               const vSpeed  = Math.hypot(p.vx, p.vy) || 0.0001;
-              const velAlign = (p.vx * toDirX + p.vy * toDirY) / (toDirL * vSpeed); // -1..1
-              // Mass bonus: heavier particles are cheaper to arc (inversely proportional cost)
+              const velAlign = (p.vx * toDirX + p.vy * toDirY) / (toDirL * vSpeed);
               const massBonus = Math.min(1, (p.mass || 0.1) / 0.5);
-              nearby.push({ p, score: prox * prox * 0.38 + closerToVE * 0.27
-                                   + Math.max(0, velAlign) * 0.22
-                                   + massBonus * 0.08 + Math.random() * 0.05 });
+              nearby.push({ p, score: prox * prox * 0.30 + closerToVE * 0.28
+                                   + Math.max(0, forwardness) * 0.22
+                                   + Math.max(0, velAlign) * 0.14
+                                   + massBonus * 0.04 + Math.random() * 0.02 });
             }
           }
         }
@@ -1363,6 +1385,32 @@
             volta.pool = Math.max(0, volta.pool - arcCost);
             volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(55, 220), strength });
             existingPts.add(src); existingPts.add(tgt);
+          }
+        }
+
+        // Attack arcs: when Volta is close enough to VE, bridge from constellation to VE vertices
+        if (ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
+          const distToVE = Math.hypot(volta.cx - ve.x, volta.cy - ve.y);
+          const attackRange = ve.scaleCurrent * 5.0 + VOLTA_ARC_DIST;
+          if (distToVE < attackRange && volta.arcs.length > 0) {
+            const existingPtsAtk = new Set();
+            for (const arc of volta.arcs) { existingPtsAtk.add(arc.a); existingPtsAtk.add(arc.b); }
+            // Try to bridge from each arc endpoint to each VE vertex within range
+            for (const pt of existingPtsAtk) {
+              if (volta.arcs.length >= VOLTA_MAX_ARCS) break;
+              // Find closest unreached VE vertex within arc distance
+              let bestVN = null, bestD = VOLTA_ARC_DIST * 1.3;
+              for (let vi = 0; vi < 12; vi++) {
+                const vn = ve.vertNodes[vi];
+                const d = Math.hypot(pt.x - vn.x, pt.y - vn.y);
+                if (d < bestD && !volta.arcs.some(a => (a.a === pt && a.b === vn) || (a.a === vn && a.b === pt))) {
+                  bestD = d; bestVN = vn;
+                }
+              }
+              if (bestVN) {
+                volta.arcs.push({ a: pt, b: bestVN, born: now, maxAge: rand(120, 380), strength: 1.0, veNode: true });
+              }
+            }
           }
         }
 
