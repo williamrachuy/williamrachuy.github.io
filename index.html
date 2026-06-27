@@ -140,7 +140,7 @@
         cvx: 0, cvy: 0,
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
-        scale: 52, brightness: 0.55, presence: 0, alpha: 0, scaleCurrent: 0, active: false
+        scale: 52, brightness: 0.55, alphaP: 0, scaleP: 0, alpha: 0, scaleCurrent: 0, excitement: 0, active: false
       };
 
       // ─── Canvas sizing ──────────────────────────────────────────────────────
@@ -391,11 +391,12 @@
           if (d >= radius) continue;
           total += (1 - d / radius) * p.heat * 0.4;
         }
-        // Vector equilibrium emits light proportional to scale and brightness
+        // VE illumination grows with excitement (orbs inside amplify brightness + radius)
         if (ve.alpha > 0.01) {
           const d = dist(x, y, ve.x, ve.y);
-          const veR = ve.scaleCurrent * 2.2;
-          if (d < veR) total += (1 - d / veR) * ve.brightness * ve.alpha;
+          const veEx = ve.excitement;
+          const veR = ve.scaleCurrent * (1 + veEx * 0.55) * 2.2;
+          if (d < veR) total += (1 - d / veR) * ve.brightness * ve.alpha * (1 + veEx * 2.2);
         }
         return clamp(total, 0, 1);
       }
@@ -616,27 +617,44 @@
           ve.y += (ve.targetY - ve.y) * lag;
         }
 
-        // Presence [0→1] drives both alpha and scale together
-        const tP = ve.active ? 1 : 0;
-        ve.presence    += (tP - ve.presence) * clamp(dt * 0.005, 0, 1);
-        ve.alpha        = ve.presence * 0.88;
-        ve.scaleCurrent = ve.scale * ve.presence;
+        // Alpha fades out faster than scale (disappears before fully shrinking)
+        const inRate = clamp(dt * 0.005, 0, 1);
+        if (ve.active) {
+          ve.alphaP += (1 - ve.alphaP) * inRate;
+          ve.scaleP += (1 - ve.scaleP) * inRate;
+        } else {
+          ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);   // fades out ~2.5× faster than scale shrinks
+          ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);  // slow scale collapse
+        }
+        ve.alpha        = ve.alphaP * 0.88;
+        ve.scaleCurrent = ve.scale * ve.scaleP;
+
+        // Count orbs inside VE footprint → drive excitement
+        const captureR = ve.scaleCurrent * 1.2;
+        let orbsIn = 0;
+        for (const ap of appParticles) {
+          if (Math.hypot(ap.x - ve.x, ap.y - ve.y) < captureR) orbsIn++;
+        }
+        const targetEx = appParticles.length > 0 ? orbsIn / appParticles.length : 0;
+        ve.excitement += (targetEx - ve.excitement) * clamp(dt * 0.003, 0, 1);
       }
 
       function drawVE() {
-        if (ve.presence < 0.01) return;
-        // Electric jitter: inharmonic sines at 4× speed → chaotic unstable field
-        const now2 = performance.now();
+        if (ve.scaleP < 0.01) return;
+        // Electric jitter: speeds up and brightens as orbs enter the VE
+        const ex = ve.excitement;
+        const brightMult = 1 + ex * 2.2;  // up to ~3× brighter at full excitement
+        const now2 = performance.now() * (1 + ex * 3.5);  // up to 4.5× faster jitter
         const elec = (
           Math.sin(now2 * 0.0284) * 0.38 +
           Math.sin(now2 * 0.0548) * 0.28 +
           Math.sin(now2 * 0.1172) * 0.18 +
           Math.sin(now2 * 0.2044) * 0.10 +
           Math.sin(now2 * 0.3588) * 0.06
-        );  // aperiodic, faster
-        const elecPos = (elec + 1) * 0.5;  // [0, 1]
-        const elecAmp = elecPos * elecPos;  // square for more chaotic contrast
-        const focal = 280, S = ve.scaleCurrent * (1 + elecAmp * 0.04);
+        );
+        const elecPos = (elec + 1) * 0.5;
+        const elecAmp = elecPos * elecPos;
+        const focal = 280, S = ve.scaleCurrent * (1 + ex * 0.55) * (1 + elecAmp * 0.04);
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
         const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
@@ -662,7 +680,7 @@
           pctx.moveTo(pts[0].px, pts[0].py);
           for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].px, pts[k].py);
           pctx.closePath();
-          pctx.globalAlpha = ve.alpha * (0.03 + elecAmp * 0.10);
+          pctx.globalAlpha = Math.min(0.9, ve.alpha * (0.03 + elecAmp * 0.10) * brightMult);
           pctx.fillStyle = '#88ccff';
           pctx.fill();
         }
@@ -671,8 +689,8 @@
         for (const [i, j] of VE_E) {
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * ((a.z + b.z) * 0.5 + 1) * 0.5;
-          pctx.globalAlpha  = ve.alpha * zf * (0.55 + elecAmp * 0.55);
-          pctx.shadowBlur   = 4 + zf * 9 + elecAmp * 22;
+          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.55 + elecAmp * 0.55) * brightMult);
+          pctx.shadowBlur   = (4 + zf * 9 + elecAmp * 22) * brightMult;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
           pctx.lineWidth    = 0.5 + zf * 0.6 + elecAmp * 0.8;
@@ -685,8 +703,8 @@
         // Radial spokes — 50% dimmer, also jitter
         for (const { px, py, z } of proj) {
           const zf = 0.35 + 0.65 * (z + 1) * 0.5;
-          pctx.globalAlpha  = ve.alpha * zf * (0.25 + elecAmp * 0.30);
-          pctx.shadowBlur   = 2 + zf * 4 + elecAmp * 10;
+          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.25 + elecAmp * 0.30) * brightMult);
+          pctx.shadowBlur   = (2 + zf * 4 + elecAmp * 10) * brightMult;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
           pctx.lineWidth    = 0.3 + zf * 0.28 + elecAmp * 0.35;
@@ -698,8 +716,8 @@
         pctx.shadowBlur = 0;
 
         // Center node
-        pctx.globalAlpha = ve.alpha * 0.92;
-        pctx.shadowBlur  = 14;
+        pctx.globalAlpha = Math.min(1, ve.alpha * 0.92);
+        pctx.shadowBlur  = 14 * brightMult;
         pctx.shadowColor = '#80e8ff';
         pctx.fillStyle   = '#e8f8ff';
         pctx.beginPath();
@@ -710,8 +728,8 @@
         // Vertices — bright dots with depth fade
         for (const { px, py, z } of proj) {
           const zf = 0.4 + 0.6 * (z + 1) * 0.5;
-          pctx.globalAlpha = ve.alpha * zf;
-          pctx.shadowBlur  = 11;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf);
+          pctx.shadowBlur  = 11 * brightMult;
           pctx.shadowColor = '#70e0ff';
           pctx.fillStyle   = '#e0f8ff';
           pctx.beginPath();
