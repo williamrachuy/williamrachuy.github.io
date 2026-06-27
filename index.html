@@ -489,7 +489,7 @@
             const dx = ap.x - l.x, dy = ap.y - l.y;
             const d  = Math.hypot(dx, dy) || 1;
             const intensity = lightIntensity(l, now);
-            const pull = intensity * 1.1 / (d * 0.055 + 1);
+            const pull = intensity * 3.3 / (d * 0.055 + 1);
             ap.vx -= (dx / d) * pull / mass; // negative = toward light
             ap.vy -= (dy / d) * pull / mass;
           }
