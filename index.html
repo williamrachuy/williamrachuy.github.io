@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.14 · 59bae46';
+      const VERSION = '20260627.15 · 6fdd3fd';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -636,15 +636,12 @@
             // Inside VE: orb momentum converts to VE axial torque; orb slows proportionally
             const innerR = ve.scale * 0.80;
             if (d < innerR) {
-              const xfer = 0.000016 * dt;
-              // z-torque: orbital (cross product in screen plane — zero at center, max at rim)
-              ve.ωz += ((dx / innerR) * ap.vy - (dy / innerR) * ap.vx) * xfer;
-              // x/y torques: translational — rightward motion tumbles around y, upward around x
-              ve.ωx += ap.vy * xfer * 0.45;
-              ve.ωy -= ap.vx * xfer * 0.45;
-              // Drain orb momentum by the same fraction transferred
-              ap.vx *= (1 - xfer * 0.55);
-              ap.vy *= (1 - xfer * 0.55);
+              // Gentle indirect influence — orb motion nudges VE rotation tendency,
+              // no direct momentum drain on the orb
+              const infl = 0.0000018 * dt;
+              ve.ωz += ((dx / innerR) * ap.vy - (dy / innerR) * ap.vx) * infl;
+              ve.ωx += ap.vy * infl * 0.4;
+              ve.ωy -= ap.vx * infl * 0.4;
             }
           }
           // Orbs sense Volta arcs and steer their wander path away — not a push, a redirect
