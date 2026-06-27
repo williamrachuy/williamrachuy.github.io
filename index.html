@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.20 · 2b6c4ea';
+      const VERSION = '20260626.21 · aead497';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -613,18 +613,27 @@
               ap.vy -= (dy / d) * pull / mass;
             }
           }
-          // Orbs flee from Volta arcs — each active arc repels nearby orbs from its midpoint
+          // Orbs sense Volta arcs and steer their wander path away — not a push, a redirect
           if (volta.active && !ap.audio) {
+            let avoidX = 0, avoidY = 0;
             for (const arc of volta.arcs) {
-              if (arc.veNode || arc.freeNode) continue; // only traversal arcs scare orbs
+              if (arc.veNode) continue; // VE-internal arcs don't register as threats
               const mx = (arc.a.x + arc.b.x) * 0.5, my = (arc.a.y + arc.b.y) * 0.5;
               const dx = ap.x - mx, dy = ap.y - my;
               const d  = Math.hypot(dx, dy) || 1;
-              if (d < 180) {
-                const fright = (1 - d / 180) * (1 - d / 180) * 0.12 / mass;
-                ap.vx += (dx / d) * fright;
-                ap.vy += (dy / d) * fright;
+              if (d < 240) {
+                const str = (1 - d / 240) * (1 - d / 240);
+                avoidX += (dx / d) * str;
+                avoidY += (dy / d) * str;
               }
+            }
+            const avoidMag = Math.hypot(avoidX, avoidY);
+            if (avoidMag > 0.001) {
+              const avoidAngle = Math.atan2(avoidY / avoidMag, avoidX / avoidMag);
+              let delta = avoidAngle - ap.wAngle;
+              while (delta >  Math.PI) delta -= Math.PI * 2;
+              while (delta < -Math.PI) delta += Math.PI * 2;
+              ap.wAngle += delta * clamp(avoidMag * 0.004 * dt, 0, 0.35);
             }
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
@@ -684,21 +693,16 @@
 
       function destroyVEEdge(ei) {
         ve.destroyedEdges.add(ei);
-        if (!ve.vertNodes) return;
-        const [vi, vj] = VE_E[ei];
-        const ni = ve.vertNodes[vi], nj = ve.vertNodes[vj];
-        // Kick the two endpoint vertices apart along their separation axis
-        const edx = nj.x - ni.x, edy = nj.y - ni.y;
-        const edn = Math.hypot(edx, edy) || 1;
-        const kick = 1.8;
-        ni.vx -= (edx / edn) * kick; ni.vy -= (edy / edn) * kick;
-        nj.vx += (edx / edn) * kick; nj.vy += (edy / edn) * kick;
-        // Angular torque on all three rotation axes
+        // Angular torque on all three rotation axes — edge energy → rotational inertia
         ve.ωx += (Math.random() * 2 - 1) * 0.0038;
         ve.ωy += (Math.random() * 2 - 1) * 0.0038;
         ve.ωz += (Math.random() * 2 - 1) * 0.0019;
-        // Outward pressure wave on nearby particles
-        const midX = (ni.x + nj.x) * 0.5, midY = (ni.y + nj.y) * 0.5;
+        // Outward pressure wave from edge midpoint into substrate
+        const [vi, vj] = VE_E[ei];
+        const ni = ve.vertNodes ? ve.vertNodes[vi] : null;
+        const nj = ve.vertNodes ? ve.vertNodes[vj] : null;
+        const midX = ni && nj ? (ni.x + nj.x) * 0.5 : ve.x;
+        const midY = ni && nj ? (ni.y + nj.y) * 0.5 : ve.y;
         for (const p of particles) {
           if (p.r < 0.05) continue;
           const pdx = p.x - midX, pdy = p.y - midY;
@@ -824,11 +828,17 @@
               // Fully bound: snap to ideal position, no drift
               node.x = idealX; node.y = idealY; node.vx = 0; node.vy = 0;
             } else {
-              // Spring toward ideal, weakened by freedom
+              // Spring toward ideal, weakened by freedom (edge tension counteracts repulsion)
               const springK = 0.009 * (1 - node.freedom);
               node.vx += (idealX - node.x) * springK;
               node.vy += (idealY - node.y) * springK;
-              const damp = 0.97 - (1 - node.freedom) * 0.08;
+              // Latent node-center repulsion — always present, dominates when spring weakens
+              const cdx = node.x - ve.x, cdy = node.y - ve.y;
+              const cd = Math.hypot(cdx, cdy) || 1;
+              const repStr = node.freedom * 0.0005;
+              node.vx += (cdx / cd) * repStr;
+              node.vy += (cdy / cd) * repStr;
+              const damp = 0.97 - (1 - node.freedom) * 0.06;
               node.vx *= damp; node.vy *= damp;
               node.x += node.vx * dt;
               node.y += node.vy * dt;
