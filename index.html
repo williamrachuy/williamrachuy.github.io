@@ -102,7 +102,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.12 · d172be8';
+      const VERSION = '20260626.13 · 7459650';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -156,7 +156,7 @@
         cvx: 0, cvy: 0,
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
-        scale: 52, brightness: 0.55, alphaP: 0, scaleP: 0, alpha: 0, scaleCurrent: 0, excitement: 0, active: false
+        scale: 52, brightness: 0.55, alphaP: 0, scaleP: 0, alpha: 0, scaleCurrent: 0, excitement: 0, strain: 0, active: false
       };
 
       // ─── Canvas sizing ──────────────────────────────────────────────────────
@@ -664,8 +664,21 @@
           ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);   // fades out ~2.5× faster than scale shrinks
           ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);  // slow scale collapse
         }
-        ve.alpha        = ve.alphaP * 0.88;
-        ve.scaleCurrent = ve.scale * ve.scaleP;
+        // Rubber-band tension: distance to target → strain [0,1]
+        const tensionDx = ve.targetX - ve.x, tensionDy = ve.targetY - ve.y;
+        const tensionDist = Math.hypot(tensionDx, tensionDy);
+        ve.strain = ve.active ? Math.min(1, tensionDist / 180) : 0;
+        // Tension torque: being pulled in a direction imparts spin (proportional to strain)
+        if (ve.active && tensionDist > 1) {
+          const tNorm = tensionDist;
+          const tTorque = ve.strain * 0.0005;
+          ve.ωy += (tensionDx / tNorm) * tTorque;
+          ve.ωx += (tensionDy / tNorm) * tTorque;
+        }
+        // Strain dims and shrinks VE — floor at 65% scale, 60% alpha
+        const strainDim = 1 - ve.strain * 0.35;
+        ve.alpha        = ve.alphaP * 0.88 * (0.60 + strainDim * 0.40);
+        ve.scaleCurrent = ve.scale * ve.scaleP * strainDim;
 
         // Count orbs inside VE footprint → drive excitement
         const captureR = ve.scaleCurrent * 1.2;
