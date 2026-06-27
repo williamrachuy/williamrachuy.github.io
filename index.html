@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.5 · 3c26b2b';
+      const VERSION = '20260627.6 · 4d618a9';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -855,8 +855,8 @@
             if (!infecting && ni.freedom === 0 && nj.freedom === 0) continue;
             const dx = nj.x - ni.x, dy = nj.y - ni.y;
             const d = Math.hypot(dx, dy) || 1;
-            const edgeE = ve.edgeEnergies ? ve.edgeEnergies[ei] : 1;
-            const f = VE_SPRING_K * (d - VE_E_REST[ei]) * edgeE;
+            // Spring is full-strength until the edge snaps — no gradual weakening
+            const f = VE_SPRING_K * (d - VE_E_REST[ei]);
             if (infecting || ni.freedom > 0) { ni.fx += (dx/d)*f; ni.fy += (dy/d)*f; }
             if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
           }
@@ -908,7 +908,7 @@
         if (ve.liberated && ve.vertNodes && liberatedNodes.length === 0) {
           for (let i = 0; i < 12; i++) {
             const n = ve.vertNodes[i];
-            liberatedNodes.push({ x: n.x, y: n.y, vx: n.vx, vy: n.vy, mass: 8 });
+            liberatedNodes.push({ x: n.x, y: n.y, vx: n.vx, vy: n.vy, mass: 8, alpha: 1.0 });
           }
         }
         // VE never resets — once destroyed it stays destroyed
@@ -1133,20 +1133,21 @@
 
       function updateLiberatedNodes(dt, now) {
         if (liberatedNodes.length === 0) return;
-        const w = stage.clientWidth, h = stage.clientHeight;
         for (const n of liberatedNodes) {
-          n.vx *= 0.990;
-          n.vy *= 0.990;
-          // Cursor light interaction — push away normally, pull toward on hold
+          // Fade slowly — nodes lose their energy once cut free
+          n.alpha = Math.max(0, n.alpha - 0.002 * dt);
+          // Substrate friction only — momentum conserved otherwise
+          n.vx *= 0.993;
+          n.vy *= 0.993;
+          // Substrate pressure from taps/clicks — pushed outward, never attracted
           for (const l of lights) {
             const dx = n.x - l.x, dy = n.y - l.y;
             const d  = Math.hypot(dx, dy) || 1;
-            if (d < 220) {
+            if (d < 200) {
               const inten = lightIntensity(l, now);
-              const str = inten * (1 - d / 220) * 0.055 / n.mass;
-              const sign = holdActive ? -1 : 1;
-              n.vx += (dx / d) * str * sign;
-              n.vy += (dy / d) * str * sign;
+              const str = inten * (1 - d / 200) * 0.045 / n.mass;
+              n.vx += (dx / d) * str;
+              n.vy += (dy / d) * str;
             }
           }
           // Orb repulsion
@@ -1159,11 +1160,7 @@
               n.vy += (dy / d) * f;
             }
           }
-          // Soft canvas boundary
-          if (n.x < 0)   n.vx += 0.05;
-          if (n.x > w)   n.vx -= 0.05;
-          if (n.y < 0)   n.vy += 0.05;
-          if (n.y > h)   n.vy -= 0.05;
+          // No boundary — nodes drift off canvas freely
           n.x += n.vx * dt;
           n.y += n.vy * dt;
         }
@@ -1173,10 +1170,11 @@
         if (liberatedNodes.length === 0) return;
         pctx.save();
         pctx.shadowColor = '#70e0ff';
-        pctx.shadowBlur  = 9;
         pctx.fillStyle   = '#d8f4ff';
-        pctx.globalAlpha = 0.88;
         for (const n of liberatedNodes) {
+          if (n.alpha < 0.01) continue;
+          pctx.shadowBlur  = 9 * n.alpha;
+          pctx.globalAlpha = n.alpha * 0.88;
           pctx.beginPath();
           pctx.arc(n.x, n.y, 2.3, 0, Math.PI * 2);
           pctx.fill();
@@ -1282,27 +1280,14 @@
               if (d < 160) { const f = volta.charge * (1 - d/160) * 0.025 / Math.max(p.mass, 0.05); p.vx += (dx/d)*f; p.vy += (dy/d)*f; }
             }
           }
+          // Internal VE arcs only — no external arcing once infection begins
           if (volta.arcs.length < VOLTA_MAX_ARCS) {
-            if (Math.random() < 0.98) {
-              // Internal VE arc: between two random vertices
-              const ni = Math.floor(Math.random() * 12), nj = Math.floor(Math.random() * 12);
-              if (ni !== nj) {
-                const a = ve.vertNodes[ni], b = ve.vertNodes[nj];
-                const d = Math.hypot(a.x - b.x, a.y - b.y);
-                if (d > 5 && d < ve.scaleCurrent * 1.9 && !volta.arcs.some(arc => arc.a === a && arc.b === b))
-                  volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200), veNode: true });
-              }
-            } else {
-              // Outer particle arc: creature still has a small outer life
-              const outerNearby = [];
-              for (const p of particles) {
-                if (p.r >= 0.05 && Math.hypot(p.x - ve.x, p.y - ve.y) < VOLTA_SEARCH_R * 2.2) outerNearby.push(p);
-              }
-              if (outerNearby.length >= 2) {
-                const a = outerNearby[Math.floor(Math.random() * outerNearby.length)];
-                const b = outerNearby.find(p => p !== a && Math.hypot(p.x - a.x, p.y - a.y) < VOLTA_ARC_DIST);
-                if (b) volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200) });
-              }
+            const ni = Math.floor(Math.random() * 12), nj = Math.floor(Math.random() * 12);
+            if (ni !== nj) {
+              const a = ve.vertNodes[ni], b = ve.vertNodes[nj];
+              const d = Math.hypot(a.x - b.x, a.y - b.y);
+              if (d > 5 && d < ve.scaleCurrent * 1.9 && !volta.arcs.some(arc => arc.a === a && arc.b === b))
+                volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200), veNode: true });
             }
           }
           return;
