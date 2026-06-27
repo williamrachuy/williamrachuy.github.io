@@ -688,7 +688,7 @@
         // Edges — glow jitters with electric field
         for (const [i, j] of VE_E) {
           const a = proj[i], b = proj[j];
-          const zf = 0.35 + 0.65 * ((a.z + b.z) * 0.5 + 1) * 0.5;
+          const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
           pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.55 + elecAmp * 0.55) * brightMult);
           pctx.shadowBlur   = (4 + zf * 9 + elecAmp * 22) * brightMult;
           pctx.shadowColor  = '#40ccff';
@@ -702,7 +702,7 @@
 
         // Radial spokes — 50% dimmer, also jitter
         for (const { px, py, z } of proj) {
-          const zf = 0.35 + 0.65 * (z + 1) * 0.5;
+          const zf = 0.35 + 0.65 * (1 - z) * 0.5;
           pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.25 + elecAmp * 0.30) * brightMult);
           pctx.shadowBlur   = (2 + zf * 4 + elecAmp * 10) * brightMult;
           pctx.shadowColor  = '#40ccff';
@@ -727,7 +727,7 @@
 
         // Vertices — bright dots with depth fade
         for (const { px, py, z } of proj) {
-          const zf = 0.4 + 0.6 * (z + 1) * 0.5;
+          const zf = 0.4 + 0.6 * (1 - z) * 0.5;
           pctx.globalAlpha = Math.min(1, ve.alpha * zf);
           pctx.shadowBlur  = 11 * brightMult;
           pctx.shadowColor = '#70e0ff';
