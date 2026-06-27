@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.7 · 0b7a38d';
+      const VERSION = '20260627.8 · 3c6bad2';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -785,14 +785,27 @@
           ve.y += ve.vy * dt;
         }
 
-        // Alpha fades out faster than scale (disappears before fully shrinking)
+        // Count orbs inside a fixed-radius presence zone (independent of current scale,
+        // so a shrinking VE doesn't expel its own sustaining orbs)
+        const presenceR = 80;
+        let orbsInPresence = 0;
+        for (const ap of appParticles) {
+          if (!ap.audio && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
+        }
+
+        // Alpha/scale: full when active; orb-sustained when idle; fades when empty
         const inRate = clamp(dt * 0.005, 0, 1);
         if (ve.active || ve.voltaHeld) {
           ve.alphaP += (1 - ve.alphaP) * inRate;
           ve.scaleP += (1 - ve.scaleP) * inRate;
+        } else if (orbsInPresence > 0) {
+          // Each orb adds 5% to the 50% idle floor (max ~90%)
+          const sustainScale = Math.min(0.90, 0.50 + orbsInPresence * 0.05);
+          ve.scaleP += (sustainScale - ve.scaleP) * clamp(dt * 0.003, 0, 1);
+          ve.alphaP += (0.88 - ve.alphaP) * clamp(dt * 0.003, 0, 1);
         } else {
-          ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);   // fades out ~2.5× faster than scale shrinks
-          ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);  // slow scale collapse
+          ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);
+          ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);
         }
         // Rubber-band tension: distance to target → strain [0,1]
         const tensionDx = ve.targetX - ve.x, tensionDy = ve.targetY - ve.y;
