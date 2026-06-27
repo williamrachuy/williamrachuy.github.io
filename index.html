@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.16 · 3b862e4';
+      const VERSION = '20260626.17 · 9344edd';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -163,7 +163,12 @@
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
         scale: 52, brightness: 0.55, alphaP: 0, scaleP: 0, alpha: 0, scaleCurrent: 0,
-        excitement: 0, strain: 0, active: false, voltaHeld: false
+        excitement: 0, strain: 0, active: false, voltaHeld: false,
+        destroyedEdges: new Set(),   // edge indices claimed by Volta during infection
+        freeNodes: null,             // liberated node objects once all edges destroyed
+        freeSurvEdges: [],           // VE_E indices that survived to liberation
+        liberated: false,            // true once VE has collapsed into free nodes
+        projCache: null,             // last projected vertex screen positions
       };
 
       // Volta — arc lightning creature that traverses particle fields toward the VE
@@ -476,7 +481,8 @@
         const ty    = p.clientY - rect.top;
         const touch = event.pointerType === 'touch' || !!event.touches;
         const veActivate = touch || (event.pointerType === 'mouse' && (event.buttons & 1));
-        if (veActivate) {
+        // VE cannot be summoned while Volta holds it (infection/liberation in progress)
+        if (veActivate && !ve.voltaHeld) {
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.targetX = tx; ve.targetY = ty;
           ve.active = true;
@@ -737,9 +743,83 @@
         }
         const targetEx = appParticles.length > 0 ? orbsIn / appParticles.length : 0;
         ve.excitement += (targetEx - ve.excitement) * clamp(dt * 0.003, 0, 1);
+
+        // Cache projected vertex positions (cheap O(12), used for liberation placement)
+        if (ve.scaleCurrent > 0.5) {
+          const _cx = Math.cos(ve.θx), _sx = Math.sin(ve.θx);
+          const _cy = Math.cos(ve.θy), _sy = Math.sin(ve.θy);
+          const _cz = Math.cos(ve.θz), _sz = Math.sin(ve.θz);
+          const _S = ve.scaleCurrent, _f = 280;
+          ve.projCache = VE_V.map(([vx, vy, vz]) => {
+            const y1 = vy*_cx - vz*_sx, z1 = vy*_sx + vz*_cx;
+            const x2 = vx*_cy + z1*_sy, z2 = -vx*_sy + z1*_cy;
+            const x3 = x2*_cz - y1*_sz, y3 = x2*_sz + y1*_cz;
+            const p = _f / (_f + z2 * _S);
+            return { px: ve.x + x3*_S*p, py: ve.y + y3*_S*p };
+          });
+        }
+
+        // Stochastic edge deterioration during Volta infection
+        if (volta.state === 'infecting' && !ve.liberated) {
+          for (let i = 0; i < VE_E.length; i++) {
+            if (!ve.destroyedEdges.has(i) && Math.random() < volta.charge * 0.018 * dt * 0.0625) {
+              ve.destroyedEdges.add(i);
+            }
+          }
+          // Liberation: all edges destroyed — free the nodes
+          if (ve.destroyedEdges.size >= VE_E.length) {
+            ve.liberated = true;
+            ve.freeNodes = (ve.projCache || []).map((p, i) => ({
+              x: p.px, y: p.py,
+              vx: (Math.random() - 0.5) * 0.06,
+              vy: (Math.random() - 0.5) * 0.06,
+              alpha: ve.alpha,
+              idx: i,
+            }));
+            ve.freeSurvEdges = []; // none survive — all destroyed before liberation
+          }
+        }
+
+        // Free node physics — drift and fade after liberation
+        if (ve.liberated && ve.freeNodes) {
+          for (const node of ve.freeNodes) {
+            node.vx *= 0.994; node.vy *= 0.994;
+            node.x += node.vx * dt; node.y += node.vy * dt;
+            node.alpha = Math.max(0, node.alpha - dt * 0.00018);
+          }
+          // Once fully faded: clean up so VE can be summoned again
+          if (ve.freeNodes.every(n => n.alpha < 0.005)) {
+            ve.liberated = false; ve.freeNodes = null; ve.freeSurvEdges = [];
+            ve.destroyedEdges.clear();
+          }
+        }
       }
 
       function drawVE() {
+        // Liberated state: draw drifting free nodes instead of the VE structure
+        if (ve.liberated && ve.freeNodes) {
+          pctx.save();
+          pctx.shadowColor = '#70e0ff';
+          // Surviving edges (if any)
+          for (const ei of ve.freeSurvEdges) {
+            const [i, j] = VE_E[ei];
+            const a = ve.freeNodes[i], b = ve.freeNodes[j];
+            const alpha = Math.min(a.alpha, b.alpha) * 0.55;
+            if (alpha < 0.01) continue;
+            pctx.globalAlpha = alpha;
+            pctx.strokeStyle = '#b8eeff'; pctx.shadowBlur = 3; pctx.lineWidth = 0.5;
+            pctx.beginPath(); pctx.moveTo(a.x, a.y); pctx.lineTo(b.x, b.y); pctx.stroke();
+          }
+          // Free node dots
+          pctx.fillStyle = '#e0f8ff'; pctx.shadowBlur = 6;
+          for (const node of ve.freeNodes) {
+            if (node.alpha < 0.005) continue;
+            pctx.globalAlpha = node.alpha;
+            pctx.beginPath(); pctx.arc(node.x, node.y, 1.8, 0, Math.PI * 2); pctx.fill();
+          }
+          pctx.shadowBlur = 0; pctx.globalAlpha = 1; pctx.restore();
+          return;
+        }
         if (ve.scaleP < 0.01) return;
         // Electric jitter: speeds up and brightens as orbs enter the VE
         const ex = ve.excitement;
@@ -792,7 +872,9 @@
         pctx.shadowBlur  = 8 + ex * 14 + elecAmp * 8 * stability;
         pctx.shadowColor = '#40ccff';
         pctx.strokeStyle = '#b8eeff';
-        for (const [i, j] of VE_E) {
+        for (let ei = 0; ei < VE_E.length; ei++) {
+          if (ve.destroyedEdges.has(ei)) continue; // claimed by Volta
+          const [i, j] = VE_E[ei];
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
           pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability));
@@ -931,6 +1013,18 @@
             ap.vx += (dx / d) * volta.charge * 0.20 / Math.max(d * 0.012, 0.5);
             ap.vy += (dy / d) * volta.charge * 0.20 / Math.max(d * 0.012, 0.5);
           }
+          // Force liberation if duration elapsed before all edges naturally died
+          if (volta.infectedTimer >= volta.infectedDuration && !ve.liberated) {
+            for (let i = 0; i < VE_E.length; i++) ve.destroyedEdges.add(i);
+            ve.liberated = true;
+            ve.freeNodes = (ve.projCache || []).map((p, i) => ({
+              x: p.px, y: p.py,
+              vx: (Math.random() - 0.5) * 0.06,
+              vy: (Math.random() - 0.5) * 0.06,
+              alpha: ve.alpha, idx: i,
+            }));
+            ve.freeSurvEdges = [];
+          }
           // Deplete energy after infection duration — signals the end of the encounter
           if (volta.infectedTimer >= volta.infectedDuration) {
             volta.energy -= dt * 0.00075;
@@ -959,6 +1053,35 @@
 
         // ── Arc management ──────────────────────────────────────────────────
         volta.arcs = volta.arcs.filter(arc => now - arc.born < arc.maxAge);
+
+        // Post-liberation: arc between free VE nodes + magnetic attraction
+        if (ve.liberated && ve.freeNodes && ve.freeNodes.length >= 2) {
+          // Apply magnetic pull on existing free-node arcs
+          for (const arc of volta.arcs) {
+            if (arc.freeNode) {
+              const na = arc.a, nb = arc.b;
+              const dx = nb.x - na.x, dy = nb.y - na.y;
+              const d  = Math.hypot(dx, dy) || 1;
+              const f  = 0.0006 * dt;
+              na.vx += (dx / d) * f; na.vy += (dy / d) * f;
+              nb.vx -= (dx / d) * f; nb.vy -= (dy / d) * f;
+            }
+          }
+          // Spawn new arcs between random free node pairs
+          if (volta.arcs.length < VOLTA_MAX_ARCS) {
+            const fn = ve.freeNodes;
+            const ni = Math.floor(Math.random() * fn.length);
+            const nj = Math.floor(Math.random() * fn.length);
+            if (ni !== nj && fn[ni].alpha > 0.05 && fn[nj].alpha > 0.05) {
+              const d = Math.hypot(fn[ni].x - fn[nj].x, fn[ni].y - fn[nj].y);
+              if (d < 220 && !volta.arcs.some(a => (a.a === fn[ni] && a.b === fn[nj]) || (a.a === fn[nj] && a.b === fn[ni]))) {
+                volta.arcs.push({ a: fn[ni], b: fn[nj], born: now, maxAge: rand(80, 260), freeNode: true });
+              }
+            }
+          }
+          return; // skip particle arc logic when liberated
+        }
+
         // Harvest particle nodes near creature center
         const nearby = [];
         for (const p of particles) {
