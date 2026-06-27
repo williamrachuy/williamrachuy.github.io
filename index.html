@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.15 · 79b9cad';
+      const VERSION = '20260626.16 · 3b862e4';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -840,14 +840,14 @@
           pctx.fill();
         }
 
-        // Volta infection: electric zaps from VE vertices to nearby particles
+        // Volta infection: straight edges from VE vertices to nearby particles
         if (volta.state === 'infecting' && volta.charge > 0.08) {
           const cFlicker = 0.6 + Math.sin(performance.now() * 0.048) * 0.22
                                + Math.sin(performance.now() * 0.081) * 0.18;
           pctx.lineCap = 'round';
+          pctx.strokeStyle = '#ffffff';
           for (const vp of proj) {
-            if (Math.random() > volta.charge * 0.65) continue; // stochastic — not every vertex every frame
-            // Find a random nearby particle within 160px
+            if (Math.random() > volta.charge * 0.65) continue;
             let target = null, bestScore = -1;
             for (const p of particles) {
               if (p.r < 0.05) continue;
@@ -858,13 +858,13 @@
               }
             }
             if (!target) continue;
-            const jags = voltaJags(vp.px, vp.py, target.x, target.y);
-            const pts  = [{ x: vp.px, y: vp.py }, ...jags, { x: target.x, y: target.y }];
-            pctx.globalAlpha = ve.alpha * volta.charge * cFlicker * 0.65;
-            pctx.strokeStyle = '#ffffff'; pctx.shadowBlur = 10; pctx.shadowColor = '#50d0ff'; pctx.lineWidth = 0.7;
-            pctx.beginPath(); pctx.moveTo(pts[0].x, pts[0].y);
-            for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].x, pts[k].y);
-            pctx.stroke();
+            const d      = Math.hypot(target.x - vp.px, target.y - vp.py);
+            const energy = Math.max(0, 1 - d / 160);
+            pctx.globalAlpha = ve.alpha * volta.charge * cFlicker * (0.3 + energy * 0.6);
+            pctx.shadowBlur  = 1 + energy * 5;
+            pctx.shadowColor = '#d0eeff';
+            pctx.lineWidth   = 0.4 + energy * 0.7;
+            pctx.beginPath(); pctx.moveTo(vp.px, vp.py); pctx.lineTo(target.x, target.y); pctx.stroke();
           }
         }
 
@@ -959,12 +959,6 @@
 
         // ── Arc management ──────────────────────────────────────────────────
         volta.arcs = volta.arcs.filter(arc => now - arc.born < arc.maxAge);
-        for (const arc of volta.arcs) {
-          if (now - arc.lastRejag > 110) {
-            arc.jags = voltaJags(arc.a.x, arc.a.y, arc.b.x, arc.b.y);
-            arc.lastRejag = now;
-          }
-        }
         // Harvest particle nodes near creature center
         const nearby = [];
         for (const p of particles) {
@@ -981,8 +975,7 @@
               const d = Math.hypot(a.x - b.x, a.y - b.y);
               if (d > 12 && d < VOLTA_ARC_DIST &&
                   !volta.arcs.some(arc => (arc.a === a && arc.b === b) || (arc.a === b && arc.b === a))) {
-                volta.arcs.push({ a, b, born: now, maxAge: rand(250, 850),
-                                  jags: voltaJags(a.x, a.y, b.x, b.y), lastRejag: now });
+                volta.arcs.push({ a, b, born: now, maxAge: rand(80, 280) });
               }
             }
           }
@@ -994,26 +987,26 @@
         const masterAlpha = clamp(volta.energy, 0, 1);
         if (masterAlpha < 0.01) return;
         pctx.save();
-        pctx.lineCap = 'round'; pctx.lineJoin = 'round';
+        pctx.lineCap = 'round';
+        pctx.strokeStyle = '#ffffff';
         for (const arc of volta.arcs) {
           const age     = (now - arc.born) / arc.maxAge;
           const life    = Math.sin(age * Math.PI);
-          const flicker = clamp(0.55 + Math.sin(now * 0.029 + arc.born * 0.001) * 0.28
-                                     + Math.sin(now * 0.061 + arc.born * 0.002) * 0.17, 0.08, 1);
-          const a = masterAlpha * life * flicker;
+          const flicker = clamp(0.5 + Math.sin(now * 0.035 + arc.born * 0.001) * 0.3
+                                    + Math.sin(now * 0.071 + arc.born * 0.002) * 0.2, 0.05, 1);
+          // Inverse-distance energy: shorter edges are brighter and thicker
+          const d       = Math.hypot(arc.a.x - arc.b.x, arc.a.y - arc.b.y);
+          const energy  = Math.max(0, 1 - d / VOLTA_ARC_DIST);
+          const bright  = energy * energy; // square for dramatic short-range peak
+          const a       = masterAlpha * life * flicker * (0.25 + bright * 0.75);
           if (a < 0.02) continue;
-          const pts = [{ x: arc.a.x, y: arc.a.y }, ...arc.jags, { x: arc.b.x, y: arc.b.y }];
-          // Outer glow pass
-          pctx.globalAlpha = a * 0.35;
-          pctx.strokeStyle = '#1840cc'; pctx.shadowBlur = 12; pctx.shadowColor = '#3870ff'; pctx.lineWidth = 3;
-          pctx.beginPath(); pctx.moveTo(pts[0].x, pts[0].y);
-          for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].x, pts[k].y);
-          pctx.stroke();
-          // Bright core pass
-          pctx.globalAlpha = a * 0.82;
-          pctx.strokeStyle = '#a8e4ff'; pctx.shadowBlur = 3; pctx.shadowColor = '#70c8ff'; pctx.lineWidth = 0.8;
-          pctx.beginPath(); pctx.moveTo(pts[0].x, pts[0].y);
-          for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].x, pts[k].y);
+          pctx.globalAlpha = a;
+          pctx.shadowBlur  = 1 + bright * 6;
+          pctx.shadowColor = '#d0eeff';
+          pctx.lineWidth   = 0.4 + bright * 0.9;
+          pctx.beginPath();
+          pctx.moveTo(arc.a.x, arc.a.y);
+          pctx.lineTo(arc.b.x, arc.b.y);
           pctx.stroke();
         }
         pctx.restore();
