@@ -456,6 +456,9 @@
 
       const releasePointerLight = () => {
         ve.active = false;
+        // Inherit cursor velocity at moment of release — this is the "throw"
+        ve.vx = ve.cvx * 0.45;
+        ve.vy = ve.cvy * 0.45;
         const l = lights.find(li => li.kind === 'pointer' && !li.released);
         if (l) {
           const now      = performance.now();
@@ -612,21 +615,15 @@
         ve.θy += ve.ωy * dt;
         ve.θz += ve.ωz * dt;
 
-        // Position: rubber-band when active, coast with viscous damping when released
+        // Position: rubber-band when active, coast when released
         if (ve.active) {
           const lag = 1 - Math.exp(-dt * 0.011);
-          const nx = ve.x + (ve.targetX - ve.x) * lag;
-          const ny = ve.y + (ve.targetY - ve.y) * lag;
-          const dvx = (nx - ve.x) / Math.max(dt, 1);
-          const dvy = (ny - ve.y) / Math.max(dt, 1);
-          ve.vx = ve.vx * 0.7 + dvx * 0.3;  // smoothed velocity estimate
-          ve.vy = ve.vy * 0.7 + dvy * 0.3;
-          ve.x = nx;
-          ve.y = ny;
+          ve.x += (ve.targetX - ve.x) * lag;
+          ve.y += (ve.targetY - ve.y) * lag;
         } else {
-          const vMax = 1.8;
-          ve.vx = clamp(ve.vx, -vMax, vMax) * 0.982;
-          ve.vy = clamp(ve.vy, -vMax, vMax) * 0.982;
+          const vMax = 3.0;
+          ve.vx = clamp(ve.vx * 0.96, -vMax, vMax);
+          ve.vy = clamp(ve.vy * 0.96, -vMax, vMax);
           ve.x += ve.vx * dt;
           ve.y += ve.vy * dt;
         }
