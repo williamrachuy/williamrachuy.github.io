@@ -512,22 +512,22 @@
           const t      = (pulse + 1) * 0.5;     // 0=contracted/dim, 1=expanded/bright
           const rDraw  = ap.r0 * (1 + 0.22 * pulse); // ±22% scale
           // Dark base — always present
-          pctx.globalAlpha = 0.70 + t * 0.25 + local * 0.05;
-          pctx.shadowBlur  = 4 + t * 28 + local * 36;
+          pctx.globalAlpha = 0.70 + t * 0.17 + local * 0.03;
+          pctx.shadowBlur  = 3 + t * 19 + local * 24;
           pctx.shadowColor = ap.brightColor;
           pctx.fillStyle   = ap.color;
           pctx.beginPath();
           pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
           pctx.fill();
           // Bright color overlay: expands strongly with pulse (dim/desat → vivid/sat)
-          pctx.globalAlpha = t * 0.78 + local * 0.35;
+          pctx.globalAlpha = t * 0.52 + local * 0.23;
           pctx.shadowBlur  = 0;
           pctx.fillStyle   = ap.brightColor;
           pctx.beginPath();
           pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
           pctx.fill();
           // 3D highlight — brightens at peak expansion
-          pctx.globalAlpha = 0.10 + t * 0.20 + local * 0.14;
+          pctx.globalAlpha = 0.07 + t * 0.13 + local * 0.09;
           pctx.fillStyle   = '#fff';
           pctx.beginPath();
           pctx.arc(ap.x - rDraw * 0.28, ap.y - rDraw * 0.30, rDraw * 0.38, 0, Math.PI * 2);
