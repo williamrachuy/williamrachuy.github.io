@@ -625,7 +625,17 @@
 
       function drawVE() {
         if (ve.presence < 0.01) return;
-        const focal = 280, S = ve.scaleCurrent;
+        // Electric jitter: sum of inharmonic sine waves → aperiodic unstable field
+        const now2 = performance.now();
+        const elec = (
+          Math.sin(now2 * 0.0071) * 0.40 +
+          Math.sin(now2 * 0.0137) * 0.28 +
+          Math.sin(now2 * 0.0293) * 0.18 +
+          Math.sin(now2 * 0.0511) * 0.09 +
+          Math.sin(now2 * 0.0897) * 0.05
+        );  // range ≈ [-1, 1], aperiodic
+        const elecPos = (elec + 1) * 0.5;  // [0, 1]
+        const focal = 280, S = ve.scaleCurrent * (1 + elecPos * 0.08);
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
         const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
@@ -651,34 +661,34 @@
           pctx.moveTo(pts[0].px, pts[0].py);
           for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].px, pts[k].py);
           pctx.closePath();
-          pctx.globalAlpha = ve.alpha * 0.055;
+          pctx.globalAlpha = ve.alpha * (0.04 + elecPos * 0.04);
           pctx.fillStyle = '#88ccff';
           pctx.fill();
         }
 
-        // Edges — glow intensity scales with depth
+        // Edges — glow jitters with electric field
         for (const [i, j] of VE_E) {
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * ((a.z + b.z) * 0.5 + 1) * 0.5;
-          pctx.globalAlpha  = ve.alpha * zf * 0.90;
-          pctx.shadowBlur   = 6 + zf * 12;
+          pctx.globalAlpha  = ve.alpha * zf * (0.70 + elecPos * 0.30);
+          pctx.shadowBlur   = 5 + zf * 10 + elecPos * 12;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
-          pctx.lineWidth    = 0.6 + zf * 0.7;
+          pctx.lineWidth    = 0.5 + zf * 0.6 + elecPos * 0.4;
           pctx.beginPath();
           pctx.moveTo(a.px, a.py);
           pctx.lineTo(b.px, b.py);
           pctx.stroke();
         }
 
-        // Radial spokes — vertex to center, 50% dimmer than outer edges
+        // Radial spokes — 50% dimmer, also jitter
         for (const { px, py, z } of proj) {
           const zf = 0.35 + 0.65 * (z + 1) * 0.5;
-          pctx.globalAlpha  = ve.alpha * zf * 0.45;
-          pctx.shadowBlur   = 3 + zf * 6;
+          pctx.globalAlpha  = ve.alpha * zf * (0.35 + elecPos * 0.15);
+          pctx.shadowBlur   = 2 + zf * 5 + elecPos * 6;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
-          pctx.lineWidth    = 0.4 + zf * 0.35;
+          pctx.lineWidth    = 0.35 + zf * 0.3 + elecPos * 0.2;
           pctx.beginPath();
           pctx.moveTo(px, py);
           pctx.lineTo(ve.x, ve.y);
