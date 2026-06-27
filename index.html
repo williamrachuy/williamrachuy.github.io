@@ -118,7 +118,7 @@
       // ─── Canvas sizing ──────────────────────────────────────────────────────
 
       function setCanvasSize(canvas, ctx) {
-        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
         canvas.width  = Math.round(stage.clientWidth  * dpr);
         canvas.height = Math.round(stage.clientHeight * dpr);
         canvas.style.width  = stage.clientWidth  + 'px';
@@ -220,12 +220,13 @@
       function updateParticles(dt) {
         const w = stage.clientWidth, h = stage.clientHeight;
         // dr/dt = (net dm/dt) / (3r²), m ∝ r³, uniform density
-        const kLoss = 0.00009;   // ablation rate (3× faster — small particle burns in ~4s)
+        const kLoss = 0.00022;   // ablation rate — ~3s to evaporate at 50% light radius
         const kGain = 0.000015;  // recovery rate via ODE phase
-        const now   = performance.now();
 
         for (const p of particles) {
           p.tw += dt * 0.00045;
+
+          // Heat from lights
           let maxHeat = 0;
           for (const l of lights) {
             const dx = p.x - l.x, dy = p.y - l.y;
@@ -239,7 +240,14 @@
             }
           }
           p.heat += (maxHeat - p.heat) * clamp(dt * 0.004, 0, 1);
-          // App-particle pressure — each orb pushes nearby dead particles outward
+
+          // Evaporated particles: only track heat + regrowth seed; skip physics
+          if (p.r <= 0) {
+            p.r = (p.heat < 0.1) ? 0.001 : 0;
+            continue;
+          }
+
+          // App-particle pressure
           for (const ap of appParticles) {
             const adx = p.x - ap.x, ady = p.y - ap.y;
             const ad  = Math.hypot(adx, ady) || 1;
@@ -250,24 +258,19 @@
               p.vy += (ady / ad) * ainf;
             }
           }
-          // Ablation / in-place regrowth:
-          // r=0 → wait until cool, then seed; ODE denominator clamped to avoid 1/r² singularity
-          if (p.r <= 0) {
-            p.r = 0;
-            if (p.heat < 0.1) p.r = 0.001; // seed regrowth when cool enough
-          } else {
-            const r2safe = Math.max(p.r * p.r, 0.04); // clamp denominator
-            const drdt   = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * r2safe);
-            p.r = Math.min(p.r0, Math.max(0, p.r + drdt * dt));
-          }
+
+          // Ablation / regrowth ODE; denominator clamped to avoid 1/r² singularity at r→0
+          const r2safe = Math.max(p.r * p.r, 0.04);
+          const drdt   = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * r2safe);
+          p.r = Math.min(p.r0, Math.max(0, p.r + drdt * dt));
+
           p.mass = p.r * p.r * p.r;
-          // Stokes fluid drag (∝ 1/r²) + substrate surface friction (∝ r²/m = 1/r)
           p.drag = Math.max(0.90, 1 - 0.0003 / Math.max(p.r * p.r, 0.01)
                                     - 0.0006 / Math.max(p.r, 0.1));
           p.vs   = Math.max(1, p.r * 2);
           p.vx  *= p.drag; p.vy *= p.drag;
           p.trail.unshift({ x: p.x, y: p.y });
-          if (p.trail.length > 10) p.trail.pop();
+          if (p.trail.length > 5) p.trail.pop();
           p.x  += p.vx * dt * 0.026;
           p.y  += p.vy * dt * 0.026;
           if (p.x < -6) p.x = w + 6; if (p.x > w + 6) p.x = -6;
@@ -286,27 +289,25 @@
           const color  = heatColor(local);
           const speed  = Math.hypot(p.vx, p.vy);
 
-          // Comet tail — evaporates from tip outward, only visible when moving + lit
+          // Comet tail — only when moving + lit; no shadowBlur on trail segments (perf)
           if (local > 0.04 && speed > 0.002 && p.trail.length > 1) {
+            pctx.shadowBlur = 0;
             const tailLen = p.trail.length;
             for (let t = 0; t < tailLen; t++) {
-              const frac = (t + 1) / tailLen;          // 0=head, 1=tail tip
-              const evap  = Math.pow(1 - frac, 1.6);   // nonlinear evaporation
+              const frac   = (t + 1) / tailLen;
+              const evap   = Math.pow(1 - frac, 1.6);
               const tAlpha = alpha * evap * local * 0.55;
               if (tAlpha < 0.005) break;
               pctx.globalAlpha = tAlpha;
-              // Tail dims shadow as it evaporates
-              pctx.shadowBlur  = local * (8 - frac * 7);
-              pctx.shadowColor = color;
               pctx.fillStyle   = color;
               pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.vs, p.vs);
             }
           }
 
-          // Particle head — self-emission glow scales with heat squared
+          // Particle head — glow only on particles with significant illumination (perf)
           const heatSq = local * local;
           pctx.globalAlpha = alpha;
-          pctx.shadowBlur  = local > 0.01 ? (3 + heatSq * 32) : 0; // radiating glow
+          pctx.shadowBlur  = local > 0.35 ? (2 + heatSq * 18) : 0;
           pctx.shadowColor = color;
           pctx.fillStyle   = color;
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
