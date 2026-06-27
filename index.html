@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.8 · 3c6bad2';
+      const VERSION = '20260627.9 · e44165a';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -787,7 +787,7 @@
 
         // Count orbs inside a fixed-radius presence zone (independent of current scale,
         // so a shrinking VE doesn't expel its own sustaining orbs)
-        const presenceR = 80;
+        const presenceR = ve.scale * 0.80; // ≈ inradius at full scale (~42px)
         let orbsInPresence = 0;
         for (const ap of appParticles) {
           if (!ap.audio && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
