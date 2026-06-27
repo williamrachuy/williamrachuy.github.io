@@ -137,6 +137,7 @@
       // VE runtime state
       const ve = {
         x: 0, y: 0, targetX: 0, targetY: 0, prevTX: 0, prevTY: 0,
+        vx: 0, vy: 0,
         cvx: 0, cvy: 0,
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
@@ -424,7 +425,7 @@
         // VE: active only on touch or while mouse button is held (not plain mouse hover)
         const veActivate = touch || (event.pointerType === 'mouse' && (event.buttons & 1));
         if (veActivate) {
-          if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; }
+          if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.targetX = tx; ve.targetY = ty;
           ve.active = true;
         }
@@ -610,11 +611,23 @@
         ve.θy += ve.ωy * dt;
         ve.θz += ve.ωz * dt;
 
-        // Rubber-band position (only when active; frozen at last click when released)
+        // Position: rubber-band when active, coast with viscous damping when released
         if (ve.active) {
           const lag = 1 - Math.exp(-dt * 0.011);
-          ve.x += (ve.targetX - ve.x) * lag;
-          ve.y += (ve.targetY - ve.y) * lag;
+          const nx = ve.x + (ve.targetX - ve.x) * lag;
+          const ny = ve.y + (ve.targetY - ve.y) * lag;
+          const dvx = (nx - ve.x) / Math.max(dt, 1);
+          const dvy = (ny - ve.y) / Math.max(dt, 1);
+          ve.vx = ve.vx * 0.7 + dvx * 0.3;  // smoothed velocity estimate
+          ve.vy = ve.vy * 0.7 + dvy * 0.3;
+          ve.x = nx;
+          ve.y = ny;
+        } else {
+          const vMax = 1.8;
+          ve.vx = clamp(ve.vx, -vMax, vMax) * 0.982;
+          ve.vy = clamp(ve.vy, -vMax, vMax) * 0.982;
+          ve.x += ve.vx * dt;
+          ve.y += ve.vy * dt;
         }
 
         // Alpha fades out faster than scale (disappears before fully shrinking)
