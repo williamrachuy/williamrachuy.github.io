@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.4 · 7762e92';
+      const VERSION = '20260627.5 · 3c26b2b';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -118,8 +118,9 @@
       const particles     = [];
       const lights        = [];
       // spawnQueue removed — particles now regrow in place
-      const appParticles  = []; // living particles — one per sub-page, immune to ablation
-      const hotParticles  = []; // subset of particles with heat≥0.3 — rebuilt each frame
+      const appParticles     = []; // living particles — one per sub-page, immune to ablation
+      const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
+      const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       let lastFrame       = 0;
       let holdActive      = false; // true while mouse/touch is held down
 
@@ -623,18 +624,15 @@
           ap.wAngle += (Math.random() - 0.5) * 0.0008 * dt * ap.speed;
           ap.vx += Math.cos(ap.wAngle) * 0.001 * ap.speed;
           ap.vy += Math.sin(ap.wAngle) * 0.001 * ap.speed;
-          // Attracted to light sources — gravity-style, stronger when close
+          // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (!ap.audio) {
-            for (const l of lights) {
-              const dx = ap.x - l.x, dy = ap.y - l.y;
-              const d  = Math.hypot(dx, dy) || 1;
-              const intensity = lightIntensity(l, now);
-              const pull = intensity * 100 / (d * 0.055 + 1) * accelBoost;
-              ap.vx -= (dx / d) * pull / mass;
-              ap.vy -= (dy / d) * pull / mass;
-            }
+          if (!ap.audio && ve.scaleCurrent > 5 && !ve.liberated) {
+            const dx = ap.x - ve.x, dy = ap.y - ve.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            const pull = 60 * accelBoost / (d * 0.04 + 1);
+            ap.vx -= (dx / d) * pull / mass;
+            ap.vy -= (dy / d) * pull / mass;
           }
           // Orbs sense Volta arcs and steer their wander path away — not a push, a redirect
           if (volta.active && !ap.audio) {
@@ -846,22 +844,25 @@
             node.freedom = VE_VERTEX_EDGES[i].reduce((n, ei) => n + (ve.destroyedEdges.has(ei) ? 1 : 0), 0) / deg;
             node.fx = 0; node.fy = 0;
           }
-          // Per-edge spring attraction (only intact edges with at least one free endpoint)
+          // Once infection starts (edgeEnergies exists), ALL nodes enter full physics —
+          // no more projCache snapping. Pre-infection, freedom=0 nodes still snap.
+          const infecting = ve.edgeEnergies !== null;
+          // Per-edge spring attraction
           for (let ei = 0; ei < VE_E.length; ei++) {
             if (ve.destroyedEdges.has(ei)) continue;
             const [vi, vj] = VE_E[ei];
             const ni = ve.vertNodes[vi], nj = ve.vertNodes[vj];
-            if (ni.freedom === 0 && nj.freedom === 0) continue;
+            if (!infecting && ni.freedom === 0 && nj.freedom === 0) continue;
             const dx = nj.x - ni.x, dy = nj.y - ni.y;
             const d = Math.hypot(dx, dy) || 1;
             const edgeE = ve.edgeEnergies ? ve.edgeEnergies[ei] : 1;
             const f = VE_SPRING_K * (d - VE_E_REST[ei]) * edgeE;
-            if (ni.freedom > 0) { ni.fx += (dx/d)*f; ni.fy += (dy/d)*f; }
-            if (nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
+            if (infecting || ni.freedom > 0) { ni.fx += (dx/d)*f; ni.fy += (dy/d)*f; }
+            if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
           }
-          // Node-pair repulsion — applies to free nodes from ALL neighbours (fixed or free)
+          // Node-pair repulsion — all nodes during infection; only free nodes pre-infection
           for (let i = 0; i < 12; i++) {
-            if (ve.vertNodes[i].freedom === 0) continue;
+            if (!infecting && ve.vertNodes[i].freedom === 0) continue;
             for (let j = i+1; j < 12; j++) {
               const ni = ve.vertNodes[i], nj = ve.vertNodes[j];
               const dx = ni.x - nj.x, dy = ni.y - nj.y;
@@ -869,13 +870,13 @@
               const d = Math.sqrt(d2) || 1;
               const f = VE_REP_STR / (d2 + 80);
               ni.fx += (dx/d)*f; ni.fy += (dy/d)*f;
-              if (nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
+              if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
             }
           }
-          // Integrate — freedom=0 nodes snap to ideal; free nodes follow physics
+          // Integrate — pre-infection freedom=0 nodes snap; during infection all use physics
           for (let i = 0; i < 12; i++) {
             const node = ve.vertNodes[i];
-            if (node.freedom === 0) {
+            if (!infecting && node.freedom === 0) {
               node.x = ve.projCache[i].px; node.y = ve.projCache[i].py;
               node.vx = 0; node.vy = 0;
             } else {
@@ -903,11 +904,14 @@
           if (ve.destroyedEdges.size >= VE_E.length) ve.liberated = true;
         }
 
-        // Cleanup after liberation and fade
-        if (ve.liberated && ve.alpha < 0.01 && !ve.voltaHeld) {
-          ve.liberated = false; ve.destroyedEdges.clear();
-          ve.vertNodes = null; ve.edgeEnergies = null; ve.edgeDrainRates = null;
+        // On first liberation, harvest nodes into persistent liberatedNodes array
+        if (ve.liberated && ve.vertNodes && liberatedNodes.length === 0) {
+          for (let i = 0; i < 12; i++) {
+            const n = ve.vertNodes[i];
+            liberatedNodes.push({ x: n.x, y: n.y, vx: n.vx, vy: n.vy, mass: 8 });
+          }
         }
+        // VE never resets — once destroyed it stays destroyed
       }
 
       function drawVE() {
@@ -1036,20 +1040,22 @@
         pctx.fill();
         pctx.shadowBlur = 0;
 
-        // Vertices — NODES DO NOT DIM; they glow brighter as their edges release energy
-        const infBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.6) : 1;
-        pctx.shadowBlur  = (11 + ex * 10) * infBoost;
-        pctx.shadowColor = '#70e0ff';
-        pctx.fillStyle   = '#e0f8ff';
-        for (let i = 0; i < 12; i++) {
-          const { px, py, z } = proj[i];
-          const zf = 0.4 + 0.6 * (1 - z) * 0.5;
-          const nodeBoost = volta.state === 'infecting' && ve.vertNodes
-            ? (1 + ve.vertNodes[i].freedom * 0.5) : 1;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf * nodeBoost);
-          pctx.beginPath();
-          pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
-          pctx.fill();
+        // Vertices — drawn here while VE lives; once liberated, liberatedNodes handles them
+        if (!ve.liberated) {
+          const infBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.6) : 1;
+          pctx.shadowBlur  = (11 + ex * 10) * infBoost;
+          pctx.shadowColor = '#70e0ff';
+          pctx.fillStyle   = '#e0f8ff';
+          for (let i = 0; i < 12; i++) {
+            const { px, py, z } = proj[i];
+            const zf = 0.4 + 0.6 * (1 - z) * 0.5;
+            const nodeBoost = volta.state === 'infecting' && ve.vertNodes
+              ? (1 + ve.vertNodes[i].freedom * 0.5) : 1;
+            pctx.globalAlpha = Math.min(1, ve.alpha * zf * nodeBoost);
+            pctx.beginPath();
+            pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
+            pctx.fill();
+          }
         }
 
         // Volta infection: straight edges from VE vertices to nearby particles
@@ -1123,6 +1129,59 @@
           jags.push({ x: x1 + dx * t + nx * mag, y: y1 + dy * t + ny * mag });
         }
         return jags;
+      }
+
+      function updateLiberatedNodes(dt, now) {
+        if (liberatedNodes.length === 0) return;
+        const w = stage.clientWidth, h = stage.clientHeight;
+        for (const n of liberatedNodes) {
+          n.vx *= 0.990;
+          n.vy *= 0.990;
+          // Cursor light interaction — push away normally, pull toward on hold
+          for (const l of lights) {
+            const dx = n.x - l.x, dy = n.y - l.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            if (d < 220) {
+              const inten = lightIntensity(l, now);
+              const str = inten * (1 - d / 220) * 0.055 / n.mass;
+              const sign = holdActive ? -1 : 1;
+              n.vx += (dx / d) * str * sign;
+              n.vy += (dy / d) * str * sign;
+            }
+          }
+          // Orb repulsion
+          for (const ap of appParticles) {
+            const dx = n.x - ap.x, dy = n.y - ap.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            if (d < 90) {
+              const f = (1 - d / 90) * 0.014 / n.mass;
+              n.vx += (dx / d) * f;
+              n.vy += (dy / d) * f;
+            }
+          }
+          // Soft canvas boundary
+          if (n.x < 0)   n.vx += 0.05;
+          if (n.x > w)   n.vx -= 0.05;
+          if (n.y < 0)   n.vy += 0.05;
+          if (n.y > h)   n.vy -= 0.05;
+          n.x += n.vx * dt;
+          n.y += n.vy * dt;
+        }
+      }
+
+      function drawLiberatedNodes() {
+        if (liberatedNodes.length === 0) return;
+        pctx.save();
+        pctx.shadowColor = '#70e0ff';
+        pctx.shadowBlur  = 9;
+        pctx.fillStyle   = '#d8f4ff';
+        pctx.globalAlpha = 0.88;
+        for (const n of liberatedNodes) {
+          pctx.beginPath();
+          pctx.arc(n.x, n.y, 2.3, 0, Math.PI * 2);
+          pctx.fill();
+        }
+        pctx.restore();
       }
 
       function updateVolta(dt, now) {
@@ -1345,6 +1404,7 @@
         updateVolta(dt, now);
         updateParticles(dt);
         updateAppParticles(dt);
+        updateLiberatedNodes(dt, now);
         updateTitle(dt);
         // Rebuild hot-particle list once per frame (avoids O(N²) in lightAt)
         hotParticles.length = 0;
@@ -1354,6 +1414,7 @@
         drawParticles(now);
         drawAppParticles(now);
         drawVE();
+        drawLiberatedNodes();
         drawVolta(now);
         requestAnimationFrame(frame);
       }
