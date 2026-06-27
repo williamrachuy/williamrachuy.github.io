@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.15 · 6fdd3fd';
+      const VERSION = '20260627.16 · c60e245';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -897,6 +897,18 @@
               if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
             }
           }
+          // Volta spasm: stochastic physics impulses during infection — velocity persists after Volta leaves
+          if (infecting && volta.state === 'infecting') {
+            const _si = 1 - ve.destroyedEdges.size / VE_E.length;
+            const spasm = (1 - _si) * volta.charge;
+            if (spasm > 0.005) {
+              const impulse = spasm * 0.003; // accumulates into velocity; ~0.048 px/frame at max
+              for (let i = 0; i < 12; i++) {
+                ve.vertNodes[i].fx += (Math.random() * 2 - 1) * impulse;
+                ve.vertNodes[i].fy += (Math.random() * 2 - 1) * impulse;
+              }
+            }
+          }
           // Integrate — pre-infection freedom=0 nodes snap; during infection all use physics
           for (let i = 0; i < 12; i++) {
             const node = ve.vertNodes[i];
@@ -975,24 +987,6 @@
           for (let i = 0; i < 12; i++) {
             proj[i].px = ve.vertNodes[i].x;
             proj[i].py = ve.vertNodes[i].y;
-          }
-        }
-
-        // Infection spasm: nodes vibrate harder as edges die — multi-frequency chaos
-        if (volta.state === 'infecting' && ve.edgeEnergies) {
-          const structIntegrity2 = 1 - ve.destroyedEdges.size / VE_E.length;
-          const spasm = (1 - structIntegrity2) * volta.charge; // 0 → 1 as VE collapses
-          if (spasm > 0.01) {
-            const jt = performance.now();
-            const amp = spasm * spasm * 14; // square for dramatic ramp; max ~14px
-            for (let i = 0; i < 12; i++) {
-              proj[i].px += (Math.sin(jt * 0.023 + i * 2.31) * 0.55
-                           + Math.sin(jt * 0.059 + i * 1.73) * 0.30
-                           + Math.sin(jt * 0.137 + i * 3.17) * 0.15) * amp;
-              proj[i].py += (Math.cos(jt * 0.031 + i * 1.87) * 0.55
-                           + Math.cos(jt * 0.071 + i * 2.63) * 0.30
-                           + Math.cos(jt * 0.109 + i * 0.94) * 0.15) * amp;
-            }
           }
         }
 
@@ -1087,33 +1081,6 @@
           }
         }
 
-        // Volta infection: straight edges from VE vertices to nearby particles
-        if (volta.state === 'infecting' && volta.charge > 0.08) {
-          const cFlicker = 0.6 + Math.sin(performance.now() * 0.048) * 0.22
-                               + Math.sin(performance.now() * 0.081) * 0.18;
-          pctx.lineCap = 'round';
-          pctx.strokeStyle = '#ffffff';
-          for (const vp of proj) {
-            if (Math.random() > volta.charge * 0.65) continue;
-            let target = null, bestScore = -1;
-            for (const p of particles) {
-              if (p.r < 0.05) continue;
-              const d = Math.hypot(p.x - vp.px, p.y - vp.py);
-              if (d < 160 && Math.random() > 0.5) {
-                const score = (1 - d / 160) + Math.random() * 0.3;
-                if (score > bestScore) { bestScore = score; target = p; }
-              }
-            }
-            if (!target) continue;
-            const d      = Math.hypot(target.x - vp.px, target.y - vp.py);
-            const energy = Math.max(0, 1 - d / 160);
-            pctx.globalAlpha = ve.alpha * volta.charge * cFlicker * (0.3 + energy * 0.6);
-            pctx.shadowBlur  = 1 + energy * 5;
-            pctx.shadowColor = '#d0eeff';
-            pctx.lineWidth   = 0.4 + energy * 0.7;
-            pctx.beginPath(); pctx.moveTo(vp.px, vp.py); pctx.lineTo(target.x, target.y); pctx.stroke();
-          }
-        }
 
         pctx.shadowBlur  = 0;
         pctx.globalAlpha = 1;
