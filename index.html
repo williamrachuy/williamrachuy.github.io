@@ -102,7 +102,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.11 · 16ee2df';
+      const VERSION = '20260626.12 · d172be8';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -623,16 +623,16 @@
 
         // Rolling-ball torque: direction of motion determines spin axis (cross product with Z).
         // Moving right → Y rotation; moving down → X rotation; diagonal → both.
-        ve.ωy += rawVx * 0.000030;
-        ve.ωx += rawVy * 0.000030;
-        ve.ωz += rawVx * rawVy * 0.000008; // diagonal curl → Z twist
-        // Acceleration impulse: sharp direction changes add strong torque burst
-        ve.ωy += ax * 0.00050;
-        ve.ωx += ay * 0.00050;
-        ve.ωz += (ax * ay) * 0.00010;
+        ve.ωy += rawVx * 0.000060; // rolling baseline from velocity
+        ve.ωx += rawVy * 0.000060;
+        ve.ωz += rawVx * rawVy * 0.000015;
+        // Acceleration is the dominant torque driver — direction changes = strong spin burst
+        ve.ωy += ax * 0.0028;
+        ve.ωx += ay * 0.0028;
+        ve.ωz += (ax * ay) * 0.00055;
 
         // Viscous fluid drag — proportional damping, decays to zero when cursor stops
-        const ωMax = 0.003;
+        const ωMax = 0.008;
         ve.ωx = clamp(ve.ωx * 0.985, -ωMax, ωMax);
         ve.ωy = clamp(ve.ωy * 0.985, -ωMax, ωMax);
         ve.ωz = clamp(ve.ωz * 0.985, -ωMax, ωMax);
