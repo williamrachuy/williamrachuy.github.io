@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.13 · 20d7381';
+      const VERSION = '20260627.14 · 59bae46';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -805,6 +805,7 @@
         for (const ap of appParticles) {
           if (!ap.audio && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
         }
+        ve.orbsInside = orbsInPresence; // exposed to drawVE for oscillation scaling
 
         // Alpha/scale: full when active; orb-sustained when idle; fades when empty
         const inRate = clamp(dt * 0.005, 0, 1);
@@ -957,7 +958,8 @@
           Math.sin(now2 * 0.3588) * 0.06
         );
         const elecPos = (elec + 1) * 0.5;
-        const elecAmp = elecPos * elecPos;
+        const orbBoost = 1 + (ve.orbsInside || 0) * 0.05; // +5% oscillation range per orb
+        const elecAmp = elecPos * elecPos * orbBoost;
         const focal = 280, S = ve.scaleCurrent * (1 + ex * 0.20) * (1 + elecAmp * 0.015 * stability);
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
