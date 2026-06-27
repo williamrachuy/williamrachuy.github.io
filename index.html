@@ -573,24 +573,30 @@
       // ─── Vector Equilibrium update + draw ───────────────────────────────────
 
       function updateVE(dt) {
-        // Smoothed cursor velocity
-        const rawCvx = (ve.targetX - ve.prevTX) / Math.max(dt, 1);
-        const rawCvy = (ve.targetY - ve.prevTY) / Math.max(dt, 1);
-        ve.cvx += (rawCvx - ve.cvx) * 0.10;
-        ve.cvy += (rawCvy - ve.cvy) * 0.10;
+        // Raw cursor velocity this frame (px/ms)
+        const rawVx = (ve.targetX - ve.prevTX) / Math.max(dt, 1);
+        const rawVy = (ve.targetY - ve.prevTY) / Math.max(dt, 1);
+        // Cursor acceleration = frame-to-frame velocity delta (tracks flicks + direction changes)
+        const ax = rawVx - ve.cvx;
+        const ay = rawVy - ve.cvy;
+        ve.cvx = rawVx;  // store raw (not smoothed) so acceleration is accurate
+        ve.cvy = rawVy;
         ve.prevTX = ve.targetX;
         ve.prevTY = ve.targetY;
 
-        // Cursor velocity → angular momentum (swipe gives spin)
-        ve.ωy += ve.cvx * 1.2e-7 * dt;
-        ve.ωx += ve.cvy * 1.2e-7 * dt;
-        ve.ωz += ve.cvx * ve.cvy * 2e-10 * dt;
+        // Velocity → continuous drag torque (proportional to cursor speed)
+        ve.ωy += rawVx * 0.000004;
+        ve.ωx += rawVy * 0.000004;
+        // Acceleration → impulse torque (visible on flicks and direction changes)
+        ve.ωy += ax * 0.00020;
+        ve.ωx += ay * 0.00020;
+        ve.ωz += (ax - ay) * 0.00008; // differential accel → Z axis spin
 
         // Damping + floor so it's always alive even when still
-        const ωMax = 0.0014, ωFloor = 0.00009;
-        ve.ωx = clamp(ve.ωx * 0.9988, -ωMax, ωMax);
-        ve.ωy = clamp(ve.ωy * 0.9988, -ωMax, ωMax);
-        ve.ωz = clamp(ve.ωz * 0.9988, -ωMax, ωMax);
+        const ωMax = 0.003, ωFloor = 0.00009;
+        ve.ωx = clamp(ve.ωx * 0.9985, -ωMax, ωMax);
+        ve.ωy = clamp(ve.ωy * 0.9985, -ωMax, ωMax);
+        ve.ωz = clamp(ve.ωz * 0.9985, -ωMax, ωMax);
         if (Math.abs(ve.ωx) < ωFloor) ve.ωx += Math.sign(ve.ωx || 1) * ωFloor * 0.04;
         if (Math.abs(ve.ωy) < ωFloor) ve.ωy += Math.sign(ve.ωy || 1) * ωFloor * 0.04;
         if (Math.abs(ve.ωz) < ωFloor) ve.ωz += Math.sign(ve.ωz || 1) * ωFloor * 0.04;
@@ -657,6 +663,31 @@
           pctx.lineTo(b.px, b.py);
           pctx.stroke();
         }
+
+        // Radial spokes — vertex to center, 50% dimmer than outer edges
+        for (const { px, py, z } of proj) {
+          const zf = 0.35 + 0.65 * (z + 1) * 0.5;
+          pctx.globalAlpha  = ve.alpha * zf * 0.45;
+          pctx.shadowBlur   = 3 + zf * 6;
+          pctx.shadowColor  = '#40ccff';
+          pctx.strokeStyle  = '#b8eeff';
+          pctx.lineWidth    = 0.4 + zf * 0.35;
+          pctx.beginPath();
+          pctx.moveTo(px, py);
+          pctx.lineTo(ve.x, ve.y);
+          pctx.stroke();
+        }
+        pctx.shadowBlur = 0;
+
+        // Center node
+        pctx.globalAlpha = ve.alpha * 0.92;
+        pctx.shadowBlur  = 14;
+        pctx.shadowColor = '#80e8ff';
+        pctx.fillStyle   = '#e8f8ff';
+        pctx.beginPath();
+        pctx.arc(ve.x, ve.y, 2.5, 0, Math.PI * 2);
+        pctx.fill();
+        pctx.shadowBlur = 0;
 
         // Vertices — bright dots with depth fade
         for (const { px, py, z } of proj) {
