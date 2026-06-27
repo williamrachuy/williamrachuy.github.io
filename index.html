@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.19 · 3281337';
+      const VERSION = '20260627.20 · 8fd2834';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -115,6 +115,8 @@
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       let lastFrame       = 0;
       let holdActive      = false; // true while mouse/touch is held down
+      let lastStageW      = 0;
+      let lastStageH      = 0;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
       function rand(lo, hi)     { return lo + Math.random() * (hi - lo); }
@@ -1379,7 +1381,7 @@
       function drawVolta(now) {
         if (!volta.active || volta.arcs.length === 0) return;
         // Pool-based master alpha: regens naturally so arcs never visually die out entirely
-        const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 2.2, 0.45, 1.0);
+        const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 3.5, 0.70, 1.0);
         if (masterAlpha < 0.01) return;
 
         // VE proximity drives brightness — builds as Volta converges, peaks inside
@@ -1408,10 +1410,10 @@
           const str     = arc.strength || 1.0;
           const energy  = clamp(Math.max(arcE, vePx * 0.6) * vePx * str, 0, 1);
           const bright  = energy * energy;
-          const a       = masterAlpha * life * flicker * (0.35 + bright * 0.65);
+          const a       = masterAlpha * life * flicker * (0.60 + bright * 0.40);
           if (a < 0.02) continue;
-          pctx.globalAlpha = a;
-          pctx.shadowBlur  = 3 + bright * 14;
+          pctx.globalAlpha = Math.min(1, a * 1.4);
+          pctx.shadowBlur  = 6 + bright * 20;
           pctx.shadowColor = '#d0eeff';
           pctx.lineWidth   = 0.4 + bright * 1.2;
           pctx.beginPath();
@@ -1425,9 +1427,30 @@
       // ─── Main loop ──────────────────────────────────────────────────────────
 
       function resize() {
-        setCanvasSize(particlesCanvas, pctx);
-        buildTitle();
-        seedParticles();
+        const w = stage.clientWidth, h = stage.clientHeight;
+        if (lastStageW === 0) {
+          // First call — seed from scratch
+          setCanvasSize(particlesCanvas, pctx);
+          buildTitle();
+          seedParticles();
+        } else {
+          // Subsequent resize or browser zoom — rescale existing positions from center
+          const prevCx = lastStageW / 2, prevCy = lastStageH / 2;
+          const cx = w / 2, cy = h / 2;
+          const sx = w / lastStageW, sy = h / lastStageH;
+          for (const p of particles) {
+            p.x = cx + (p.x - prevCx) * sx;
+            p.y = cy + (p.y - prevCy) * sy;
+          }
+          for (const ap of appParticles) {
+            ap.x = cx + (ap.x - prevCx) * sx;
+            ap.y = cy + (ap.y - prevCy) * sy;
+          }
+          setCanvasSize(particlesCanvas, pctx);
+          buildTitle();
+        }
+        lastStageW = w;
+        lastStageH = h;
       }
 
       function frame(now) {
