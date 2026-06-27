@@ -115,6 +115,34 @@
         return `#${lift(r,0.62)}${lift(g,0.62)}${lift(b,0.62)}`;
       }
 
+      // ─── Vector Equilibrium geometry ────────────────────────────────────────
+      // Cuboctahedron: 12 vertices at all permutations of (±1,±1,0)/√2 on the unit sphere.
+      // Circumradius = edge length = 1. Fuller's "vector equilibrium" — all vectors cancel.
+      const VE_S = 1 / Math.SQRT2;
+      const VE_V = [
+        [ VE_S, VE_S,    0],[ VE_S,-VE_S,    0],[-VE_S, VE_S,    0],[-VE_S,-VE_S,    0],
+        [ VE_S,    0, VE_S],[ VE_S,    0,-VE_S],[-VE_S,    0, VE_S],[-VE_S,    0,-VE_S],
+        [    0, VE_S, VE_S],[    0, VE_S,-VE_S],[    0,-VE_S, VE_S],[    0,-VE_S,-VE_S]
+      ];
+      const VE_E = []; // 24 edges — vertex pairs at unit distance
+      for (let i = 0; i < 12; i++)
+        for (let j = i+1; j < 12; j++) {
+          const [ax,ay,az] = VE_V[i], [bx,by,bz] = VE_V[j];
+          const d2 = (ax-bx)**2 + (ay-by)**2 + (az-bz)**2;
+          if (d2 > 0.95 && d2 < 1.05) VE_E.push([i, j]);
+        }
+      const VE_T = [[0,4,8],[0,5,9],[1,4,10],[1,5,11],[2,6,8],[2,7,9],[3,6,10],[3,7,11]];
+      const VE_Q = [[0,4,1,5],[2,6,3,7],[0,8,2,9],[1,10,3,11],[4,8,6,10],[5,9,7,11]];
+
+      // VE runtime state
+      const ve = {
+        x: 0, y: 0, targetX: 0, targetY: 0, prevTX: 0, prevTY: 0,
+        cvx: 0, cvy: 0,
+        θx: 0.4, θy: 1.1, θz: 0.2,
+        ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
+        scale: 52, brightness: 0.55, alpha: 0, active: false
+      };
+
       // ─── Canvas sizing ──────────────────────────────────────────────────────
 
       function setCanvasSize(canvas, ctx) {
@@ -363,6 +391,12 @@
           if (d >= radius) continue;
           total += (1 - d / radius) * p.heat * 0.4;
         }
+        // Vector equilibrium emits light proportional to scale and brightness
+        if (ve.alpha > 0.01) {
+          const d = dist(x, y, ve.x, ve.y);
+          const veR = ve.scale * 2.2;
+          if (d < veR) total += (1 - d / veR) * ve.brightness * ve.alpha;
+        }
         return clamp(total, 0, 1);
       }
 
@@ -386,6 +420,10 @@
         const tx    = p.clientX - rect.left;
         const ty    = p.clientY - rect.top;
         const touch = event.pointerType === 'touch' || !!event.touches;
+        // VE follows cursor/touch — teleport to first contact, rubber-band after
+        if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; }
+        ve.targetX = tx; ve.targetY = ty;
+        ve.active = true;
         const existing = lights.find(l => l.kind === 'pointer');
         if (existing) {
           existing.targetX = tx; existing.targetY = ty;
@@ -410,6 +448,7 @@
       }
 
       const releasePointerLight = () => {
+        ve.active = false;
         const l = lights.find(li => li.kind === 'pointer' && !li.released);
         if (l) {
           const now      = performance.now();
@@ -531,6 +570,111 @@
         pctx.shadowBlur  = 0;
       }
 
+      // ─── Vector Equilibrium update + draw ───────────────────────────────────
+
+      function updateVE(dt) {
+        // Smoothed cursor velocity
+        const rawCvx = (ve.targetX - ve.prevTX) / Math.max(dt, 1);
+        const rawCvy = (ve.targetY - ve.prevTY) / Math.max(dt, 1);
+        ve.cvx += (rawCvx - ve.cvx) * 0.10;
+        ve.cvy += (rawCvy - ve.cvy) * 0.10;
+        ve.prevTX = ve.targetX;
+        ve.prevTY = ve.targetY;
+
+        // Cursor velocity → angular momentum (swipe gives spin)
+        ve.ωy += ve.cvx * 1.2e-7 * dt;
+        ve.ωx += ve.cvy * 1.2e-7 * dt;
+        ve.ωz += ve.cvx * ve.cvy * 2e-10 * dt;
+
+        // Damping + floor so it's always alive even when still
+        const ωMax = 0.0014, ωFloor = 0.00009;
+        ve.ωx = clamp(ve.ωx * 0.9988, -ωMax, ωMax);
+        ve.ωy = clamp(ve.ωy * 0.9988, -ωMax, ωMax);
+        ve.ωz = clamp(ve.ωz * 0.9988, -ωMax, ωMax);
+        if (Math.abs(ve.ωx) < ωFloor) ve.ωx += Math.sign(ve.ωx || 1) * ωFloor * 0.04;
+        if (Math.abs(ve.ωy) < ωFloor) ve.ωy += Math.sign(ve.ωy || 1) * ωFloor * 0.04;
+        if (Math.abs(ve.ωz) < ωFloor) ve.ωz += Math.sign(ve.ωz || 1) * ωFloor * 0.04;
+
+        // Integrate angles
+        ve.θx += ve.ωx * dt;
+        ve.θy += ve.ωy * dt;
+        ve.θz += ve.ωz * dt;
+
+        // Rubber-band position (lags slightly behind light source)
+        const lag = 1 - Math.exp(-dt * 0.011);
+        ve.x += (ve.targetX - ve.x) * lag;
+        ve.y += (ve.targetY - ve.y) * lag;
+
+        // Fade in/out
+        const tA = ve.active ? 0.88 : 0;
+        ve.alpha += (tA - ve.alpha) * clamp(dt * 0.0025, 0, 1);
+      }
+
+      function drawVE() {
+        if (ve.alpha < 0.01) return;
+        const focal = 280, S = ve.scale;
+        // Precompute trig
+        const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
+        const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
+        const cz = Math.cos(ve.θz), sz = Math.sin(ve.θz);
+        // Rotate + project all 12 vertices
+        const proj = VE_V.map(([vx, vy, vz]) => {
+          const y1 = vy*cx - vz*sx, z1 = vy*sx + vz*cx;
+          const x2 = vx*cy + z1*sy, z2 = -vx*sy + z1*cy;
+          const x3 = x2*cz - y1*sz, y3 = x2*sz + y1*cz;
+          const persp = focal / (focal + z2 * S);
+          return { px: ve.x + x3*S*persp, py: ve.y + y3*S*persp, z: z2 };
+        });
+
+        pctx.save();
+
+        // Faces — sorted back→front, very low alpha fill
+        const allFaces = [
+          ...VE_T.map(f => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i) => s+proj[i].z, 0)/f.length })),
+          ...VE_Q.map(f => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i) => s+proj[i].z, 0)/f.length }))
+        ].sort((a, b) => a.z - b.z);
+        for (const { pts } of allFaces) {
+          pctx.beginPath();
+          pctx.moveTo(pts[0].px, pts[0].py);
+          for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].px, pts[k].py);
+          pctx.closePath();
+          pctx.globalAlpha = ve.alpha * 0.055;
+          pctx.fillStyle = '#88ccff';
+          pctx.fill();
+        }
+
+        // Edges — glow intensity scales with depth
+        for (const [i, j] of VE_E) {
+          const a = proj[i], b = proj[j];
+          const zf = 0.35 + 0.65 * ((a.z + b.z) * 0.5 + 1) * 0.5;
+          pctx.globalAlpha  = ve.alpha * zf * 0.90;
+          pctx.shadowBlur   = 6 + zf * 12;
+          pctx.shadowColor  = '#40ccff';
+          pctx.strokeStyle  = '#b8eeff';
+          pctx.lineWidth    = 0.6 + zf * 0.7;
+          pctx.beginPath();
+          pctx.moveTo(a.px, a.py);
+          pctx.lineTo(b.px, b.py);
+          pctx.stroke();
+        }
+
+        // Vertices — bright dots with depth fade
+        for (const { px, py, z } of proj) {
+          const zf = 0.4 + 0.6 * (z + 1) * 0.5;
+          pctx.globalAlpha = ve.alpha * zf;
+          pctx.shadowBlur  = 11;
+          pctx.shadowColor = '#70e0ff';
+          pctx.fillStyle   = '#e0f8ff';
+          pctx.beginPath();
+          pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
+          pctx.fill();
+        }
+
+        pctx.shadowBlur  = 0;
+        pctx.globalAlpha = 1;
+        pctx.restore();
+      }
+
       // ─── Main loop ──────────────────────────────────────────────────────────
 
       function resize() {
@@ -543,11 +687,13 @@
         const dt = Math.min(32, now - (lastFrame || now));
         lastFrame = now;
         updateLights(dt);
+        updateVE(dt);
         updateParticles(dt);
         updateAppParticles(dt);
         updateTitle(dt);
         drawParticles(now);
         drawAppParticles(now);
+        drawVE();
         requestAnimationFrame(frame);
       }
 
