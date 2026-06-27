@@ -149,7 +149,7 @@
 
       function seedParticles() {
         particles.length = 0;
-        for (let i = 0; i < 216; i++) {
+        for (let i = 0; i < 432; i++) {
           particles.push({
             x:  Math.random() * stage.clientWidth,
             y:  Math.random() * stage.clientHeight,
@@ -234,7 +234,8 @@
       }
 
       // ─── Light system ───────────────────────────────────────────────────────
-      // Pointer lights: 3s fade-in on press, 8s fade-out on release.
+      // Touch: 3s fade-in, 7s fade-out. Mouse: near-instant fade-in, 7s fade-out.
+      // Light center rubber-bands behind the actual pointer (no overshoot).
 
       function lightAt(x, y) {
         let total = 0;
@@ -243,18 +244,22 @@
           const d      = dist(x, y, l.x, l.y);
           const radius = l.kind === 'pointer' ? (72 + l.strength * 64) : (96 + l.strength * 64);
           const life   = clamp(l.ttl / l.maxTtl, 0, 1);
-          // Eased decay: fades out more slowly at first (perceptually matches 8s feel)
           const easedLife = Math.pow(life, 0.55);
-          // 3-second linear fade-in
-          const fadeIn = clamp((now - (l.born || now)) / 3000, 0, 1);
+          const fadeIn = clamp((now - (l.born || now)) / (l.fadeInMs || 3000), 0, 1);
           total += Math.max(0, 1 - d / radius) * l.strength * easedLife * fadeIn;
         }
         return clamp(total, 0, 1);
       }
 
       function updateLights(dt) {
+        // Rubber band: exponential lerp toward target — quick but no overshoot
+        const lag = 1 - Math.exp(-dt * 0.018);
         for (let i = lights.length - 1; i >= 0; i--) {
           const l = lights[i];
+          if (l.targetX !== undefined) {
+            l.x += (l.targetX - l.x) * lag;
+            l.y += (l.targetY - l.y) * lag;
+          }
           if (l.kind === 'pointer' && !l.released) { l.ttl = l.maxTtl; continue; }
           l.ttl -= dt;
           if (l.ttl <= 0) lights.splice(i, 1);
@@ -262,31 +267,33 @@
       }
 
       function pointerLight(event, strength) {
-        const rect = stage.getBoundingClientRect();
-        const p    = event.touches ? event.touches[0] : event;
-        const x    = p.clientX - rect.left;
-        const y    = p.clientY - rect.top;
+        const rect  = stage.getBoundingClientRect();
+        const p     = event.touches ? event.touches[0] : event;
+        const tx    = p.clientX - rect.left;
+        const ty    = p.clientY - rect.top;
+        const touch = event.pointerType === 'touch' || !!event.touches;
         const existing = lights.find(l => l.kind === 'pointer');
         if (existing) {
-          existing.x = x; existing.y = y;
+          existing.targetX = tx; existing.targetY = ty;
           existing.strength = Math.max(existing.strength, strength);
           existing.ttl = existing.maxTtl;
           existing.released = false;
         } else {
-          lights.push({ x, y, strength, ttl: 8000, maxTtl: 8000,
-            kind: 'pointer', born: performance.now(), released: false });
+          lights.push({ x: tx, y: ty, targetX: tx, targetY: ty, strength,
+            ttl: 7000, maxTtl: 7000, kind: 'pointer',
+            born: performance.now(), released: false,
+            fadeInMs: touch ? 3000 : 200 });
         }
       }
 
       const releasePointerLight = () => {
         const l = lights.find(li => li.kind === 'pointer');
-        // On release: keep full ttl of 8s and let it decay
-        if (l) { l.released = true; l.ttl = 8000; l.maxTtl = 8000; }
+        if (l) { l.released = true; l.ttl = 7000; l.maxTtl = 7000; }
       };
 
       // ─── Title letters ──────────────────────────────────────────────────────
       // Springy but viscous: pushed away from tap, spring back to rest.
-      // Higher spring + push than before, same high damping = lively but damped.
+      // smoothGlow per-letter eliminates quantized scale steps.
 
       function updateTitle(dt) {
         const w        = stage.clientWidth, h = stage.clientHeight;
@@ -301,29 +308,27 @@
             const dx = lx - light.x;
             const dy = ly - light.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const inf = Math.max(0, 1 - d / 210) * light.strength;
+            const inf = Math.max(0, 1 - d / 240) * light.strength;
             localLight = Math.max(localLight, inf);
-            // Push away from light — more force than before for visible spring response
-            fx += (dx / d) * inf * 0.016;
-            fy += (dy / d) * inf * 0.010;
+            fx += (dx / d) * inf * 0.045;
+            fy += (dy / d) * inf * 0.028;
           }
           titleGlow = Math.max(titleGlow, localLight);
 
-          // Spring toward rest (stronger spring = snappier return, still damped)
           l.vx += fx + (l.baseX - l.x) * 0.065;
           l.vy += fy + (0       - l.y) * 0.068;
-
-          // Viscous damping — motion feels thick, not bouncy
           l.vx *= 0.90;
           l.vy *= 0.90;
-
           l.x += l.vx * dt * 0.038;
           l.y += l.vy * dt * 0.038;
 
-          const glow = clamp(localLight, 0, 1);
+          // Low-pass filter on glow — eliminates quantized scale jumps
+          if (l.smoothGlow === undefined) l.smoothGlow = 0;
+          l.smoothGlow += (localLight - l.smoothGlow) * 0.12;
+          const glow = clamp(l.smoothGlow, 0, 1);
           l.el.style.color      = `rgba(232,224,209,${(0.24 + glow * 0.76).toFixed(3)})`;
           l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${(glow * 22).toFixed(1)}px rgba(232,224,209,${(glow * 0.16).toFixed(3)})`;
-          l.el.style.transform  = `translate(-50%,-50%) translate(${(l.x - l.baseX).toFixed(2)}px,${l.y.toFixed(2)}px) scale(${(1 + glow * 0.02).toFixed(4)},${(1 - glow * 0.007).toFixed(4)})`;
+          l.el.style.transform  = `translate(-50%,-50%) translate(${l.x - l.baseX}px,${l.y}px) scale(${1 + glow * 0.035},${1 - glow * 0.012})`;
         }
 
         word.style.filter     = `blur(${(titleGlow * 0.18).toFixed(2)}px)`;
