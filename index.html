@@ -279,11 +279,16 @@
 
       }
 
+      // Mass threshold: particles below this are dark-matter — invisible unless lit or hot
+      const MASS_THRESH = 0.15; // r ≈ 0.53; captures all small-variant particles
+
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         for (const p of particles) {
-          if (p.r < 0.05) continue; // fully evaporated — invisible until regrowing
+          if (p.r < 0.05) continue; // fully evaporated
           const local = lightAt(p.x, p.y);
+          // Small + unlit + cool → invisible (dark matter until illuminated or heated)
+          if (p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
           const alpha  = (p.alpha * 0.59) + local * (0.32 + pulse * 0.18);
           const color  = heatColor(local);
@@ -349,6 +354,14 @@
           const d = dist(x, y, ap.x, ap.y);
           const pulse = (Math.sin(now * ap.breathRate + ap.breathPhase) + 1) * 0.5;
           total += Math.max(0, 1 - d / 130) * (0.38 + pulse * 0.22);
+        }
+        // Hot particles glow — emit light proportional to heat (only when meaningfully hot)
+        for (const p of particles) {
+          if (p.heat < 0.3 || p.r < 0.05) continue;
+          const d = dist(x, y, p.x, p.y);
+          const radius = 12 + p.heat * 30;
+          if (d >= radius) continue;
+          total += (1 - d / radius) * p.heat * 0.4;
         }
         return clamp(total, 0, 1);
       }
