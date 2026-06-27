@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.21 · aead497';
+      const VERSION = '20260627.1 · e199429';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -171,6 +171,8 @@
         scale: 52, brightness: 0.55, alphaP: 0, scaleP: 0, alpha: 0, scaleCurrent: 0,
         excitement: 0, strain: 0, active: false, voltaHeld: false,
         destroyedEdges: new Set(),   // edge indices claimed by Volta during infection
+        edgeEnergies: null,          // Float32Array — per-edge energy [0,1], dims in drawVE
+        edgeDrainRates: null,        // per-edge randomized drain rate
         vertNodes: null,             // per-vertex {x,y,vx,vy,freedom} spring objects
         liberated: false,            // true once all edges destroyed (vertices drift freely)
         projCache: null,             // last projected vertex screen positions (ideal)
@@ -783,13 +785,8 @@
         }
         // Strain dims and shrinks VE — floor at 65% scale, 60% alpha
         const strainDim  = 1 - ve.strain * 0.35;
-        // Structural integrity: dim alpha as edges are destroyed (continuous, physics-driven)
-        const structuralIntegrity = 1 - ve.destroyedEdges.size / (VE_E.length || 1);
-        const voltaDrain = (volta.state === 'infecting' && !ve.liberated)
-          ? Math.max(0.10, structuralIntegrity * 0.90 + 0.10)
-          : 1;
-        ve.alpha        = ve.alphaP * 0.88 * (0.60 + strainDim * 0.40) * voltaDrain;
-        ve.scaleCurrent = ve.scale * ve.scaleP * strainDim; // size unchanged by infection
+        ve.alpha        = ve.alphaP * 0.88 * (0.60 + strainDim * 0.40); // no global Volta drain — edges dim individually
+        ve.scaleCurrent = ve.scale * ve.scaleP * strainDim;
 
         // Count orbs inside VE footprint → drive excitement
         const captureR = ve.scaleCurrent * 1.2;
@@ -846,21 +843,26 @@
           }
         }
 
-        // Physics-based edge deterioration during Volta infection
+        // Continuous edge energy drain during Volta infection
         if (volta.state === 'infecting' && !ve.liberated) {
+          if (!ve.edgeEnergies) {
+            ve.edgeEnergies = new Float32Array(VE_E.length).fill(1.0);
+            // Each edge has a randomized drain rate: 0.5→1.5 (mean 1.0) — origami unfolds unevenly
+            ve.edgeDrainRates = Float32Array.from({length: VE_E.length}, () => 0.5 + Math.random());
+          }
           for (let i = 0; i < VE_E.length; i++) {
-            if (!ve.destroyedEdges.has(i) && Math.random() < volta.charge * 0.012 * dt * 0.0625) {
-              destroyVEEdge(i);
-            }
+            if (ve.destroyedEdges.has(i)) continue;
+            const drain = volta.charge * 0.00022 * ve.edgeDrainRates[i] * dt;
+            ve.edgeEnergies[i] = Math.max(0, ve.edgeEnergies[i] - drain);
+            if (ve.edgeEnergies[i] <= 0) destroyVEEdge(i);
           }
-          if (ve.destroyedEdges.size >= VE_E.length) {
-            ve.liberated = true;
-          }
+          if (ve.destroyedEdges.size >= VE_E.length) ve.liberated = true;
         }
 
         // Cleanup after liberation and fade
         if (ve.liberated && ve.alpha < 0.01 && !ve.voltaHeld) {
-          ve.liberated = false; ve.destroyedEdges.clear(); ve.vertNodes = null;
+          ve.liberated = false; ve.destroyedEdges.clear();
+          ve.vertNodes = null; ve.edgeEnergies = null; ve.edgeDrainRates = null;
         }
       }
 
@@ -918,30 +920,39 @@
           pctx.fill();
         }
 
-        // Edges — one shadowBlur for the whole pass (depth variation via alpha only)
+        // Structural integrity (for node glow boost — edges dim individually, nodes don't)
+        const structIntegrity = VE_E.length > 0 ? 1 - ve.destroyedEdges.size / VE_E.length : 1;
+
+        // Edges — each dims individually based on its own energy
         pctx.shadowBlur  = 8 + ex * 14 + elecAmp * 8 * stability;
         pctx.shadowColor = '#40ccff';
         pctx.strokeStyle = '#b8eeff';
         for (let ei = 0; ei < VE_E.length; ei++) {
-          if (ve.destroyedEdges.has(ei)) continue; // claimed by Volta
+          if (ve.destroyedEdges.has(ei)) continue;
+          const edgeE = ve.edgeEnergies ? ve.edgeEnergies[ei] : 1;
+          if (edgeE < 0.005) continue;
           const [i, j] = VE_E[ei];
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability));
-          pctx.lineWidth   = 0.5 + zf * 0.6 + elecAmp * 0.8;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability) * edgeE);
+          pctx.lineWidth   = (0.5 + zf * 0.6 + elecAmp * 0.8) * edgeE;
           pctx.beginPath();
           pctx.moveTo(a.px, a.py);
           pctx.lineTo(b.px, b.py);
           pctx.stroke();
         }
 
-        // Radial spokes — one shadowBlur for the whole pass
+        // Radial spokes — dim per vertex based on average energy of its edges
         pctx.shadowBlur  = 4 + ex * 8 + elecAmp * 4 * stability;
         pctx.shadowColor = '#40ccff';
         pctx.strokeStyle = '#b8eeff';
-        for (const { px, py, z } of proj) {
+        for (let i = 0; i < 12; i++) {
+          const { px, py, z } = proj[i];
           const zf = 0.35 + 0.65 * (1 - z) * 0.5;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability));
+          const spokeE = ve.edgeEnergies
+            ? VE_VERTEX_EDGES[i].reduce((s, ei) => s + ve.edgeEnergies[ei], 0) / (VE_VERTEX_EDGES[i].length || 1)
+            : 1;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability) * spokeE);
           pctx.lineWidth   = 0.3 + zf * 0.28 + elecAmp * 0.35;
           pctx.beginPath();
           pctx.moveTo(px, py);
@@ -950,23 +961,28 @@
         }
         pctx.shadowBlur = 0;
 
-        // Center node
-        pctx.globalAlpha = Math.min(1, ve.alpha * 0.92);
-        pctx.shadowBlur  = 14 + ex * 14;
+        // Center node — brightens as infection releases energy into it
+        const centerBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.55) : 1;
+        pctx.globalAlpha = Math.min(1, ve.alpha * 0.92 * centerBoost);
+        pctx.shadowBlur  = (14 + ex * 14) * centerBoost;
         pctx.shadowColor = '#80e8ff';
         pctx.fillStyle   = '#e8f8ff';
         pctx.beginPath();
-        pctx.arc(ve.x, ve.y, 2.5, 0, Math.PI * 2);
+        pctx.arc(ve.x, ve.y, 2.5 * centerBoost, 0, Math.PI * 2);
         pctx.fill();
         pctx.shadowBlur = 0;
 
-        // Vertices — one shadowBlur for the whole pass
-        pctx.shadowBlur  = 11 + ex * 10;
+        // Vertices — NODES DO NOT DIM; they glow brighter as their edges release energy
+        const infBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.6) : 1;
+        pctx.shadowBlur  = (11 + ex * 10) * infBoost;
         pctx.shadowColor = '#70e0ff';
         pctx.fillStyle   = '#e0f8ff';
-        for (const { px, py, z } of proj) {
+        for (let i = 0; i < 12; i++) {
+          const { px, py, z } = proj[i];
           const zf = 0.4 + 0.6 * (1 - z) * 0.5;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf);
+          const nodeBoost = volta.state === 'infecting' && ve.vertNodes
+            ? (1 + ve.vertNodes[i].freedom * 0.5) : 1;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf * nodeBoost);
           pctx.beginPath();
           pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
           pctx.fill();
@@ -1029,7 +1045,7 @@
         volta.energy           = 1.0;
         volta.arcs             = [];
         volta.infectedTimer    = 0;
-        volta.infectedDuration = rand(3000, 10000);
+        volta.infectedDuration = rand(14000, 22000);
         volta.charge           = 0;
         volta.state            = 'entering';
         volta.active           = true;
@@ -1201,6 +1217,18 @@
             targets.sort((a, b) => b.score - a.score);
             const tgt = targets[Math.floor(Math.random() * Math.min(3, targets.length))].p;
             volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(80, 280) });
+          }
+        }
+
+        // Traversal arcs charge the particles they connect — heat up and brighten
+        if (volta.state === 'traversing') {
+          for (const arc of volta.arcs) {
+            if (arc.veNode) continue;
+            const age = (now - arc.born) / arc.maxAge;
+            const vitality = Math.sin(age * Math.PI);
+            const heatAdd = 0.001 * vitality * dt;
+            if (arc.a.heat !== undefined) arc.a.heat = Math.min(0.55, arc.a.heat + heatAdd);
+            if (arc.b.heat !== undefined) arc.b.heat = Math.min(0.55, arc.b.heat + heatAdd);
           }
         }
       }
