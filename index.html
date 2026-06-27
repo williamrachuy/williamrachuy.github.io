@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.9 · e44165a';
+      const VERSION = '20260627.10 · ae44b49';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -917,12 +917,14 @@
           if (ve.destroyedEdges.size >= VE_E.length) ve.liberated = true;
         }
 
-        // On first liberation, harvest nodes into persistent liberatedNodes array
+        // On first liberation, harvest all 13 nodes (12 vertices + center) into liberatedNodes
         if (ve.liberated && ve.vertNodes && liberatedNodes.length === 0) {
           for (let i = 0; i < 12; i++) {
             const n = ve.vertNodes[i];
             liberatedNodes.push({ x: n.x, y: n.y, vx: n.vx, vy: n.vy, mass: 8, alpha: 1.0 });
           }
+          // Center node inherits VE translational velocity
+          liberatedNodes.push({ x: ve.x, y: ve.y, vx: ve.vx, vy: ve.vy, mass: 8, alpha: 1.0 });
         }
         // VE never resets — once destroyed it stays destroyed
       }
@@ -1042,15 +1044,17 @@
         }
         pctx.shadowBlur = 0;
 
-        // Center node — brightens as infection releases energy into it
-        const centerBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.55) : 1;
-        pctx.globalAlpha = Math.min(1, ve.alpha * 0.92 * centerBoost);
-        pctx.shadowBlur  = (14 + ex * 14) * centerBoost;
-        pctx.shadowColor = '#80e8ff';
-        pctx.fillStyle   = '#e8f8ff';
-        pctx.beginPath();
-        pctx.arc(ve.x, ve.y, 2.5 * centerBoost, 0, Math.PI * 2);
-        pctx.fill();
+        // Center node — once liberated it's a liberatedNode; only draw while VE lives
+        if (!ve.liberated) {
+          const centerBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.55) : 1;
+          pctx.globalAlpha = Math.min(1, ve.alpha * 0.92 * centerBoost);
+          pctx.shadowBlur  = (14 + ex * 14) * centerBoost;
+          pctx.shadowColor = '#80e8ff';
+          pctx.fillStyle   = '#e8f8ff';
+          pctx.beginPath();
+          pctx.arc(ve.x, ve.y, 2.5 * centerBoost, 0, Math.PI * 2);
+          pctx.fill();
+        }
         pctx.shadowBlur = 0;
 
         // Vertices — drawn here while VE lives; once liberated, liberatedNodes handles them
