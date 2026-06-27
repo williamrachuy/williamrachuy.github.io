@@ -103,6 +103,7 @@
       const particles     = [];
       const lights        = [];
       const spawnQueue    = []; // regrowth: { spawnAt, r0 } — fires 2-30s after burnout
+      const appParticles  = []; // living particles — one per sub-page, immune to ablation
       let lastFrame       = 0;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -143,6 +144,37 @@
           word.appendChild(span);
           titleLetters.push({ el: span, baseX, x: baseX, y: 0, vx: 0, vy: 0 });
           x += widths[i] + tracking;
+        }
+      }
+
+      // ─── App particles (living — sub-pages) ────────────────────────────────
+
+      function seedAppParticles() {
+        appParticles.length = 0;
+        const pages = [
+          { path: 'snake',            color: '#7c9a52' }, // moss
+          { path: 'berzerk',          color: '#c4714a' }, // terracotta
+          { path: 'calculator',       color: '#c9a227' }, // ochre
+          { path: 'clock',            color: '#5a7a8a' }, // slate
+          { path: 'cellularautomata', color: '#8b5c3a' }, // umber
+          { path: 'blog',             color: '#b06b6b' }, // dusty rose
+          { path: 'nanaimo',          color: '#c4a882' }, // sand
+          { path: 'pretext-demo',     color: '#6b7c5a' }, // sage
+        ];
+        const w = stage.clientWidth, h = stage.clientHeight;
+        for (let i = 0; i < pages.length; i++) {
+          const angle = (i / pages.length) * Math.PI * 2 - Math.PI * 0.5;
+          const r0 = 7 + Math.random() * 3;
+          appParticles.push({
+            ...pages[i],
+            x: w * 0.5 + Math.cos(angle) * w * 0.3,
+            y: h * 0.5 + Math.sin(angle) * h * 0.28,
+            vx: 0, vy: 0,
+            r0,
+            wAngle:      Math.random() * Math.PI * 2,
+            breathPhase: Math.random() * Math.PI * 2,
+            breathRate:  0.0006 + Math.random() * 0.0004,
+          });
         }
       }
 
@@ -199,6 +231,17 @@
             p.vy += (dy / d) * heat * 0.057 / p.mass;
           }
           p.heat += (maxHeat - p.heat) * clamp(dt * 0.004, 0, 1);
+          // App-particle pressure — very faint, purely local (living things breathe on you)
+          for (const ap of appParticles) {
+            const adx = p.x - ap.x, ady = p.y - ap.y;
+            const ad  = Math.hypot(adx, ady) || 1;
+            const apr = Math.max(0, 1 - ad / (ap.r0 * 5));
+            if (apr > 0) {
+              const ainf = apr * apr * 0.00004 / p.mass;
+              p.vx += (adx / ad) * ainf;
+              p.vy += (ady / ad) * ainf;
+            }
+          }
           if (p.r > 0) {
             const drdt = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * p.r * p.r);
             p.r = Math.min(p.r0, Math.max(0, p.r + drdt * dt));
@@ -419,6 +462,62 @@
         word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.10).toFixed(3));
       }
 
+      // ─── App particle update & draw ─────────────────────────────────────────
+
+      function updateAppParticles(dt) {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        for (const ap of appParticles) {
+          // Slow wander: direction drifts gradually
+          ap.wAngle += (Math.random() - 0.5) * 0.0008 * dt;
+          ap.vx += Math.cos(ap.wAngle) * 0.001;
+          ap.vy += Math.sin(ap.wAngle) * 0.001;
+          // Light pressure (mass makes them nearly immovable — feels alive)
+          for (const l of lights) {
+            const dx = ap.x - l.x, dy = ap.y - l.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            const prox = Math.max(0, 1 - d / 140);
+            const heat = Math.pow(prox, 1.8) * l.strength;
+            const mass = ap.r0 * ap.r0 * ap.r0;
+            ap.vx += (dx / d) * heat * 0.057 / mass;
+            ap.vy += (dy / d) * heat * 0.057 / mass;
+          }
+          ap.vx *= 0.990; ap.vy *= 0.990;
+          // Soft boundary repulsion
+          const mg = ap.r0 + 4;
+          if (ap.x < mg)     ap.vx += (mg - ap.x) * 0.008;
+          if (ap.x > w - mg) ap.vx -= (ap.x - (w - mg)) * 0.008;
+          if (ap.y < mg)     ap.vy += (mg - ap.y) * 0.008;
+          if (ap.y > h - mg) ap.vy -= (ap.y - (h - mg)) * 0.008;
+          ap.x += ap.vx * dt * 0.026;
+          ap.y += ap.vy * dt * 0.026;
+        }
+      }
+
+      function drawAppParticles(now) {
+        for (const ap of appParticles) {
+          const local  = lightAt(ap.x, ap.y);
+          const pulse  = Math.sin(now * ap.breathRate + ap.breathPhase);
+          const rDraw  = ap.r0 * (1 + 0.1 * pulse);
+          // Base fill with glow from light source
+          pctx.globalAlpha = 0.80 + local * 0.20;
+          pctx.shadowBlur  = 3 + local * 26;
+          pctx.shadowColor = ap.color;
+          pctx.fillStyle   = ap.color;
+          pctx.beginPath();
+          pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
+          pctx.fill();
+          // Subtle highlight dot (makes it look 3D without a gradient)
+          pctx.globalAlpha = 0.18 + local * 0.10;
+          pctx.shadowBlur  = 0;
+          pctx.fillStyle   = '#fff';
+          pctx.beginPath();
+          pctx.arc(ap.x - rDraw * 0.28, ap.y - rDraw * 0.30, rDraw * 0.38, 0, Math.PI * 2);
+          pctx.fill();
+        }
+        pctx.globalAlpha = 1;
+        pctx.shadowBlur  = 0;
+      }
+
       // ─── Main loop ──────────────────────────────────────────────────────────
 
       function resize() {
@@ -432,8 +531,10 @@
         lastFrame = now;
         updateLights(dt);
         updateParticles(dt);
+        updateAppParticles(dt);
         updateTitle(dt);
         drawParticles(now);
+        drawAppParticles(now);
         requestAnimationFrame(frame);
       }
 
@@ -449,7 +550,21 @@
       stage.addEventListener('touchend',      releasePointerLight, { passive: true });
       window.addEventListener('resize', resize);
 
+      // Navigate on tap/click of an app particle
+      stage.addEventListener('click', e => {
+        const rect = stage.getBoundingClientRect();
+        const cx = e.clientX - rect.left;
+        const cy = e.clientY - rect.top;
+        for (const ap of appParticles) {
+          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) {
+            window.location.href = '/' + ap.path;
+            return;
+          }
+        }
+      });
+
       resize();
+      seedAppParticles();
       requestAnimationFrame(frame);
     })();
   </script>
