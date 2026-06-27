@@ -89,7 +89,8 @@
 
   <script>
     (() => {
-      const TITLE = 'ADIVIDIARDI';
+      const TITLE   = 'ADIVIDIARDI';
+      const VERSION = '20260626.1';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -656,8 +657,9 @@
         if (ve.scaleP < 0.01) return;
         // Electric jitter: speeds up and brightens as orbs enter the VE
         const ex = ve.excitement;
-        const brightMult = 1 + ex * 2.2;  // up to ~3× brighter at full excitement
-        const now2 = performance.now() * (1 + ex * 3.5);  // up to 4.5× faster jitter
+        const brightMult = 1 + ex * 2.2;   // up to ~3× brighter at full excitement
+        const ampMult    = 1 + ex * 0.20;  // oscillation ceiling rises 20% with orbs
+        const now2 = performance.now() * (2.0 + ex * 3.0);  // 2× base, up to 5× at full orbs
         const elec = (
           Math.sin(now2 * 0.0284) * 0.38 +
           Math.sin(now2 * 0.0548) * 0.28 +
@@ -667,7 +669,7 @@
         );
         const elecPos = (elec + 1) * 0.5;
         const elecAmp = elecPos * elecPos;
-        const focal = 280, S = ve.scaleCurrent * (1 + ex * 0.55) * (1 + elecAmp * 0.04);
+        const focal = 280, S = ve.scaleCurrent * (1 + ex * 0.20) * (1 + elecAmp * 0.015 * ampMult);
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
         const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
@@ -693,7 +695,7 @@
           pctx.moveTo(pts[0].px, pts[0].py);
           for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].px, pts[k].py);
           pctx.closePath();
-          pctx.globalAlpha = Math.min(0.9, ve.alpha * (0.03 + elecAmp * 0.10) * brightMult);
+          pctx.globalAlpha = Math.min(0.9, ve.alpha * (0.03 + elecAmp * 0.06 * ampMult) * brightMult);
           pctx.fillStyle = '#88ccff';
           pctx.fill();
         }
@@ -702,8 +704,8 @@
         for (const [i, j] of VE_E) {
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
-          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.55 + elecAmp * 0.55) * brightMult);
-          pctx.shadowBlur   = (4 + zf * 9 + elecAmp * 22) * brightMult;
+          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.65 + elecAmp * 0.20 * ampMult) * brightMult);
+          pctx.shadowBlur   = (4 + zf * 9 + elecAmp * 8 * ampMult) * brightMult;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
           pctx.lineWidth    = 0.5 + zf * 0.6 + elecAmp * 0.8;
@@ -716,8 +718,8 @@
         // Radial spokes — 50% dimmer, also jitter
         for (const { px, py, z } of proj) {
           const zf = 0.35 + 0.65 * (1 - z) * 0.5;
-          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.25 + elecAmp * 0.30) * brightMult);
-          pctx.shadowBlur   = (2 + zf * 4 + elecAmp * 10) * brightMult;
+          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * (0.28 + elecAmp * 0.12 * ampMult) * brightMult);
+          pctx.shadowBlur   = (2 + zf * 4 + elecAmp * 4 * ampMult) * brightMult;
           pctx.shadowColor  = '#40ccff';
           pctx.strokeStyle  = '#b8eeff';
           pctx.lineWidth    = 0.3 + zf * 0.28 + elecAmp * 0.35;
@@ -774,6 +776,14 @@
         drawParticles(now);
         drawAppParticles(now);
         drawVE();
+        // Version stamp — bottom-right, small and dim
+        pctx.save();
+        pctx.globalAlpha = 0.22;
+        pctx.fillStyle   = '#aac8d8';
+        pctx.font        = '10px monospace';
+        pctx.textAlign   = 'right';
+        pctx.fillText(VERSION, particlesCanvas.width - 8, particlesCanvas.height - 8);
+        pctx.restore();
         requestAnimationFrame(frame);
       }
 
