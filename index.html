@@ -102,7 +102,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.10 · e8be4e8';
+      const VERSION = '20260626.11 · 16ee2df';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -398,7 +398,7 @@
         for (const ap of appParticles) {
           const d = dist(x, y, ap.x, ap.y);
           const pulse = (Math.sin(now * ap.breathRate + ap.breathPhase) + 1) * 0.5;
-          total += Math.max(0, 1 - d / 130) * (0.38 + pulse * 0.22);
+          total += Math.max(0, 1 - d / 200) * (0.55 + pulse * 0.32);
         }
         // Hot particles glow — hotParticles is a pre-filtered subset rebuilt each frame
         for (const p of hotParticles) {
@@ -583,7 +583,7 @@
           const rDraw  = ap.r0 * (1 + 0.22 * pulse); // ±22% scale
           // Dark base — always present
           pctx.globalAlpha = 0.70 + t * 0.17 + local * 0.03;
-          pctx.shadowBlur  = 2 + t * 10 + local * 16;  // reduced glow to avoid cluster blur
+          pctx.shadowBlur  = 1 + t * 5 + local * 8;
           pctx.shadowColor = ap.brightColor;
           pctx.fillStyle   = ap.color;
           pctx.beginPath();
