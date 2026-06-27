@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.1 · e199429';
+      const VERSION = '20260627.2 · 6ad146d';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -154,12 +154,33 @@
         }
       const VE_T = [[0,4,8],[0,5,9],[1,4,10],[1,5,11],[2,6,8],[2,7,9],[3,6,10],[3,7,11]];
       const VE_Q = [[0,4,1,5],[2,6,3,7],[0,8,2,9],[1,10,3,11],[4,8,6,10],[5,9,7,11]];
-      // Per-vertex edge lists (cuboctahedron: degree 4 per vertex)
+      // Per-vertex edge lists (degree 4 per vertex in cuboctahedron)
       const VE_VERTEX_EDGES = Array.from({length: 12}, () => []);
       for (let _ei = 0; _ei < VE_E.length; _ei++) {
         VE_VERTEX_EDGES[VE_E[_ei][0]].push(_ei);
         VE_VERTEX_EDGES[VE_E[_ei][1]].push(_ei);
       }
+      // Edge lookup for face-to-edge mapping
+      const VE_E_MAP = {};
+      for (let _ei = 0; _ei < VE_E.length; _ei++) VE_E_MAP[VE_E[_ei][0]*12+VE_E[_ei][1]] = _ei;
+      const _fei = (a,b) => a < b ? VE_E_MAP[a*12+b] : VE_E_MAP[b*12+a];
+      const VE_T_EDGES = VE_T.map(([a,b,c]) => [_fei(a,b),_fei(b,c),_fei(a,c)]);
+      const VE_Q_EDGES = VE_Q.map(([a,b,c,d]) => [_fei(a,b),_fei(b,c),_fei(c,d),_fei(d,a)]);
+      // Per-edge rest lengths — initial 2D projected distances (computed once at init angles)
+      const VE_E_REST = (() => {
+        const tx=0.4,ty=1.1,tz=0.2,S=52,f=280;
+        const ip = VE_V.map(([vx,vy,vz]) => {
+          const y1=vy*Math.cos(tx)-vz*Math.sin(tx), z1=vy*Math.sin(tx)+vz*Math.cos(tx);
+          const x2=vx*Math.cos(ty)+z1*Math.sin(ty), z2=-vx*Math.sin(ty)+z1*Math.cos(ty);
+          const x3=x2*Math.cos(tz)-y1*Math.sin(tz), y3=x2*Math.sin(tz)+y1*Math.cos(tz);
+          const p=f/(f+z2*S); return [x3*S*p, y3*S*p];
+        });
+        return VE_E.map(([i,j]) => Math.hypot(ip[i][0]-ip[j][0], ip[i][1]-ip[j][1]));
+      })();
+      // Spring physics constants (tuned via Python simulation — stable 52→65px radius after full dissolution)
+      const VE_SPRING_K = 0.0015; // per-edge spring stiffness
+      const VE_REP_STR  = 0.003;  // node-pair repulsion (inv-square, softened)
+      const VE_DAMP     = 0.975;  // velocity damping per frame
 
       // VE runtime state
       const ve = {
@@ -811,32 +832,52 @@
             return { px: ve.x + x3*_S*p, py: ve.y + y3*_S*p };
           });
 
-          // Vertex spring-damper: bound vertices track ideal projection; free vertices drift
+          // Vertex physics: per-edge springs + node repulsion (no "spring toward ideal" — that caused rotational instability)
           if (!ve.vertNodes) {
-            ve.vertNodes = ve.projCache.map(p => ({ x: p.px, y: p.py, vx: 0, vy: 0, freedom: 0 }));
+            ve.vertNodes = ve.projCache.map(p => ({ x: p.px, y: p.py, vx: 0, vy: 0, fx: 0, fy: 0, freedom: 0 }));
           }
+          // Freedom + force reset
           for (let i = 0; i < 12; i++) {
             const node = ve.vertNodes[i];
-            // Recompute freedom (fraction of this vertex's edges that are destroyed)
             const deg = VE_VERTEX_EDGES[i].length || 1;
             node.freedom = VE_VERTEX_EDGES[i].reduce((n, ei) => n + (ve.destroyedEdges.has(ei) ? 1 : 0), 0) / deg;
-            const idealX = ve.projCache[i].px, idealY = ve.projCache[i].py;
+            node.fx = 0; node.fy = 0;
+          }
+          // Per-edge spring attraction (only intact edges with at least one free endpoint)
+          for (let ei = 0; ei < VE_E.length; ei++) {
+            if (ve.destroyedEdges.has(ei)) continue;
+            const [vi, vj] = VE_E[ei];
+            const ni = ve.vertNodes[vi], nj = ve.vertNodes[vj];
+            if (ni.freedom === 0 && nj.freedom === 0) continue;
+            const dx = nj.x - ni.x, dy = nj.y - ni.y;
+            const d = Math.hypot(dx, dy) || 1;
+            const edgeE = ve.edgeEnergies ? ve.edgeEnergies[ei] : 1;
+            const f = VE_SPRING_K * (d - VE_E_REST[ei]) * edgeE;
+            if (ni.freedom > 0) { ni.fx += (dx/d)*f; ni.fy += (dy/d)*f; }
+            if (nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
+          }
+          // Node-pair repulsion — applies to free nodes from ALL neighbours (fixed or free)
+          for (let i = 0; i < 12; i++) {
+            if (ve.vertNodes[i].freedom === 0) continue;
+            for (let j = i+1; j < 12; j++) {
+              const ni = ve.vertNodes[i], nj = ve.vertNodes[j];
+              const dx = ni.x - nj.x, dy = ni.y - nj.y;
+              const d2 = dx*dx + dy*dy;
+              const d = Math.sqrt(d2) || 1;
+              const f = VE_REP_STR / (d2 + 80);
+              ni.fx += (dx/d)*f; ni.fy += (dy/d)*f;
+              if (nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
+            }
+          }
+          // Integrate — freedom=0 nodes snap to ideal; free nodes follow physics
+          for (let i = 0; i < 12; i++) {
+            const node = ve.vertNodes[i];
             if (node.freedom === 0) {
-              // Fully bound: snap to ideal position, no drift
-              node.x = idealX; node.y = idealY; node.vx = 0; node.vy = 0;
+              node.x = ve.projCache[i].px; node.y = ve.projCache[i].py;
+              node.vx = 0; node.vy = 0;
             } else {
-              // Spring toward ideal, weakened by freedom (edge tension counteracts repulsion)
-              const springK = 0.009 * (1 - node.freedom);
-              node.vx += (idealX - node.x) * springK;
-              node.vy += (idealY - node.y) * springK;
-              // Latent node-center repulsion — always present, dominates when spring weakens
-              const cdx = node.x - ve.x, cdy = node.y - ve.y;
-              const cd = Math.hypot(cdx, cdy) || 1;
-              const repStr = node.freedom * 0.0005;
-              node.vx += (cdx / cd) * repStr;
-              node.vy += (cdy / cd) * repStr;
-              const damp = 0.97 - (1 - node.freedom) * 0.06;
-              node.vx *= damp; node.vy *= damp;
+              node.vx = (node.vx + node.fx) * VE_DAMP;
+              node.vy = (node.vy + node.fy) * VE_DAMP;
               node.x += node.vx * dt;
               node.y += node.vy * dt;
             }
@@ -905,17 +946,19 @@
 
         pctx.save();
 
-        // Faces — sorted back→front, very low alpha fill
+        // Faces — sorted back→front; disappear when any constituent edge dies
         const allFaces = [
-          ...VE_T.map(f => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i) => s+proj[i].z, 0)/f.length })),
-          ...VE_Q.map(f => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i) => s+proj[i].z, 0)/f.length }))
+          ...VE_T.map((f, fi) => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i)=>s+proj[i].z,0)/f.length, eIdx: VE_T_EDGES[fi] })),
+          ...VE_Q.map((f, fi) => ({ pts: f.map(i => proj[i]), z: f.reduce((s,i)=>s+proj[i].z,0)/f.length, eIdx: VE_Q_EDGES[fi] }))
         ].sort((a, b) => a.z - b.z);
-        for (const { pts } of allFaces) {
+        for (const { pts, eIdx } of allFaces) {
+          const faceE = ve.edgeEnergies ? eIdx.reduce((mn, ei) => Math.min(mn, ve.edgeEnergies[ei]), 1) : 1;
+          if (faceE < 0.06) continue; // face dissolves with its weakest edge
           pctx.beginPath();
           pctx.moveTo(pts[0].px, pts[0].py);
           for (let k = 1; k < pts.length; k++) pctx.lineTo(pts[k].px, pts[k].py);
           pctx.closePath();
-          pctx.globalAlpha = Math.min(0.9, ve.alpha * ((0.04 + ex * 0.10) + elecAmp * 0.06 * stability));
+          pctx.globalAlpha = Math.min(0.9, ve.alpha * faceE * ((0.04 + ex * 0.10) + elecAmp * 0.06 * stability));
           pctx.fillStyle = '#88ccff';
           pctx.fill();
         }
