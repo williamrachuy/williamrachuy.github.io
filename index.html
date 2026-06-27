@@ -150,15 +150,18 @@
       function seedParticles() {
         particles.length = 0;
         for (let i = 0; i < 432; i++) {
+          const size = Math.random() > 0.86 ? 2 : 1;
           particles.push({
             x:  Math.random() * stage.clientWidth,
             y:  Math.random() * stage.clientHeight,
             vx: rand(-0.012, 0.012),
             vy: rand(-0.008, 0.008),
-            size: Math.random() > 0.86 ? 2 : 1,
-            tw:   Math.random() * Math.PI * 2,
+            size,
+            tw:    Math.random() * Math.PI * 2,
             alpha: rand(0.16, 0.34),
-            trail: []  // comet tail positions
+            trail: [],
+            mass: size * size * size,        // ∝ r³, uniform density sphere
+            drag: 1 - 0.0012 / (size * size) // Stokes: drag decel ∝ 1/r², so big=less drag
           });
         }
       }
@@ -180,11 +183,11 @@
             const dx = p.x - l.x, dy = p.y - l.y;
             const d  = Math.hypot(dx, dy) || 1;
             const prox = Math.max(0, 1 - d / 140);
-            const inf  = Math.pow(prox, 1.8) * l.strength * 0.057; // +50% pressure
-            p.vx += (dx / d) * inf;
-            p.vy += (dy / d) * inf;
+            const inf  = Math.pow(prox, 1.8) * l.strength * 0.057;
+            p.vx += (dx / d) * inf / p.mass; // a = F/m
+            p.vy += (dy / d) * inf / p.mass;
           }
-          p.vx *= 0.9988; p.vy *= 0.9988;
+          p.vx *= p.drag; p.vy *= p.drag;
           // Record trail before moving (tail evaporates oldest first)
           p.trail.unshift({ x: p.x, y: p.y });
           if (p.trail.length > 10) p.trail.pop();
