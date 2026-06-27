@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.2 · 6ad146d';
+      const VERSION = '20260627.3 · 9fd1921';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -644,8 +644,8 @@
               const mx = (arc.a.x + arc.b.x) * 0.5, my = (arc.a.y + arc.b.y) * 0.5;
               const dx = ap.x - mx, dy = ap.y - my;
               const d  = Math.hypot(dx, dy) || 1;
-              if (d < 240) {
-                const str = (1 - d / 240) * (1 - d / 240);
+              if (d < 320) {
+                const str = (1 - d / 320) * (1 - d / 320);
                 avoidX += (dx / d) * str;
                 avoidY += (dy / d) * str;
               }
@@ -656,7 +656,7 @@
               let delta = avoidAngle - ap.wAngle;
               while (delta >  Math.PI) delta -= Math.PI * 2;
               while (delta < -Math.PI) delta += Math.PI * 2;
-              ap.wAngle += delta * clamp(avoidMag * 0.004 * dt, 0, 0.35);
+              ap.wAngle += delta * clamp(avoidMag * 0.018 * dt, 0, 0.55);
             }
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
@@ -720,6 +720,9 @@
         ve.ωx += (Math.random() * 2 - 1) * 0.0038;
         ve.ωy += (Math.random() * 2 - 1) * 0.0038;
         ve.ωz += (Math.random() * 2 - 1) * 0.0019;
+        // Translational impulse — each edge death nudges the VE center so it drifts
+        ve.vx = clamp(ve.vx + (Math.random() * 2 - 1) * 0.018, -2.2, 2.2);
+        ve.vy = clamp(ve.vy + (Math.random() * 2 - 1) * 0.018, -2.2, 2.2);
         // Outward pressure wave from edge midpoint into substrate
         const [vi, vj] = VE_E[ei];
         const ni = ve.vertNodes ? ve.vertNodes[vi] : null;
@@ -1066,7 +1069,7 @@
 
       // ─── Volta — arc lightning creature ─────────────────────────────────────
 
-      const VOLTA_ARC_DIST = 130; // max px between particle nodes for an arc to form
+      const VOLTA_ARC_DIST = 88; // max px between particle nodes for an arc to form
       const VOLTA_SEARCH_R = 105; // radius around creature center for harvesting nodes
       const VOLTA_SPEED    = 28;  // px/s toward target
       const VOLTA_MAX_ARCS = 5;   // limited arc budget — more focused, less omnipresent
@@ -1088,7 +1091,7 @@
         volta.energy           = 1.0;
         volta.arcs             = [];
         volta.infectedTimer    = 0;
-        volta.infectedDuration = rand(14000, 22000);
+        volta.infectedDuration = rand(7000, 11000);
         volta.charge           = 0;
         volta.state            = 'entering';
         volta.active           = true;
@@ -1131,7 +1134,7 @@
           }
           // Deplete energy after infection duration — signals the end of the encounter
           if (volta.infectedTimer >= volta.infectedDuration) {
-            volta.energy -= dt * 0.00075;
+            volta.energy -= dt * 0.003;
             if (volta.energy <= 0) {
               volta.active = false; volta.state = 'dormant'; volta.charge = 0;
               ve.voltaHeld = false; scheduleVoltaSpawn(); return;
@@ -1263,15 +1266,17 @@
           }
         }
 
-        // Traversal arcs charge the particles they connect — heat up and brighten
+        // Traversal arcs charge the particles they connect — heat up, brighten, and evaporate
         if (volta.state === 'traversing') {
           for (const arc of volta.arcs) {
             if (arc.veNode) continue;
             const age = (now - arc.born) / arc.maxAge;
             const vitality = Math.sin(age * Math.PI);
-            const heatAdd = 0.001 * vitality * dt;
-            if (arc.a.heat !== undefined) arc.a.heat = Math.min(0.55, arc.a.heat + heatAdd);
-            if (arc.b.heat !== undefined) arc.b.heat = Math.min(0.55, arc.b.heat + heatAdd);
+            const d = Math.hypot(arc.a.x - arc.b.x, arc.a.y - arc.b.y);
+            const arcEnergy = Math.max(0, 1 - d / VOLTA_ARC_DIST); // shorter = more energetic
+            const heatAdd = 0.004 * vitality * arcEnergy * dt;
+            if (arc.a.heat !== undefined) arc.a.heat = Math.min(0.92, arc.a.heat + heatAdd);
+            if (arc.b.heat !== undefined) arc.b.heat = Math.min(0.92, arc.b.heat + heatAdd);
           }
         }
       }
