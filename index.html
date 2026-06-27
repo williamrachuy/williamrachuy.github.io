@@ -412,35 +412,44 @@
             l.x += (l.targetX - l.x) * lag;
             l.y += (l.targetY - l.y) * lag;
           }
-          if (!l.released) continue; // active lights never expire
+          // Pulse decay: strength drains toward sustainStrength exponentially
+          if (l.sustainStrength !== undefined && l.strength > l.sustainStrength + 0.005) {
+            const excess = l.strength - l.sustainStrength;
+            l.strength = l.sustainStrength + excess * Math.exp(-dt * 0.006);
+          }
+          if (!l.released) continue;
           l.ttl -= dt;
           if (l.ttl <= 0) lights.splice(i, 1);
         }
       }
 
-      function pointerLight(event, strength) {
+      // strength: spike value (null = no spike, just update sustain)
+      // sustainStrength: the level it decays toward after the spike
+      function pointerLight(event, strength, sustainStrength) {
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
         const tx    = p.clientX - rect.left;
         const ty    = p.clientY - rect.top;
         const touch = event.pointerType === 'touch' || !!event.touches;
-        // VE: active only on touch or while mouse button is held (not plain mouse hover)
         const veActivate = touch || (event.pointerType === 'mouse' && (event.buttons & 1));
         if (veActivate) {
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.targetX = tx; ve.targetY = ty;
           ve.active = true;
         }
-        // No position tracking when inactive — VE stays frozen at last click position
+        const sus = sustainStrength !== undefined ? sustainStrength : (strength || 0.30);
         const existing = lights.find(l => l.kind === 'pointer');
         if (existing) {
           existing.targetX = tx; existing.targetY = ty;
-          existing.strength = Math.max(existing.strength, strength);
-          if (existing.released) {
-            // Re-tap while fading out: resume fade-in from current intensity (no flicker)
+          existing.sustainStrength = sus;
+          if (strength !== null && strength > existing.strength) {
+            existing.strength = strength;  // spike: allow strength to jump up
+          }
+          if (existing.released && strength !== null && strength > 0.5) {
+            // Re-tap while fading: resume fade-in from current intensity
             const now  = performance.now();
             const prev = lightIntensity(existing, now);
-            const t0   = (Math.pow(10, prev) - 1) / 9; // inverse of logCurve
+            const t0   = (Math.pow(10, prev) - 1) / 9;
             existing.born         = now - t0 * (existing.fadeInMs || 3000);
             existing.releaseTime  = undefined;
             existing.ageAtRelease = undefined;
@@ -448,7 +457,9 @@
             existing.ttl          = 99999;
           }
         } else {
-          lights.push({ x: tx, y: ty, targetX: tx, targetY: ty, strength,
+          const initStr = strength !== null ? strength : sus;
+          lights.push({ x: tx, y: ty, targetX: tx, targetY: ty,
+            strength: initStr, sustainStrength: sus,
             ttl: 99999, maxTtl: 99999, kind: 'pointer',
             born: performance.now(), released: false,
             fadeInMs: touch ? 3000 : 200, fadeOutMs: 7000 });
@@ -791,20 +802,26 @@
       }
 
       stage.addEventListener('pointerdown', e => {
-        pointerLight(e, 1.05);
-        // Random angular impulse on click/tap — only for primary button or touch
-        if (e.button === 0) {
+        // Spike to 100%, settle to 70% (mouse click) or 30% (touch hold)
+        const touch = e.pointerType === 'touch';
+        pointerLight(e, 1.0, touch ? 0.30 : 0.70);
+        if (e.button === 0 || touch) {
           ve.ωx += (Math.random() * 2 - 1) * 0.0035;
           ve.ωy += (Math.random() * 2 - 1) * 0.0035;
           ve.ωz += (Math.random() * 2 - 1) * 0.0018;
         }
       });
       stage.addEventListener('pointermove', e => {
-        if (e.pointerType === 'mouse') pointerLight(e, 0.14);
-        else if (e.buttons)            pointerLight(e, 0.28);
+        if (e.pointerType === 'mouse') {
+          if (e.buttons & 1) pointerLight(e, null, 0.70);  // held click — sustain 70%
+          else               pointerLight(e, 0.30, 0.30);  // hover — steady 30%
+        } else if (e.buttons) {
+          // Touch swipe: speed scales sustain from 30% to 70%
+          const speed = Math.hypot(e.movementX || 0, e.movementY || 0);
+          const sus   = Math.min(0.70, 0.30 + speed * 0.08);
+          pointerLight(e, null, sus);
+        }
       });
-      stage.addEventListener('touchstart', e => pointerLight(e, 1.0), { passive: true });
-      stage.addEventListener('touchmove',  e => pointerLight(e, 0.3),  { passive: true });
       stage.addEventListener('pointerup',     releasePointerLight);
       stage.addEventListener('pointercancel', releasePointerLight);
       stage.addEventListener('touchend',      releasePointerLight, { passive: true });
