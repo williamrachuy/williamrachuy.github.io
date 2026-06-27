@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.16 · c60e245';
+      const VERSION = '20260627.17 · 21e03e7';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -897,16 +897,13 @@
               if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
             }
           }
-          // Volta spasm: stochastic physics impulses during infection — velocity persists after Volta leaves
+          // Volta spasm: velocity impulses during infection — always present, carry momentum after Volta leaves
           if (infecting && volta.state === 'infecting') {
             const _si = 1 - ve.destroyedEdges.size / VE_E.length;
-            const spasm = (1 - _si) * volta.charge;
-            if (spasm > 0.005) {
-              const impulse = spasm * 0.003; // accumulates into velocity; ~0.048 px/frame at max
-              for (let i = 0; i < 12; i++) {
-                ve.vertNodes[i].fx += (Math.random() * 2 - 1) * impulse;
-                ve.vertNodes[i].fy += (Math.random() * 2 - 1) * impulse;
-              }
+            const jitterVel = (0.0008 + (1 - _si) * volta.charge * 0.002) * dt;
+            for (let i = 0; i < 12; i++) {
+              ve.vertNodes[i].vx += (Math.random() * 2 - 1) * jitterVel;
+              ve.vertNodes[i].vy += (Math.random() * 2 - 1) * jitterVel;
             }
           }
           // Integrate — pre-infection freedom=0 nodes snap; during infection all use physics
@@ -1076,7 +1073,7 @@
               ? (1 + ve.vertNodes[i].freedom * 0.5) : 1;
             pctx.globalAlpha = Math.min(1, ve.alpha * zf * nodeBoost);
             pctx.beginPath();
-            pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
+            pctx.arc(px, py, 2.3, 0, Math.PI * 2); // uniform size = dead node size
             pctx.fill();
           }
         }
@@ -1359,6 +1356,19 @@
         if (!volta.active || volta.arcs.length === 0) return;
         const masterAlpha = clamp(volta.energy, 0, 1);
         if (masterAlpha < 0.01) return;
+
+        // Proximity of Volta to VE — arcs are brightest inside VE, build as Volta approaches
+        let vePx = 1.0;
+        if (ve.scaleCurrent > 5) {
+          if (volta.state === 'infecting') {
+            vePx = 1.8; // maximum when inside/consuming
+          } else {
+            const dToVE = Math.hypot(volta.cx - ve.x, volta.cy - ve.y);
+            const horizon = Math.hypot(particlesCanvas.width, particlesCanvas.height) * 0.45 || 600;
+            vePx = 0.25 + 1.55 * Math.max(0, 1 - dToVE / horizon);
+          }
+        }
+
         pctx.save();
         pctx.lineCap = 'round';
         pctx.strokeStyle = '#ffffff';
@@ -1367,16 +1377,18 @@
           const life    = Math.sin(age * Math.PI);
           const flicker = clamp(0.5 + Math.sin(now * 0.035 + arc.born * 0.001) * 0.3
                                     + Math.sin(now * 0.071 + arc.born * 0.002) * 0.2, 0.05, 1);
-          // Inverse-distance energy: shorter edges are brighter and thicker
           const d       = Math.hypot(arc.a.x - arc.b.x, arc.a.y - arc.b.y);
-          const energy  = Math.max(0, 1 - d / VOLTA_ARC_DIST);
-          const bright  = energy * energy; // square for dramatic short-range peak
-          const a       = masterAlpha * life * flicker * (0.25 + bright * 0.75);
+          const arcE    = Math.max(0, 1 - d / VOLTA_ARC_DIST);
+          // Blend arc-length energy with VE proximity — whichever is higher wins,
+          // with proximity dominant so convergence on VE always reads as maximum energy
+          const energy  = clamp(Math.max(arcE, vePx * 0.6) * vePx, 0, 1);
+          const bright  = energy * energy;
+          const a       = masterAlpha * life * flicker * (0.15 + bright * 0.85);
           if (a < 0.02) continue;
           pctx.globalAlpha = a;
-          pctx.shadowBlur  = 1 + bright * 6;
+          pctx.shadowBlur  = 1 + bright * 10;
           pctx.shadowColor = '#d0eeff';
-          pctx.lineWidth   = 0.4 + bright * 0.9;
+          pctx.lineWidth   = 0.4 + bright * 1.2;
           pctx.beginPath();
           pctx.moveTo(arc.a.x, arc.a.y);
           pctx.lineTo(arc.b.x, arc.b.y);
