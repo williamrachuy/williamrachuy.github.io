@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.3 · 9fd1921';
+      const VERSION = '20260627.4 · 7762e92';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -947,6 +947,24 @@
           }
         }
 
+        // Infection spasm: nodes vibrate harder as edges die — multi-frequency chaos
+        if (volta.state === 'infecting' && ve.edgeEnergies) {
+          const structIntegrity2 = 1 - ve.destroyedEdges.size / VE_E.length;
+          const spasm = (1 - structIntegrity2) * volta.charge; // 0 → 1 as VE collapses
+          if (spasm > 0.01) {
+            const jt = performance.now();
+            const amp = spasm * spasm * 14; // square for dramatic ramp; max ~14px
+            for (let i = 0; i < 12; i++) {
+              proj[i].px += (Math.sin(jt * 0.023 + i * 2.31) * 0.55
+                           + Math.sin(jt * 0.059 + i * 1.73) * 0.30
+                           + Math.sin(jt * 0.137 + i * 3.17) * 0.15) * amp;
+              proj[i].py += (Math.cos(jt * 0.031 + i * 1.87) * 0.55
+                           + Math.cos(jt * 0.071 + i * 2.63) * 0.30
+                           + Math.cos(jt * 0.109 + i * 0.94) * 0.15) * amp;
+            }
+          }
+        }
+
         pctx.save();
 
         // Faces — sorted back→front; disappear when any constituent edge dies
@@ -1206,7 +1224,7 @@
             }
           }
           if (volta.arcs.length < VOLTA_MAX_ARCS) {
-            if (Math.random() < 0.80) {
+            if (Math.random() < 0.98) {
               // Internal VE arc: between two random vertices
               const ni = Math.floor(Math.random() * 12), nj = Math.floor(Math.random() * 12);
               if (ni !== nj) {
