@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.26 · f79968e';
+      const VERSION = '20260627.27 · 1beeec5';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -1118,7 +1118,7 @@
 
       // ─── Volta — arc lightning creature ─────────────────────────────────────
 
-      const VOLTA_ARC_DIST = 77;  // max px between particle nodes for an arc to form
+      const VOLTA_ARC_DIST = 116; // 150% link range; keeps the constellation coherent
       const VOLTA_SEARCH_R = 104; // radius around creature center for harvesting nodes
       const VOLTA_SPEED    = 28;  // px/s toward target
       const VOLTA_MAX_ARCS = 22;  // constellation budget
@@ -1280,9 +1280,6 @@
             }
           }
           if (volta.state === 'entering') volta.state = 'traversing';
-          // Slow energy drain while traversing (~80s to exhaust without finding VE)
-          volta.energy -= dt * 0.000011;
-          if (volta.energy <= 0) { volta.active = false; volta.state = 'dormant'; scheduleVoltaSpawn(); return; }
         }
 
         // ── Arc management ──────────────────────────────────────────────────
@@ -1401,6 +1398,17 @@
                                    + Math.max(0, velAlign) * 0.14
                                    + massBonus * 0.04 + Math.random() * 0.02 });
             }
+          }
+        }
+
+        // Particle availability sustains Volta. It only fades when the local
+        // substrate can no longer support even one arc, never while surrounded.
+        if (nearby.length >= 2) {
+          volta.energy = Math.min(1, volta.energy + dt * 0.00018);
+        } else {
+          volta.energy -= dt * 0.000011;
+          if (volta.energy <= 0) {
+            volta.active = false; volta.state = 'dormant'; scheduleVoltaSpawn(); return;
           }
         }
 
