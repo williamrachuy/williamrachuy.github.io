@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.18 · 4228a3b';
+      const VERSION = '20260626.19 · b74abee';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -1147,7 +1147,6 @@
         }
 
         // Traversal: organic arc search toward VE
-        const w = stage.clientWidth, h = stage.clientHeight;
         const veX = ve.scaleCurrent > 5 ? ve.x : w * 0.5;
         const veY = ve.scaleCurrent > 5 ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
