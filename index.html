@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.23 · 0a1206e';
+      const VERSION = '20260627.24 · 6c1d44a';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -117,6 +117,8 @@
       let holdActive      = false; // true while mouse/touch is held down
       let lastStageW      = 0;
       let lastStageH      = 0;
+      let arcTrailCanvas  = null;
+      let arcTrailCtx     = null;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
       function rand(lo, hi)     { return lo + Math.random() * (hi - lo); }
@@ -1218,13 +1220,22 @@
             }
           }
         } else {
-          // Move toward VE if visible, otherwise wander toward canvas center
+          // Volta center = centroid of arc body (emergent) + gentle pull toward VE
+          if (volta.arcs.length > 0) {
+            let sx = 0, sy = 0, cnt = 0;
+            for (const arc of volta.arcs) {
+              sx += arc.a.x + arc.b.x; sy += arc.a.y + arc.b.y; cnt += 2;
+            }
+            volta.cx += ((sx / cnt) - volta.cx) * clamp(dt * 0.014, 0, 1);
+            volta.cy += ((sy / cnt) - volta.cy) * clamp(dt * 0.014, 0, 1);
+          }
+          // Still drift toward VE so the arc body eventually reaches it
           const tx = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
           const ty = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
           const ddx = tx - volta.cx, ddy = ty - volta.cy;
           const dd  = Math.hypot(ddx, ddy) || 1;
-          volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * dt * 0.001, dd);
-          volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * dt * 0.001, dd);
+          volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
+          volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           // Check infection trigger: creature reaches VE — burst of attack arcs at the moment of contact
           if (ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
@@ -1435,6 +1446,45 @@
         const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 5.0, 0.92, 1.0);
         if (masterAlpha < 0.01) return;
 
+        // Retinal burn trail — offscreen canvas that fades at 22% per frame
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        if (!arcTrailCanvas || arcTrailCanvas.width !== particlesCanvas.width) {
+          arcTrailCanvas = document.createElement('canvas');
+          arcTrailCanvas.width  = particlesCanvas.width;
+          arcTrailCanvas.height = particlesCanvas.height;
+          arcTrailCtx = arcTrailCanvas.getContext('2d');
+        }
+        // Fade existing trail
+        arcTrailCtx.save();
+        arcTrailCtx.setTransform(1, 0, 0, 1, 0, 0);
+        arcTrailCtx.globalCompositeOperation = 'destination-out';
+        arcTrailCtx.fillStyle = 'rgba(0,0,0,0.22)';
+        arcTrailCtx.fillRect(0, 0, arcTrailCanvas.width, arcTrailCanvas.height);
+        arcTrailCtx.restore();
+        // Stamp current arcs into trail at dim blur
+        arcTrailCtx.save();
+        arcTrailCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        arcTrailCtx.lineCap = 'round';
+        arcTrailCtx.strokeStyle = '#a8d8ff';
+        arcTrailCtx.shadowColor = '#70b0ff';
+        arcTrailCtx.shadowBlur  = 14;
+        arcTrailCtx.lineWidth   = 1.2;
+        arcTrailCtx.globalAlpha = 0.38;
+        for (const arc of volta.arcs) {
+          arcTrailCtx.beginPath();
+          arcTrailCtx.moveTo(arc.a.x, arc.a.y);
+          arcTrailCtx.lineTo(arc.b.x, arc.b.y);
+          arcTrailCtx.stroke();
+        }
+        arcTrailCtx.restore();
+        // Composite trail under the bright arcs
+        pctx.save();
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.globalCompositeOperation = 'screen';
+        pctx.globalAlpha = 0.55;
+        pctx.drawImage(arcTrailCanvas, 0, 0);
+        pctx.restore();
+
         // VE proximity drives brightness — builds as Volta converges, peaks inside
         let vePx = 1.0;
         if (ve.scaleCurrent > 5) {
@@ -1478,30 +1528,9 @@
       // ─── Main loop ──────────────────────────────────────────────────────────
 
       function resize() {
-        const w = stage.clientWidth, h = stage.clientHeight;
-        if (lastStageW === 0) {
-          // First call — seed from scratch
-          setCanvasSize(particlesCanvas, pctx);
-          buildTitle();
-          seedParticles();
-        } else {
-          // Subsequent resize or browser zoom — rescale existing positions from center
-          const prevCx = lastStageW / 2, prevCy = lastStageH / 2;
-          const cx = w / 2, cy = h / 2;
-          const sx = w / lastStageW, sy = h / lastStageH;
-          for (const p of particles) {
-            p.x = cx + (p.x - prevCx) * sx;
-            p.y = cy + (p.y - prevCy) * sy;
-          }
-          for (const ap of appParticles) {
-            ap.x = cx + (ap.x - prevCx) * sx;
-            ap.y = cy + (ap.y - prevCy) * sy;
-          }
-          setCanvasSize(particlesCanvas, pctx);
-          buildTitle();
-        }
-        lastStageW = w;
-        lastStageH = h;
+        setCanvasSize(particlesCanvas, pctx);
+        buildTitle();
+        seedParticles();
       }
 
       function frame(now) {
