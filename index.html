@@ -303,7 +303,7 @@
         for (const p of particles) {
           const local = lightAt(p.x, p.y);
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const alpha  = (p.alpha * 0.44) + local * (0.32 + pulse * 0.18);
+          const alpha  = (p.alpha * 0.59) + local * (0.32 + pulse * 0.18);
           const color  = heatColor(local);
           const speed  = Math.hypot(p.vx, p.vy);
 
@@ -364,10 +364,11 @@
           const radius = l.kind === 'pointer' ? (72 + l.strength * 64) : (96 + l.strength * 64);
           total += Math.max(0, 1 - d / radius) * l.strength * lightIntensity(l, now);
         }
-        // App particles emit soft ambient light — illuminates nearby dead particles
+        // App particles emit light — illuminates nearby dead particles + other orbs
         for (const ap of appParticles) {
           const d = dist(x, y, ap.x, ap.y);
-          total += Math.max(0, 1 - d / (ap.r0 * 9)) * 0.14;
+          const pulse = (Math.sin(now * ap.breathRate + ap.breathPhase) + 1) * 0.5;
+          total += Math.max(0, 1 - d / 130) * (0.38 + pulse * 0.22);
         }
         return clamp(total, 0, 1);
       }
