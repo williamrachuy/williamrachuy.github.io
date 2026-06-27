@@ -37,19 +37,11 @@
       inset: 0;
       pointer-events: none;
     }
-    #veil::before {
-      content: "";
-      position: absolute;
-      left: 50%; top: 50%;
-      width: min(78vw, 760px);
-      height: 1px;
-      transform: translate(-50%, -50%);
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-    }
-    #wordmark-wrap { display: grid; place-items: center; }
+    #wordmark-wrap { display: grid; align-items: start; justify-content: center; padding-top: 18dvh; }
     #wordmark {
       position: relative;
       display: inline-block;
+      transform-origin: center center;
       animation: breathe 15s ease-in-out infinite;
       will-change: opacity, filter, transform;
     }
@@ -103,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.17 · 21e03e7';
+      const VERSION = '20260627.18 · 6fc7a82';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -206,7 +198,8 @@
         state: 'dormant',      // 'dormant' | 'entering' | 'traversing' | 'infecting'
         cx: 0, cy: 0,          // creature center
         energy: 1.0,
-        arcs: [],              // active arc segments: { a, b, born, maxAge, jags, lastRejag }
+        pool: 1.0,             // arc energy pool — drains on arc creation, regens over time
+        arcs: [],              // active arc segments: { a, b, born, maxAge, strength }
         infectedTimer: 0,
         infectedDuration: 0,
         charge: 0,             // 0→1 during infection — drives VE wildness
@@ -620,10 +613,11 @@
             ap.vy = 0;
             continue;
           }
-          // Slow wander: direction drifts gradually
-          ap.wAngle += (Math.random() - 0.5) * 0.0008 * dt * ap.speed;
-          ap.vx += Math.cos(ap.wAngle) * 0.001 * ap.speed;
-          ap.vy += Math.sin(ap.wAngle) * 0.001 * ap.speed;
+          // Slow wander — more active after VE is destroyed (no pull to mask the drift)
+          const wanderStr = ve.liberated ? 0.0042 : 0.001;
+          ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
+          ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed;
+          ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed;
           // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
@@ -1181,6 +1175,8 @@
           return;
         }
         const w = stage.clientWidth, h = stage.clientHeight;
+        // Arc energy pool regens continuously — arcs consume it, giving ebb-and-flow brightness
+        volta.pool = Math.min(1.0, volta.pool + dt * 0.00022);
 
         if (volta.state === 'infecting') {
           volta.cx = ve.x; volta.cy = ve.y;
@@ -1229,12 +1225,12 @@
         // ── Arc management ──────────────────────────────────────────────────
         volta.arcs = volta.arcs.filter(arc => now - arc.born < arc.maxAge);
 
-        // Magnetic pull: particle arcs draw their two nodes together while alive
+        // Magnetic pull: particle arcs draw their two nodes together; force scales with strength
         for (const arc of volta.arcs) {
           if (!arc.freeNode && !arc.veNode) {
             const dx = arc.b.x - arc.a.x, dy = arc.b.y - arc.a.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const f  = 0.00038 * dt;
+            const f  = (arc.strength || 0.6) * 0.00055 * dt;
             arc.a.vx += (dx / d) * f; arc.a.vy += (dy / d) * f;
             arc.b.vx -= (dx / d) * f; arc.b.vy -= (dy / d) * f;
           }
@@ -1293,15 +1289,25 @@
         const veY = ve.scaleCurrent > 5 ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
 
-        // Harvest nearby particles — strong inverse-distance bias, light VE-direction bias
+        // Harvest nearby particles — blend: proximity, closeness-to-VE, velocity-toward-VE, mass
         const nearby = [];
         for (const p of particles) {
           if (p.r >= 0.05) {
             const distFromVolta = Math.hypot(p.x - volta.cx, p.y - volta.cy);
             if (distFromVolta < VOLTA_SEARCH_R) {
-              const prox = 1 - distFromVolta / VOLTA_SEARCH_R;
-              const toVE = Math.hypot(p.x - veX, p.y - veY);
-              nearby.push({ p, score: prox * prox * 0.65 + (1 - toVE / veDist) * 0.20 + Math.random() * 0.15 });
+              const prox    = 1 - distFromVolta / VOLTA_SEARCH_R;
+              const toVE    = Math.hypot(p.x - veX, p.y - veY);
+              const closerToVE = Math.max(0, 1 - toVE / veDist);
+              // Velocity alignment: how closely is this particle already moving toward VE?
+              const toDirX  = veX - p.x, toDirY = veY - p.y;
+              const toDirL  = Math.hypot(toDirX, toDirY) || 1;
+              const vSpeed  = Math.hypot(p.vx, p.vy) || 0.0001;
+              const velAlign = (p.vx * toDirX + p.vy * toDirY) / (toDirL * vSpeed); // -1..1
+              // Mass bonus: heavier particles are cheaper to arc (inversely proportional cost)
+              const massBonus = Math.min(1, (p.mass || 0.1) / 0.5);
+              nearby.push({ p, score: prox * prox * 0.38 + closerToVE * 0.27
+                                   + Math.max(0, velAlign) * 0.22
+                                   + massBonus * 0.08 + Math.random() * 0.05 });
             }
           }
         }
@@ -1332,7 +1338,14 @@
             if (targets.length > 0) {
               targets.sort((a, b) => b.score - a.score);
               const tgt = targets[Math.floor(Math.random() * Math.min(3, targets.length))].p;
-              volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(80, 280) });
+              const arcLen = Math.hypot(tgt.x - src.x, tgt.y - src.y);
+              // Cost: proportional to length, inversely to target mass (lighter = expensive)
+              const arcCost = (arcLen / VOLTA_ARC_DIST) * 0.20 / Math.max(tgt.mass || 0.1, 0.05);
+              if (volta.pool >= Math.min(arcCost, 0.08)) {
+                const strength = clamp(1 - arcCost * 0.6, 0.25, 1.0);
+                volta.pool = Math.max(0, volta.pool - arcCost);
+                volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(80, 280), strength });
+              }
             }
           }
         }
@@ -1354,10 +1367,11 @@
 
       function drawVolta(now) {
         if (!volta.active || volta.arcs.length === 0) return;
-        const masterAlpha = clamp(volta.energy, 0, 1);
+        // Pool-based master alpha: regens naturally so arcs never visually die out entirely
+        const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 1.6, 0.30, 1.0);
         if (masterAlpha < 0.01) return;
 
-        // Proximity of Volta to VE — arcs are brightest inside VE, build as Volta approaches
+        // VE proximity drives brightness — builds as Volta converges, peaks inside
         let vePx = 1.0;
         if (ve.scaleCurrent > 5) {
           if (volta.state === 'infecting') {
@@ -1378,10 +1392,10 @@
           const flicker = clamp(0.5 + Math.sin(now * 0.035 + arc.born * 0.001) * 0.3
                                     + Math.sin(now * 0.071 + arc.born * 0.002) * 0.2, 0.05, 1);
           const d       = Math.hypot(arc.a.x - arc.b.x, arc.a.y - arc.b.y);
-          const arcE    = Math.max(0, 1 - d / VOLTA_ARC_DIST);
-          // Blend arc-length energy with VE proximity — whichever is higher wins,
-          // with proximity dominant so convergence on VE always reads as maximum energy
-          const energy  = clamp(Math.max(arcE, vePx * 0.6) * vePx, 0, 1);
+          // VE node arcs: always full brightness; traversal arcs: inverse-distance energy
+          const arcE    = arc.veNode ? 1.0 : Math.max(0, 1 - d / VOLTA_ARC_DIST);
+          const str     = arc.strength || 1.0;
+          const energy  = clamp(Math.max(arcE, vePx * 0.6) * vePx * str, 0, 1);
           const bright  = energy * energy;
           const a       = masterAlpha * life * flicker * (0.15 + bright * 0.85);
           if (a < 0.02) continue;
