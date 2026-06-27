@@ -102,6 +102,7 @@
       const titleLetters  = [];
       const particles     = [];
       const lights        = [];
+      const spawnQueue    = []; // regrowth: { spawnAt, r0 } — fires 2-30s after burnout
       let lastFrame       = 0;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -180,11 +181,11 @@
 
       function updateParticles(dt) {
         const w = stage.clientWidth, h = stage.clientHeight;
-        // Ablation: dr/dt = (dm/dt) / (3r²) since m ∝ r³
-        // Loss rate ∝ heat; recovery rate ∝ (1-heat). Recovery is slower than loss.
-        const kLoss = 0.00003;   // ablation constant  (~4s to burn a small particle)
-        const kGain = 0.000015;  // recovery constant  (~8s to fully cool/regrow)
-        const rMin  = 0.08;
+        // dr/dt = (net dm/dt) / (3r²), m ∝ r³, uniform density
+        const kLoss = 0.00003;   // ablation rate (~4s to fully burn a small particle)
+        const kGain = 0.000015;  // recovery rate (~8s for a small particle to regrow)
+        const now   = performance.now();
+
         for (const p of particles) {
           p.tw += dt * 0.00045;
           let maxHeat = 0;
@@ -197,14 +198,14 @@
             p.vx += (dx / d) * heat * 0.057 / p.mass;
             p.vy += (dy / d) * heat * 0.057 / p.mass;
           }
-          // Heat lags behind local pressure slightly
           p.heat += (maxHeat - p.heat) * clamp(dt * 0.004, 0, 1);
-          // Ablation / recovery — r² in denominator means small particles change faster
-          const drdt = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * p.r * p.r);
-          p.r    = clamp(p.r + drdt * dt, rMin, p.r0);
+          if (p.r > 0) {
+            const drdt = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * p.r * p.r);
+            p.r = Math.min(p.r0, Math.max(0, p.r + drdt * dt));
+          }
           p.mass = p.r * p.r * p.r;
-          p.drag = Math.max(0.95, 1 - 0.0003 / (p.r * p.r));
-          p.vs   = Math.max(1, p.r * 2); // visual diameter
+          p.drag = Math.max(0.95, 1 - 0.0003 / Math.max(p.r * p.r, 0.01));
+          p.vs   = Math.max(1, p.r * 2);
           p.vx  *= p.drag; p.vy *= p.drag;
           p.trail.unshift({ x: p.x, y: p.y });
           if (p.trail.length > 10) p.trail.pop();
@@ -212,6 +213,37 @@
           p.y  += p.vy * dt * 0.026;
           if (p.x < -6) p.x = w + 6; if (p.x > w + 6) p.x = -6;
           if (p.y < -6) p.y = h + 6; if (p.y > h + 6) p.y = -6;
+        }
+
+        // Remove fully burned particles; schedule regrowth 2-30s later
+        for (let i = particles.length - 1; i >= 0; i--) {
+          if (particles[i].r <= 0) {
+            const r0 = particles[i].r0;
+            particles.splice(i, 1);
+            spawnQueue.push({ spawnAt: now + 2000 + Math.random() * 28000, r0 });
+          }
+        }
+
+        // Spawn queued particles as tiny seeds; recovery formula grows them naturally
+        for (let i = spawnQueue.length - 1; i >= 0; i--) {
+          if (spawnQueue[i].spawnAt <= now) {
+            const { r0 } = spawnQueue[i];
+            spawnQueue.splice(i, 1);
+            particles.push({
+              x:  Math.random() * stage.clientWidth,
+              y:  Math.random() * stage.clientHeight,
+              vx: rand(-0.012, 0.012),
+              vy: rand(-0.008, 0.008),
+              tw:    Math.random() * Math.PI * 2,
+              alpha: rand(0.16, 0.34),
+              trail: [],
+              r:    0.1, r0,   // starts at minimum visible size, grows to r0
+              heat: 0,
+              mass: 0.001,     // 0.1³
+              drag: 0.97,
+              vs:   1
+            });
+          }
         }
       }
 
