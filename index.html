@@ -234,8 +234,24 @@
       }
 
       // ─── Light system ───────────────────────────────────────────────────────
-      // Touch: 3s fade-in, 7s fade-out. Mouse: near-instant fade-in, 7s fade-out.
+      // Touch: 3s log fade-in, 7s log fade-out. Mouse: 200ms log fade-in, 7s fade-out.
+      // Intensity is purely time-driven — no hold phase outside the fade windows.
       // Light center rubber-bands behind the actual pointer (no overshoot).
+
+      // Logarithmic curve: t ∈ [0,1] → [0,1], fast rise then plateau
+      function logCurve(t) { return Math.log(1 + 9 * t) / Math.LN10; }
+
+      function lightIntensity(l, now) {
+        const fadeInDur = l.fadeInMs || 3000;
+        if (!l.releaseTime) {
+          // Active: log fade-in over fadeInDur, saturates and holds at 1
+          return logCurve(clamp((now - l.born) / fadeInDur, 0, 1));
+        }
+        // Released: log fade-out from whatever level we were at on release
+        const levelAtRelease = logCurve(clamp(l.ageAtRelease / fadeInDur, 0, 1));
+        const t = clamp((now - l.releaseTime) / (l.fadeOutMs || 7000), 0, 1);
+        return levelAtRelease * (1 - logCurve(t));
+      }
 
       function lightAt(x, y) {
         let total = 0;
@@ -243,16 +259,12 @@
         for (const l of lights) {
           const d      = dist(x, y, l.x, l.y);
           const radius = l.kind === 'pointer' ? (72 + l.strength * 64) : (96 + l.strength * 64);
-          const life   = clamp(l.ttl / l.maxTtl, 0, 1);
-          const easedLife = Math.pow(life, 0.55);
-          const fadeIn = clamp((now - (l.born || now)) / (l.fadeInMs || 3000), 0, 1);
-          total += Math.max(0, 1 - d / radius) * l.strength * easedLife * fadeIn;
+          total += Math.max(0, 1 - d / radius) * l.strength * lightIntensity(l, now);
         }
         return clamp(total, 0, 1);
       }
 
       function updateLights(dt) {
-        // Rubber band: exponential lerp toward target — quick but no overshoot
         const lag = 1 - Math.exp(-dt * 0.018);
         for (let i = lights.length - 1; i >= 0; i--) {
           const l = lights[i];
@@ -260,7 +272,7 @@
             l.x += (l.targetX - l.x) * lag;
             l.y += (l.targetY - l.y) * lag;
           }
-          if (l.kind === 'pointer' && !l.released) { l.ttl = l.maxTtl; continue; }
+          if (!l.released) continue; // active lights never expire
           l.ttl -= dt;
           if (l.ttl <= 0) lights.splice(i, 1);
         }
@@ -276,19 +288,35 @@
         if (existing) {
           existing.targetX = tx; existing.targetY = ty;
           existing.strength = Math.max(existing.strength, strength);
-          existing.ttl = existing.maxTtl;
-          existing.released = false;
+          if (existing.released) {
+            // Re-tap while fading out: resume fade-in from current intensity (no flicker)
+            const now  = performance.now();
+            const prev = lightIntensity(existing, now);
+            const t0   = (Math.pow(10, prev) - 1) / 9; // inverse of logCurve
+            existing.born         = now - t0 * (existing.fadeInMs || 3000);
+            existing.releaseTime  = undefined;
+            existing.ageAtRelease = undefined;
+            existing.released     = false;
+            existing.ttl          = 99999;
+          }
         } else {
           lights.push({ x: tx, y: ty, targetX: tx, targetY: ty, strength,
-            ttl: 7000, maxTtl: 7000, kind: 'pointer',
+            ttl: 99999, maxTtl: 99999, kind: 'pointer',
             born: performance.now(), released: false,
-            fadeInMs: touch ? 3000 : 200 });
+            fadeInMs: touch ? 3000 : 200, fadeOutMs: 7000 });
         }
       }
 
       const releasePointerLight = () => {
-        const l = lights.find(li => li.kind === 'pointer');
-        if (l) { l.released = true; l.ttl = 7000; l.maxTtl = 7000; }
+        const l = lights.find(li => li.kind === 'pointer' && !li.released);
+        if (l) {
+          const now      = performance.now();
+          l.releaseTime  = now;
+          l.ageAtRelease = now - l.born;
+          l.released     = true;
+          l.ttl          = l.fadeOutMs || 7000;
+          l.maxTtl       = l.ttl;
+        }
       };
 
       // ─── Title letters ──────────────────────────────────────────────────────
