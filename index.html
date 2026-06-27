@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.25 · f19685e';
+      const VERSION = '20260627.26 · f79968e';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -192,6 +192,7 @@
         edgeEnergies: null,          // Float32Array — per-edge energy [0,1], dims in drawVE
         edgeDrainRates: null,        // per-edge randomized drain rate
         vertNodes: null,             // per-vertex {x,y,vx,vy,freedom} spring objects
+        centerNode: null,             // center node joins vertex physics once Volta attacks
         liberated: false,            // true once all edges destroyed (vertices drift freely)
         projCache: null,             // last projected vertex screen positions (ideal)
       };
@@ -870,6 +871,9 @@
           if (!ve.vertNodes) {
             ve.vertNodes = ve.projCache.map(p => ({ x: p.px, y: p.py, vx: 0, vy: 0, fx: 0, fy: 0, freedom: 0, drawScale: 1.0, _arced: false }));
           }
+          if (!ve.centerNode) {
+            ve.centerNode = { x: ve.x, y: ve.y, vx: 0, vy: 0, fx: 0, fy: 0, freedom: 0, drawScale: 1.0, _arced: false };
+          }
           // Freedom + force reset
           for (let i = 0; i < 12; i++) {
             const node = ve.vertNodes[i];
@@ -880,6 +884,8 @@
           // Once infection starts (edgeEnergies exists), ALL nodes enter full physics —
           // no more projCache snapping. Pre-infection, freedom=0 nodes still snap.
           const infecting = ve.edgeEnergies !== null;
+          const center = ve.centerNode;
+          center.fx = 0; center.fy = 0;
           // Per-edge spring attraction
           for (let ei = 0; ei < VE_E.length; ei++) {
             if (ve.destroyedEdges.has(ei)) continue;
@@ -914,6 +920,8 @@
               ve.vertNodes[i].vx += (Math.random() * 2 - 1) * jitterVel;
               ve.vertNodes[i].vy += (Math.random() * 2 - 1) * jitterVel;
             }
+            center.vx += (Math.random() * 2 - 1) * jitterVel;
+            center.vy += (Math.random() * 2 - 1) * jitterVel;
           }
           // Integrate — pre-infection freedom=0 nodes snap; during infection all use physics
           for (let i = 0; i < 12; i++) {
@@ -927,6 +935,17 @@
               node.x += node.vx * dt;
               node.y += node.vy * dt;
             }
+          }
+          if (!infecting) {
+            center.x = ve.x; center.y = ve.y;
+            center.vx = 0; center.vy = 0;
+          } else {
+            // The center is a thirteenth physical node during attack, with the
+            // same damping and accumulated Volta impulses as every vertex.
+            center.vx = (center.vx + center.fx) * VE_DAMP;
+            center.vy = (center.vy + center.fy) * VE_DAMP;
+            center.x += center.vx * dt;
+            center.y += center.vy * dt;
           }
         }
 
@@ -952,8 +971,8 @@
             const n = ve.vertNodes[i];
             liberatedNodes.push({ x: n.x, y: n.y, vx: n.vx, vy: n.vy, mass: 8, alpha: 1.0, r: 2.3 * (n.drawScale || 1.0) });
           }
-          // Center node inherits VE translational velocity
-          liberatedNodes.push({ x: ve.x, y: ve.y, vx: ve.vx, vy: ve.vy, mass: 8, alpha: 1.0, r: 2.3 });
+          const c = ve.centerNode;
+          liberatedNodes.push({ x: c.x, y: c.y, vx: c.vx, vy: c.vy, mass: 8, alpha: 1.0, r: 2.3 * (c.drawScale || 1.0) });
         }
         // VE never resets — once destroyed it stays destroyed
       }
@@ -1038,6 +1057,8 @@
         }
 
         // Radial spokes — dim per vertex based on average energy of its edges
+        const centerX = ve.centerNode ? ve.centerNode.x : ve.x;
+        const centerY = ve.centerNode ? ve.centerNode.y : ve.y;
         pctx.shadowBlur  = 4 + ex * 8 + elecAmp * 4 * stability;
         pctx.shadowColor = '#40ccff';
         pctx.strokeStyle = '#b8eeff';
@@ -1051,7 +1072,7 @@
           pctx.lineWidth   = 0.3 + zf * 0.28 + elecAmp * 0.35;
           pctx.beginPath();
           pctx.moveTo(px, py);
-          pctx.lineTo(ve.x, ve.y);
+          pctx.lineTo(centerX, centerY);
           pctx.stroke();
         }
         pctx.shadowBlur = 0;
@@ -1064,7 +1085,8 @@
           pctx.shadowColor = '#80e8ff';
           pctx.fillStyle   = '#e8f8ff';
           pctx.beginPath();
-          pctx.arc(ve.x, ve.y, 2.5 * centerBoost, 0, Math.PI * 2);
+          const centerScale = (ve.centerNode && ve.centerNode.drawScale) || 1.0;
+          pctx.arc(centerX, centerY, 2.5 * centerBoost * centerScale, 0, Math.PI * 2);
           pctx.fill();
         }
         pctx.shadowBlur = 0;
@@ -1242,13 +1264,14 @@
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
             // Stinger burst: connect every arc endpoint to nearest VE vertex
             if (ve.vertNodes) {
+              const attackNodes = ve.centerNode ? [...ve.vertNodes, ve.centerNode] : ve.vertNodes;
               const pts = new Set();
               for (const arc of volta.arcs) { pts.add(arc.a); pts.add(arc.b); }
               for (const pt of pts) {
                 let bestVN = null, bestD = Infinity;
-                for (let vi = 0; vi < 12; vi++) {
-                  const d = Math.hypot(pt.x - ve.vertNodes[vi].x, pt.y - ve.vertNodes[vi].y);
-                  if (d < bestD) { bestD = d; bestVN = ve.vertNodes[vi]; }
+                for (const node of attackNodes) {
+                  const d = Math.hypot(pt.x - node.x, pt.y - node.y);
+                  if (d < bestD) { bestD = d; bestVN = node; }
                 }
                 if (bestVN && bestD < VOLTA_ARC_DIST * 2.5) {
                   volta.arcs.push({ a: pt, b: bestVN, born: now, maxAge: rand(200, 500), strength: 1.0, veNode: true });
@@ -1267,20 +1290,22 @@
 
         // VE node drawScale: jitter scale 90-110% when newly arced; retain on disconnect
         if (ve.vertNodes) {
+          const scalableNodes = ve.centerNode ? [...ve.vertNodes, ve.centerNode] : ve.vertNodes;
           const arcedIdx = new Set();
           for (const arc of volta.arcs) {
             if (!arc.veNode) continue;
-            const ia = ve.vertNodes.indexOf(arc.a), ib = ve.vertNodes.indexOf(arc.b);
+            const ia = scalableNodes.indexOf(arc.a), ib = scalableNodes.indexOf(arc.b);
             if (ia >= 0) arcedIdx.add(ia);
             if (ib >= 0) arcedIdx.add(ib);
           }
-          for (let i = 0; i < 12; i++) {
-            const isNow = arcedIdx.has(i), wasBefore = ve.vertNodes[i]._arced;
+          for (let i = 0; i < scalableNodes.length; i++) {
+            const node = scalableNodes[i];
+            const isNow = arcedIdx.has(i), wasBefore = node._arced;
             if (isNow && !wasBefore) {
-              ve.vertNodes[i].drawScale = 1.0; // reset first, then randomize
-              ve.vertNodes[i].drawScale = rand(0.90, 1.10);
+              node.drawScale = 1.0; // reset first, then randomize
+              node.drawScale = rand(0.90, 1.10);
             }
-            ve.vertNodes[i]._arced = isNow;
+            node._arced = isNow;
           }
         }
 
@@ -1331,9 +1356,10 @@
             }
             // Internal VE arcs only
             if (volta.arcs.length < VOLTA_MAX_ARCS) {
-              const ni = Math.floor(Math.random() * 12), nj = Math.floor(Math.random() * 12);
+              const internalNodes = ve.centerNode ? [...ve.vertNodes, ve.centerNode] : ve.vertNodes;
+              const ni = Math.floor(Math.random() * internalNodes.length), nj = Math.floor(Math.random() * internalNodes.length);
               if (ni !== nj) {
-                const a = ve.vertNodes[ni], b = ve.vertNodes[nj];
+                const a = internalNodes[ni], b = internalNodes[nj];
                 const d = Math.hypot(a.x - b.x, a.y - b.y);
                 if (d > 5 && d < ve.scaleCurrent * 1.9 && !volta.arcs.some(arc => arc.a === a && arc.b === b))
                   volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200), veNode: true });
@@ -1431,8 +1457,8 @@
               if (volta.arcs.length >= VOLTA_MAX_ARCS) break;
               // Find closest unreached VE vertex within arc distance
               let bestVN = null, bestD = VOLTA_ARC_DIST * 1.3;
-              for (let vi = 0; vi < 12; vi++) {
-                const vn = ve.vertNodes[vi];
+              const attackNodes = ve.centerNode ? [...ve.vertNodes, ve.centerNode] : ve.vertNodes;
+              for (const vn of attackNodes) {
                 const d = Math.hypot(pt.x - vn.x, pt.y - vn.y);
                 if (d < bestD && !volta.arcs.some(a => (a.a === pt && a.b === vn) || (a.a === vn && a.b === pt))) {
                   bestD = d; bestVN = vn;
