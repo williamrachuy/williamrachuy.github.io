@@ -150,18 +150,21 @@
       function seedParticles() {
         particles.length = 0;
         for (let i = 0; i < 432; i++) {
-          const size = Math.random() > 0.86 ? 2 : 1;
+          const r0 = Math.random() > 0.86 ? 1.0 : 0.5; // 3D radius; visual diameter = r0*2
           particles.push({
             x:  Math.random() * stage.clientWidth,
             y:  Math.random() * stage.clientHeight,
             vx: rand(-0.012, 0.012),
             vy: rand(-0.008, 0.008),
-            size,
             tw:    Math.random() * Math.PI * 2,
             alpha: rand(0.16, 0.34),
             trail: [],
-            mass: size * size * size,        // ∝ r³, uniform density sphere
-            drag: 1 - 0.0012 / (size * size) // Stokes: drag decel ∝ 1/r², so big=less drag
+            r:    r0,  // current 3D radius (drives mass + visual size)
+            r0:   r0,  // max radius (recovery ceiling)
+            heat: 0,   // 0=cold, 1=fully ablating
+            mass: r0 * r0 * r0,
+            drag: Math.max(0.95, 1 - 0.0003 / (r0 * r0)),
+            vs:   Math.max(1, r0 * 2) // visual size (px), kept in sync each frame
           });
         }
       }
@@ -177,18 +180,32 @@
 
       function updateParticles(dt) {
         const w = stage.clientWidth, h = stage.clientHeight;
+        // Ablation: dr/dt = (dm/dt) / (3r²) since m ∝ r³
+        // Loss rate ∝ heat; recovery rate ∝ (1-heat). Recovery is slower than loss.
+        const kLoss = 0.00003;   // ablation constant  (~4s to burn a small particle)
+        const kGain = 0.000015;  // recovery constant  (~8s to fully cool/regrow)
+        const rMin  = 0.08;
         for (const p of particles) {
           p.tw += dt * 0.00045;
+          let maxHeat = 0;
           for (const l of lights) {
             const dx = p.x - l.x, dy = p.y - l.y;
-            const d  = Math.hypot(dx, dy) || 1;
+            const d    = Math.hypot(dx, dy) || 1;
             const prox = Math.max(0, 1 - d / 140);
-            const inf  = Math.pow(prox, 1.8) * l.strength * 0.057;
-            p.vx += (dx / d) * inf / p.mass; // a = F/m
-            p.vy += (dy / d) * inf / p.mass;
+            const heat = Math.pow(prox, 1.8) * l.strength;
+            maxHeat    = Math.max(maxHeat, heat);
+            p.vx += (dx / d) * heat * 0.057 / p.mass;
+            p.vy += (dy / d) * heat * 0.057 / p.mass;
           }
-          p.vx *= p.drag; p.vy *= p.drag;
-          // Record trail before moving (tail evaporates oldest first)
+          // Heat lags behind local pressure slightly
+          p.heat += (maxHeat - p.heat) * clamp(dt * 0.004, 0, 1);
+          // Ablation / recovery — r² in denominator means small particles change faster
+          const drdt = (-p.heat * kLoss + (1 - p.heat) * kGain) / (3 * p.r * p.r);
+          p.r    = clamp(p.r + drdt * dt, rMin, p.r0);
+          p.mass = p.r * p.r * p.r;
+          p.drag = Math.max(0.95, 1 - 0.0003 / (p.r * p.r));
+          p.vs   = Math.max(1, p.r * 2); // visual diameter
+          p.vx  *= p.drag; p.vy *= p.drag;
           p.trail.unshift({ x: p.x, y: p.y });
           if (p.trail.length > 10) p.trail.pop();
           p.x  += p.vx * dt * 0.026;
@@ -220,7 +237,7 @@
               pctx.shadowBlur  = local * (8 - frac * 7);
               pctx.shadowColor = color;
               pctx.fillStyle   = color;
-              pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.size, p.size);
+              pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.vs, p.vs);
             }
           }
 
@@ -230,7 +247,7 @@
           pctx.shadowBlur  = local > 0.01 ? (3 + heatSq * 32) : 0; // radiating glow
           pctx.shadowColor = color;
           pctx.fillStyle   = color;
-          pctx.fillRect(Math.round(p.x), Math.round(p.y), p.size, p.size);
+          pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
         }
         pctx.globalAlpha = 1;
         pctx.shadowBlur  = 0;
