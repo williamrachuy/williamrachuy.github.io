@@ -521,22 +521,22 @@
           const t      = (pulse + 1) * 0.5;     // 0=contracted/dim, 1=expanded/bright
           const rDraw  = ap.r0 * (1 + 0.22 * pulse); // ±22% scale
           // Dark base — always present
-          pctx.globalAlpha = 0.88 + local * 0.12;
-          pctx.shadowBlur  = 6 + t * 10 + local * 32;
+          pctx.globalAlpha = 0.70 + t * 0.25 + local * 0.05;
+          pctx.shadowBlur  = 4 + t * 28 + local * 36;
           pctx.shadowColor = ap.brightColor;
           pctx.fillStyle   = ap.color;
           pctx.beginPath();
           pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
           pctx.fill();
-          // Bright overlay: fades in as orb expands (desaturated→saturated pulse)
-          pctx.globalAlpha = t * 0.58 + local * 0.32;
+          // Bright color overlay: expands strongly with pulse (dim/desat → vivid/sat)
+          pctx.globalAlpha = t * 0.78 + local * 0.35;
           pctx.shadowBlur  = 0;
           pctx.fillStyle   = ap.brightColor;
           pctx.beginPath();
           pctx.arc(ap.x, ap.y, rDraw, 0, Math.PI * 2);
           pctx.fill();
-          // 3D highlight
-          pctx.globalAlpha = 0.14 + t * 0.10 + local * 0.14;
+          // 3D highlight — brightens at peak expansion
+          pctx.globalAlpha = 0.10 + t * 0.20 + local * 0.14;
           pctx.fillStyle   = '#fff';
           pctx.beginPath();
           pctx.arc(ap.x - rDraw * 0.28, ap.y - rDraw * 0.30, rDraw * 0.38, 0, Math.PI * 2);
