@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.18 · 6fc7a82';
+      const VERSION = '20260627.19 · 3281337';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -659,6 +659,17 @@
               while (delta >  Math.PI) delta -= Math.PI * 2;
               while (delta < -Math.PI) delta += Math.PI * 2;
               ap.wAngle += delta * clamp(avoidMag * 0.018 * dt, 0, 0.55);
+              // Direct velocity flee — wangle redirect alone is too subtle
+              ap.vx += (avoidX / (avoidMag || 1)) * avoidMag * 0.10;
+              ap.vy += (avoidY / (avoidMag || 1)) * avoidMag * 0.10;
+            }
+            // Flee from Volta creature center directly
+            const fdx = ap.x - volta.cx, fdy = ap.y - volta.cy;
+            const fd  = Math.hypot(fdx, fdy) || 1;
+            if (fd < 300) {
+              const flee = (1 - fd / 300) * (1 - fd / 300) * 0.14;
+              ap.vx += (fdx / fd) * flee;
+              ap.vy += (fdy / fd) * flee;
             }
           }
           ap.vx *= 0.988; ap.vy *= 0.988;
@@ -1368,7 +1379,7 @@
       function drawVolta(now) {
         if (!volta.active || volta.arcs.length === 0) return;
         // Pool-based master alpha: regens naturally so arcs never visually die out entirely
-        const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 1.6, 0.30, 1.0);
+        const masterAlpha = clamp(volta.energy, 0, 1) * clamp(volta.pool * 2.2, 0.45, 1.0);
         if (masterAlpha < 0.01) return;
 
         // VE proximity drives brightness — builds as Volta converges, peaks inside
@@ -1397,10 +1408,10 @@
           const str     = arc.strength || 1.0;
           const energy  = clamp(Math.max(arcE, vePx * 0.6) * vePx * str, 0, 1);
           const bright  = energy * energy;
-          const a       = masterAlpha * life * flicker * (0.15 + bright * 0.85);
+          const a       = masterAlpha * life * flicker * (0.35 + bright * 0.65);
           if (a < 0.02) continue;
           pctx.globalAlpha = a;
-          pctx.shadowBlur  = 1 + bright * 10;
+          pctx.shadowBlur  = 3 + bright * 14;
           pctx.shadowColor = '#d0eeff';
           pctx.lineWidth   = 0.4 + bright * 1.2;
           pctx.beginPath();
