@@ -636,7 +636,7 @@
         );  // aperiodic, faster
         const elecPos = (elec + 1) * 0.5;  // [0, 1]
         const elecAmp = elecPos * elecPos;  // square for more chaotic contrast
-        const focal = 280, S = ve.scaleCurrent * (1 + elecAmp * 0.14);
+        const focal = 280, S = ve.scaleCurrent * (1 + elecAmp * 0.04);
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
         const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
