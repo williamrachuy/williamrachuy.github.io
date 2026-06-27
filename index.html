@@ -105,6 +105,7 @@
       const lights        = [];
       // spawnQueue removed — particles now regrow in place
       const appParticles  = []; // living particles — one per sub-page, immune to ablation
+      const hotParticles  = []; // subset of particles with heat≥0.3 — rebuilt each frame
       let lastFrame       = 0;
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
@@ -218,7 +219,9 @@
 
       function seedParticles() {
         particles.length = 0;
-        for (let i = 0; i < 432; i++) {
+        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 1;
+        const count = isMobile ? 240 : 432;
+        for (let i = 0; i < count; i++) {
           const r0 = Math.random() > 0.86 ? 1.0 : 0.5; // 3D radius; visual diameter = r0*2
           particles.push({
             x:  Math.random() * stage.clientWidth,
@@ -316,7 +319,7 @@
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
-          const local = lightAt(p.x, p.y);
+          const local = lightAt(p.x, p.y, now);
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
           if (p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
@@ -371,9 +374,8 @@
         return levelAtRelease * (1 - logCurve(t));
       }
 
-      function lightAt(x, y) {
+      function lightAt(x, y, now) {
         let total = 0;
-        const now = performance.now();
         for (const l of lights) {
           const d      = dist(x, y, l.x, l.y);
           const radius = l.kind === 'pointer' ? (72 + l.strength * 64) : (96 + l.strength * 64);
@@ -385,9 +387,8 @@
           const pulse = (Math.sin(now * ap.breathRate + ap.breathPhase) + 1) * 0.5;
           total += Math.max(0, 1 - d / 130) * (0.38 + pulse * 0.22);
         }
-        // Hot particles glow — emit light proportional to heat (only when meaningfully hot)
-        for (const p of particles) {
-          if (p.heat < 0.3 || p.r < 0.05) continue;
+        // Hot particles glow — hotParticles is a pre-filtered subset rebuilt each frame
+        for (const p of hotParticles) {
           const d = dist(x, y, p.x, p.y);
           const radius = 12 + p.heat * 30;
           if (d >= radius) continue;
@@ -550,7 +551,7 @@
 
       function drawAppParticles(now) {
         for (const ap of appParticles) {
-          const local  = lightAt(ap.x, ap.y);
+          const local  = lightAt(ap.x, ap.y, now);
           const pulse  = Math.sin(now * ap.breathRate + ap.breathPhase);
           const t      = (pulse + 1) * 0.5;     // 0=contracted/dim, 1=expanded/bright
           const rDraw  = ap.r0 * (1 + 0.22 * pulse); // ±22% scale
@@ -697,29 +698,29 @@
           pctx.fill();
         }
 
-        // Edges — glow jitters with electric field
+        // Edges — one shadowBlur for the whole pass (depth variation via alpha only)
+        pctx.shadowBlur  = 8 + ex * 14 + elecAmp * 8 * stability;
+        pctx.shadowColor = '#40ccff';
+        pctx.strokeStyle = '#b8eeff';
         for (const [i, j] of VE_E) {
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
-          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability));
-          pctx.shadowBlur   = 4 + zf * 9 + ex * 14 + elecAmp * 8 * stability;
-          pctx.shadowColor  = '#40ccff';
-          pctx.strokeStyle  = '#b8eeff';
-          pctx.lineWidth    = 0.5 + zf * 0.6 + elecAmp * 0.8;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability));
+          pctx.lineWidth   = 0.5 + zf * 0.6 + elecAmp * 0.8;
           pctx.beginPath();
           pctx.moveTo(a.px, a.py);
           pctx.lineTo(b.px, b.py);
           pctx.stroke();
         }
 
-        // Radial spokes — 50% dimmer, also jitter
+        // Radial spokes — one shadowBlur for the whole pass
+        pctx.shadowBlur  = 4 + ex * 8 + elecAmp * 4 * stability;
+        pctx.shadowColor = '#40ccff';
+        pctx.strokeStyle = '#b8eeff';
         for (const { px, py, z } of proj) {
           const zf = 0.35 + 0.65 * (1 - z) * 0.5;
-          pctx.globalAlpha  = Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability));
-          pctx.shadowBlur   = 2 + zf * 4 + ex * 8 + elecAmp * 4 * stability;
-          pctx.shadowColor  = '#40ccff';
-          pctx.strokeStyle  = '#b8eeff';
-          pctx.lineWidth    = 0.3 + zf * 0.28 + elecAmp * 0.35;
+          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability));
+          pctx.lineWidth   = 0.3 + zf * 0.28 + elecAmp * 0.35;
           pctx.beginPath();
           pctx.moveTo(px, py);
           pctx.lineTo(ve.x, ve.y);
@@ -737,13 +738,13 @@
         pctx.fill();
         pctx.shadowBlur = 0;
 
-        // Vertices — bright dots with depth fade
+        // Vertices — one shadowBlur for the whole pass
+        pctx.shadowBlur  = 11 + ex * 10;
+        pctx.shadowColor = '#70e0ff';
+        pctx.fillStyle   = '#e0f8ff';
         for (const { px, py, z } of proj) {
           const zf = 0.4 + 0.6 * (1 - z) * 0.5;
           pctx.globalAlpha = Math.min(1, ve.alpha * zf);
-          pctx.shadowBlur  = 11 + ex * 10;
-          pctx.shadowColor = '#70e0ff';
-          pctx.fillStyle   = '#e0f8ff';
           pctx.beginPath();
           pctx.arc(px, py, 1.1 + zf * 1.1, 0, Math.PI * 2);
           pctx.fill();
@@ -770,6 +771,11 @@
         updateParticles(dt);
         updateAppParticles(dt);
         updateTitle(dt);
+        // Rebuild hot-particle list once per frame (avoids O(N²) in lightAt)
+        hotParticles.length = 0;
+        for (const p of particles) {
+          if (p.heat >= 0.3 && p.r >= 0.05) hotParticles.push(p);
+        }
         drawParticles(now);
         drawAppParticles(now);
         drawVE();
