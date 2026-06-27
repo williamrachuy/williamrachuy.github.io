@@ -103,7 +103,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.11 · b25e84f';
+      const VERSION = '20260627.12 · be09fc8';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -636,7 +636,7 @@
             // Inside VE: orb momentum converts to VE axial torque; orb slows proportionally
             const innerR = ve.scale * 0.80;
             if (d < innerR) {
-              const xfer = 0.0008 * dt;
+              const xfer = 0.00016 * dt;
               // z-torque: orbital (cross product in screen plane — zero at center, max at rim)
               ve.ωz += ((dx / innerR) * ap.vy - (dy / innerR) * ap.vx) * xfer;
               // x/y torques: translational — rightward motion tumbles around y, upward around x
