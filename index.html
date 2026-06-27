@@ -78,9 +78,21 @@
       0%, 100% { transform: scale(0.95); }
       50%       { transform: scale(1.05); }
     }
+  #ver-stamp {
+    position: fixed;
+    bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    right: 12px;
+    font: 11px/1 monospace;
+    color: rgba(170,200,216,0.38);
+    pointer-events: none;
+    z-index: 9999;
+    user-select: none;
+    white-space: nowrap;
+  }
   </style>
 </head>
 <body>
+  <div id="ver-stamp"></div>
   <main id="stage" aria-label="Interactive Adividiardi landing page">
     <canvas id="particles"></canvas>
     <div id="veil"></div>
@@ -90,7 +102,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260626.5 - e3db32e';
+      const VERSION = '20260626.10 · e8be4e8';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -793,14 +805,6 @@
         drawParticles(now);
         drawAppParticles(now);
         drawVE();
-        // Version stamp — bottom-right, small and dim
-        pctx.save();
-        pctx.globalAlpha = 0.22;
-        pctx.fillStyle   = '#aac8d8';
-        pctx.font        = '10px monospace';
-        pctx.textAlign   = 'right';
-        pctx.fillText(VERSION, particlesCanvas.width - 8, particlesCanvas.height - 8);
-        pctx.restore();
         requestAnimationFrame(frame);
       }
 
@@ -844,6 +848,7 @@
         }
       });
 
+      document.getElementById('ver-stamp').textContent = VERSION;
       resize();
       seedAppParticles();
       requestAnimationFrame(frame);
