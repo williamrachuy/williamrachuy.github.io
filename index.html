@@ -140,7 +140,7 @@
         cvx: 0, cvy: 0,
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
-        scale: 52, brightness: 0.55, alpha: 0, active: false
+        scale: 52, brightness: 0.55, presence: 0, alpha: 0, scaleCurrent: 0, active: false
       };
 
       // ─── Canvas sizing ──────────────────────────────────────────────────────
@@ -394,7 +394,7 @@
         // Vector equilibrium emits light proportional to scale and brightness
         if (ve.alpha > 0.01) {
           const d = dist(x, y, ve.x, ve.y);
-          const veR = ve.scale * 2.2;
+          const veR = ve.scaleCurrent * 2.2;
           if (d < veR) total += (1 - d / veR) * ve.brightness * ve.alpha;
         }
         return clamp(total, 0, 1);
@@ -426,9 +426,8 @@
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; }
           ve.targetX = tx; ve.targetY = ty;
           ve.active = true;
-        } else {
-          ve.targetX = tx; ve.targetY = ty; // track position even when inactive
         }
+        // No position tracking when inactive — VE stays frozen at last click position
         const existing = lights.find(l => l.kind === 'pointer');
         if (existing) {
           existing.targetX = tx; existing.targetY = ty;
@@ -589,13 +588,15 @@
         ve.prevTX = ve.targetX;
         ve.prevTY = ve.targetY;
 
-        // Velocity → continuous drag torque (proportional to cursor speed)
-        ve.ωy += rawVx * 0.000004;
-        ve.ωx += rawVy * 0.000004;
-        // Acceleration → impulse torque (visible on flicks and direction changes)
-        ve.ωy += ax * 0.00020;
-        ve.ωx += ay * 0.00020;
-        ve.ωz += (ax - ay) * 0.00008; // differential accel → Z axis spin
+        // Rolling-ball torque: direction of motion determines spin axis (cross product with Z).
+        // Moving right → Y rotation; moving down → X rotation; diagonal → both.
+        ve.ωy += rawVx * 0.000030;
+        ve.ωx += rawVy * 0.000030;
+        ve.ωz += rawVx * rawVy * 0.000008; // diagonal curl → Z twist
+        // Acceleration impulse: sharp direction changes add strong torque burst
+        ve.ωy += ax * 0.00050;
+        ve.ωx += ay * 0.00050;
+        ve.ωz += (ax * ay) * 0.00010;
 
         // Viscous fluid drag — proportional damping, decays to zero when cursor stops
         const ωMax = 0.003;
@@ -608,19 +609,23 @@
         ve.θy += ve.ωy * dt;
         ve.θz += ve.ωz * dt;
 
-        // Rubber-band position (lags slightly behind light source)
-        const lag = 1 - Math.exp(-dt * 0.011);
-        ve.x += (ve.targetX - ve.x) * lag;
-        ve.y += (ve.targetY - ve.y) * lag;
+        // Rubber-band position (only when active; frozen at last click when released)
+        if (ve.active) {
+          const lag = 1 - Math.exp(-dt * 0.011);
+          ve.x += (ve.targetX - ve.x) * lag;
+          ve.y += (ve.targetY - ve.y) * lag;
+        }
 
-        // Fade in/out
-        const tA = ve.active ? 0.88 : 0;
-        ve.alpha += (tA - ve.alpha) * clamp(dt * 0.0025, 0, 1);
+        // Presence [0→1] drives both alpha and scale together
+        const tP = ve.active ? 1 : 0;
+        ve.presence    += (tP - ve.presence) * clamp(dt * 0.005, 0, 1);
+        ve.alpha        = ve.presence * 0.88;
+        ve.scaleCurrent = ve.scale * ve.presence;
       }
 
       function drawVE() {
-        if (ve.alpha < 0.01) return;
-        const focal = 280, S = ve.scale;
+        if (ve.presence < 0.01) return;
+        const focal = 280, S = ve.scaleCurrent;
         // Precompute trig
         const cx = Math.cos(ve.θx), sx = Math.sin(ve.θx);
         const cy = Math.cos(ve.θy), sy = Math.sin(ve.θy);
