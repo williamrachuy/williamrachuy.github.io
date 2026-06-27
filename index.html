@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.28 · a267df6';
+      const VERSION = '20260627.29 · a65e8d0';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -301,6 +301,7 @@
             r:    r0,  // current 3D radius (drives mass + visual size)
             r0:   r0,  // max radius (recovery ceiling)
             heat: 0,   // 0=cold, 1=fully ablating
+            thermalInput: 0, // force/arc energy deposited this frame
             mass: r0 * r0 * r0,
             drag: Math.max(0.90, 1 - 0.0003 / (r0 * r0) - 0.0006 / r0),
             vs:   Math.max(1, r0 * 2) // visual size (px), kept in sync each frame
@@ -317,6 +318,12 @@
         return `rgb(${r},${g},${b})`;
       }
 
+      function applyThermalResponse(p, thermalInput, dt) {
+        const heatTarget = clamp(thermalInput, 0, 1);
+        const heatRate = heatTarget > p.heat ? 0.006 : 0.0015;
+        p.heat += (heatTarget - p.heat) * clamp(dt * heatRate, 0, 1);
+      }
+
       function updateParticles(dt) {
         const w = stage.clientWidth, h = stage.clientHeight;
         // dr/dt = (net dm/dt) / (3r²), m ∝ r³, uniform density
@@ -326,25 +333,21 @@
         for (const p of particles) {
           p.tw += dt * 0.00045;
 
-          // Heat from lights
-          let maxHeat = 0;
+          // All heating sources deposit energy into one material model. Lights
+          // are substrate disturbances: proximity alone is not temperature;
+          // only the force they actually exert contributes frictional heat.
+          let thermalInput = p.thermalInput || 0;
+          p.thermalInput = 0;
           for (const l of lights) {
             const dx = p.x - l.x, dy = p.y - l.y;
             const d    = Math.hypot(dx, dy) || 1;
             const prox = Math.max(0, 1 - d / 140);
-            const heat = Math.pow(prox, 1.8) * l.strength;
-            maxHeat    = Math.max(maxHeat, heat);
+            const force = Math.pow(prox, 1.8) * l.strength;
             if (p.mass > 0.01) {
-              p.vx += (dx / d) * heat * 0.057 / p.mass;
-              p.vy += (dy / d) * heat * 0.057 / p.mass;
+              p.vx += (dx / d) * force * 0.057 / p.mass;
+              p.vy += (dy / d) * force * 0.057 / p.mass;
+              thermalInput = Math.max(thermalInput, force);
             }
-          }
-          p.heat += (maxHeat - p.heat) * clamp(dt * 0.004, 0, 1);
-
-          // Evaporated particles: only track heat + regrowth seed; skip physics
-          if (p.r <= 0) {
-            p.r = (p.heat < 0.1) ? 0.001 : 0;
-            continue;
           }
 
           // App-particle pressure
@@ -354,10 +357,22 @@
             const apr = Math.max(0, 1 - ad / (ap.r0 * 6));
             if (apr > 0 && p.mass > 0.01) {
               const pressure = ap.audio && ap.playing ? 1.30 : 1;
-              const ainf = apr * apr * 0.0012 * pressure / p.mass;
+              const forceLoad = apr * apr * pressure;
+              const ainf = forceLoad * 0.0012 / p.mass;
               p.vx += (adx / ad) * ainf;
               p.vy += (ady / ad) * ainf;
+              thermalInput = Math.max(thermalInput, forceLoad);
             }
+          }
+
+          // Shared thermal response: force and arc energy heat identically;
+          // absence of either cools the material back toward ambient.
+          applyThermalResponse(p, thermalInput, dt);
+
+          // Evaporated particles cool before they can nucleate and regrow.
+          if (p.r <= 0) {
+            p.r = (p.heat < 0.1) ? 0.001 : 0;
+            continue;
           }
 
           // Ablation / regrowth ODE; denominator clamped to avoid 1/r² singularity at r→0
@@ -392,17 +407,18 @@
           if (p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
           const alpha  = (p.alpha * 0.59) + local * (0.32 + pulse * 0.18);
-          const color  = heatColor(local);
+          const color  = heatColor(p.heat);
+          const emission = Math.max(local, p.heat);
           const speed  = Math.hypot(p.vx, p.vy);
 
           // Comet tail — only when moving + lit; no shadowBlur on trail segments (perf)
-          if (local > 0.04 && speed > 0.002 && p.trail.length > 1) {
+          if (emission > 0.04 && speed > 0.002 && p.trail.length > 1) {
             pctx.shadowBlur = 0;
             const tailLen = p.trail.length;
             for (let t = 0; t < tailLen; t++) {
               const frac   = (t + 1) / tailLen;
               const evap   = Math.pow(1 - frac, 1.6);
-              const tAlpha = alpha * evap * local * 0.55;
+              const tAlpha = alpha * evap * emission * 0.55;
               if (tAlpha < 0.005) break;
               pctx.globalAlpha = tAlpha;
               pctx.fillStyle   = color;
@@ -411,9 +427,9 @@
           }
 
           // Particle head — glow only on particles with significant illumination (perf)
-          const heatSq = local * local;
-          pctx.globalAlpha = alpha;
-          pctx.shadowBlur  = local > 0.35 ? (2 + heatSq * 18) : 0;
+          const heatSq = emission * emission;
+          pctx.globalAlpha = Math.min(1, alpha + p.heat * 0.22);
+          pctx.shadowBlur  = emission > 0.35 ? (2 + heatSq * 18) : 0;
           pctx.shadowColor = color;
           pctx.fillStyle   = color;
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
@@ -1477,7 +1493,8 @@
           }
         }
 
-        // Traversal arcs charge the particles they connect — heat up, brighten, and evaporate
+        // Traversal arcs deposit edge energy into the same thermal accumulator
+        // used by substrate friction. Cooling and ablation happen in updateParticles.
         if (volta.state === 'traversing') {
           for (const arc of volta.arcs) {
             if (arc.veNode) continue;
@@ -1485,9 +1502,9 @@
             const vitality = Math.sin(age * Math.PI);
             const d = Math.hypot(arc.a.x - arc.b.x, arc.a.y - arc.b.y);
             const arcEnergy = Math.max(0, 1 - d / VOLTA_ARC_DIST); // shorter = more energetic
-            const heatAdd = 0.004 * vitality * arcEnergy * dt;
-            if (arc.a.heat !== undefined) arc.a.heat = Math.min(0.92, arc.a.heat + heatAdd);
-            if (arc.b.heat !== undefined) arc.b.heat = Math.min(0.92, arc.b.heat + heatAdd);
+            const transfer = clamp(vitality * arcEnergy * (arc.strength || 1), 0, 1);
+            if (arc.a.thermalInput !== undefined) arc.a.thermalInput = Math.max(arc.a.thermalInput, transfer);
+            if (arc.b.thermalInput !== undefined) arc.b.thermalInput = Math.max(arc.b.thermalInput, transfer);
           }
         }
       }
