@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.4 · 2d0f139';
+      const VERSION = '20260628.5 · 46605db';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -1552,14 +1552,14 @@
             volta.cy += ((sy / cnt) - volta.cy) * clamp(dt * 0.014, 0, 1);
           }
           // Still drift toward VE so the arc body eventually reaches it
-          const tx = (ve.active && ve.scaleCurrent > 5) ? ve.x : w * 0.5;
-          const ty = (ve.active && ve.scaleCurrent > 5) ? ve.y : h * 0.5;
+          const tx = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
+          const ty = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
           const ddx = tx - volta.cx, ddy = ty - volta.cy;
           const dd  = Math.hypot(ddx, ddy) || 1;
           volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           // Check infection trigger: creature reaches VE — burst of attack arcs at the moment of contact
-          if (ve.active && ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
+          if (ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
             // Stinger burst: connect every arc endpoint to nearest VE vertex
             if (ve.vertNodes) {
@@ -1666,8 +1666,8 @@
         }
 
         // Traversal: organic arc search toward VE
-        const veX = (ve.active && ve.scaleCurrent > 5) ? ve.x : w * 0.5;
-        const veY = (ve.active && ve.scaleCurrent > 5) ? ve.y : h * 0.5;
+        const veX = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
+        const veY = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
 
         // Volta's forward direction (toward VE)
@@ -1755,7 +1755,7 @@
         }
 
         // Attack arcs: when Volta is close enough to VE, bridge from constellation to VE vertices
-        if (ve.active && ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
+        if (ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
           const distToVE = Math.hypot(volta.cx - ve.x, volta.cy - ve.y);
           const attackRange = ve.scaleCurrent * 5.0 + VOLTA_ARC_DIST;
           if (distToVE < attackRange && volta.arcs.length > 0) {
