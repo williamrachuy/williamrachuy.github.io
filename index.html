@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.2 · cb23d1e';
+      const VERSION = '20260628.3 · d4e5721';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -113,7 +113,8 @@
       const appParticles     = []; // living particles — one per sub-page, immune to ablation
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
-      const catOrbImg = new Image(); catOrbImg.src = 'catorb.png';
+      const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
+      const catMeowAudio = new Audio('meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
       let catCursorY    = -9999;
@@ -724,6 +725,7 @@
           scaredPhase: 0,
           leanSign: 1,                     // which way to tilt when curious
           attackCooldown: 0,               // ms before cat may attack again
+          meowIn: 20000 + Math.random() * 40000, // first meow delay: 20–60s
         };
       }
 
@@ -940,6 +942,21 @@
         // Smooth scale
         c.sca += (c.scaTarget - c.sca) * clamp(dt * 0.008, 0, 0.45);
         c.sca  = clamp(c.sca, 0.82, 1.40);
+
+        // Meow — bell-curve interval, 30–120s, more likely near cursor (pet_seek)
+        c.meowIn -= dt;
+        if (c.meowIn <= 0) {
+          // Volume: louder when seeking pets, quieter when scared
+          catMeowAudio.volume = c.mood === 'pet_seek' ? 0.90
+                              : c.mood === 'scared'   ? 0.35
+                              : c.mood === 'attack'   ? 0.70
+                              : 0.60;
+          catMeowAudio.currentTime = 0;
+          catMeowAudio.play().catch(() => {});
+          // Next interval: bell curve via average of 3 uniforms → ~Gaussian on [30s, 120s]
+          const bell = (Math.random() + Math.random() + Math.random()) / 3;
+          c.meowIn = 30000 + bell * 90000;
+        }
       }
 
       // ────────────────────────────────────────────────────────────────────────
