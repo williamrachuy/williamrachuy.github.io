@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.5 · 46605db';
+      const VERSION = '20260628.6 · afa6239';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -647,7 +647,7 @@
           // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (!ap.audio && ve.active && ve.scaleCurrent > 5 && !ve.liberated) {
+          if (!ap.audio && ve.scaleCurrent > 5 && !ve.liberated) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 60 * accelBoost / (d * 0.04 + 1);
