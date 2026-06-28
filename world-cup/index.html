@@ -256,14 +256,17 @@
     .group-table tr:last-child td { border-bottom: none; }
     .knockout-grid {
       display: grid;
-      grid-template-columns: repeat(6, minmax(230px, 1fr));
-      gap: 14px;
+      grid-template-columns: repeat(5, minmax(260px, 1fr));
+      gap: 20px;
       overflow-x: auto;
-      padding-bottom: 4px;
+      padding: 8px 4px 14px;
+      align-items: start;
     }
     .round-column {
       align-content: start;
-      min-width: 230px;
+      min-width: 260px;
+      display: grid;
+      position: relative;
     }
     .round-title {
       position: sticky;
@@ -274,6 +277,88 @@
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 12px;
       font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .round-matches {
+      display: grid;
+      gap: 14px;
+    }
+    .round-column[data-round="r32"] .round-matches { margin-top: 0; gap: 12px; }
+    .round-column[data-round="r16"] .round-matches { margin-top: 52px; gap: 46px; }
+    .round-column[data-round="qf"] .round-matches { margin-top: 126px; gap: 120px; }
+    .round-column[data-round="sf"] .round-matches { margin-top: 264px; gap: 268px; }
+    .round-column[data-round="final"] .round-matches { margin-top: 404px; gap: 12px; }
+    .bracket-card {
+      position: relative;
+      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.028));
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 18px;
+      padding: 14px;
+      min-height: 158px;
+      box-shadow: 0 14px 32px rgba(0,0,0,0.24);
+    }
+    .round-column:not([data-round="final"]) .bracket-card::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      right: -20px;
+      width: 20px;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(120,227,255,0.55), rgba(120,227,255,0.18));
+      transform: translateY(-50%);
+    }
+    .bracket-match-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .bracket-meta {
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.45;
+    }
+    .bracket-team-list {
+      display: grid;
+      gap: 8px;
+    }
+    .bracket-team {
+      display: grid;
+      grid-template-columns: 22px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.05);
+    }
+    .bracket-team.winner {
+      border-color: rgba(115,240,169,0.35);
+      background: rgba(115,240,169,0.08);
+    }
+    .bracket-team-name {
+      font-weight: 650;
+      line-height: 1.2;
+    }
+    .bracket-score {
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+    }
+    .bracket-stats {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+    .third-place-wrap {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      max-width: 420px;
     }
     .match-meta, .meta-line {
       color: var(--muted);
@@ -351,13 +436,16 @@
     @media (max-width: 1180px) {
       .hero, .top-grid, .team-grid { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .knockout-grid { grid-template-columns: repeat(3, minmax(230px, 1fr)); }
+      .knockout-grid { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
+      .round-column[data-round] .round-matches { margin-top: 0; gap: 14px; }
+      .round-column .bracket-card::after { display: none; }
     }
     @media (max-width: 760px) {
       body { padding: 14px; }
       .hero, .panel { padding: 16px; }
       .stats-grid, .record-grid, .knockout-grid { grid-template-columns: 1fr; }
       .timeline-item { grid-template-columns: 1fr; gap: 4px; }
+      .bracket-team { grid-template-columns: 22px 1fr auto; }
     }
   </style>
 </head>
@@ -419,6 +507,7 @@
         </div>
       </div>
       <div class="knockout-grid" id="knockout-grid"></div>
+      <div class="third-place-wrap" id="third-place-wrap"></div>
     </section>
 
     <section class="panel">
@@ -468,7 +557,7 @@
     (() => {
       const DATA_BASE = 'https://worldcup26.ir/get';
       const REFRESH_MS = 5 * 60 * 1000;
-      const ROUND_ORDER = ['r32', 'r16', 'qf', 'sf', 'third', 'final'];
+      const ROUND_ORDER = ['r32', 'r16', 'qf', 'sf', 'final'];
       const ROUND_LABELS = {
         r32: 'Round of 32',
         r16: 'Round of 16',
@@ -490,6 +579,7 @@
       const feedList = document.getElementById('feed-list');
       const snapshotList = document.getElementById('snapshot-list');
       const knockoutGrid = document.getElementById('knockout-grid');
+      const thirdPlaceWrap = document.getElementById('third-place-wrap');
       const groupGrid = document.getElementById('group-grid');
       const teamSelect = document.getElementById('team-select');
       const teamSummary = document.getElementById('team-summary');
@@ -572,6 +662,14 @@
         return team?.flag || '';
       }
 
+      function getWinnerName(game) {
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        if (normalizeStatus(game) !== 'final') return 'Not finished';
+        if (Number(game.home_score) === Number(game.away_score)) return 'Draw';
+        return Number(game.home_score) > Number(game.away_score) ? `${homeName} won` : `${awayName} won`;
+      }
+
       function matchCard(game, compact = false) {
         const status = normalizeStatus(game);
         const stadium = stadiumMap().get(String(game.stadium_id || ''));
@@ -584,13 +682,38 @@
         const scorerParts = [];
         if (homeScorers.length) scorerParts.push(`${homeName}: ${homeScorers.join(', ')}`);
         if (awayScorers.length) scorerParts.push(`${awayName}: ${awayScorers.join(', ')}`);
-        const winner = status === 'final'
-          ? Number(game.home_score) === Number(game.away_score)
-            ? 'Draw'
-            : Number(game.home_score) > Number(game.away_score) ? `${homeName} won` : `${awayName} won`
-          : 'Not finished';
+        const winner = getWinnerName(game);
+        if (compact) {
+          const homeWon = status === 'final' && Number(game.home_score) > Number(game.away_score);
+          const awayWon = status === 'final' && Number(game.away_score) > Number(game.home_score);
+          return `
+            <article class="bracket-card">
+              <div class="bracket-match-head">
+                <span class="status-pill status-${status}">${escapeHtml(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
+                <span class="bracket-meta">${escapeHtml(`Match ${game.id}`)}</span>
+              </div>
+              <div class="bracket-meta">${escapeHtml(formatDate(game.local_date))}</div>
+              <div class="bracket-team-list" style="margin-top:10px;">
+                <div class="bracket-team ${homeWon ? 'winner' : ''}">
+                  ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : '<span></span>'}
+                  <div class="bracket-team-name">${escapeHtml(homeName)}</div>
+                  <div class="bracket-score">${escapeHtml(Number(game.home_score || 0))}</div>
+                </div>
+                <div class="bracket-team ${awayWon ? 'winner' : ''}">
+                  ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : '<span></span>'}
+                  <div class="bracket-team-name">${escapeHtml(awayName)}</div>
+                  <div class="bracket-score">${escapeHtml(Number(game.away_score || 0))}</div>
+                </div>
+              </div>
+              <div class="bracket-stats">
+                <div>${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)}${stadium?.name_en ? ` · ${escapeHtml(stadium.name_en)}` : ''}</div>
+                <div>${escapeHtml(winner)}</div>
+                ${scorerParts.length ? `<div>${escapeHtml(scorerParts.join(' | '))}</div>` : ''}
+              </div>
+            </article>`;
+        }
         return `
-          <article class="${compact ? 'match-card' : 'feed-card'}">
+          <article class="feed-card">
             <div class="feed-row">
               <span class="status-pill status-${status}">${escapeHtml(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
               <span class="meta-line">${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)}</span>
@@ -683,11 +806,17 @@
         knockoutGrid.innerHTML = ROUND_ORDER.map(round => {
           const games = sorted.filter(game => game.type === round);
           return `
-            <div class="round-column">
+            <div class="round-column" data-round="${escapeHtml(round)}">
               <div class="round-title">${escapeHtml(ROUND_LABELS[round])}</div>
-              ${games.length ? games.map(game => matchCard(game, true)).join('') : '<div class="match-card">No fixtures yet.</div>'}
+              <div class="round-matches">
+                ${games.length ? games.map(game => matchCard(game, true)).join('') : '<div class="bracket-card">No fixtures yet.</div>'}
+              </div>
             </div>`;
         }).join('');
+        const thirdPlaceGame = sorted.find(game => game.type === 'third');
+        thirdPlaceWrap.innerHTML = thirdPlaceGame
+          ? `<div><div class="round-title">Third place playoff</div>${matchCard(thirdPlaceGame, true)}</div>`
+          : '';
       }
 
       function renderGroups() {
