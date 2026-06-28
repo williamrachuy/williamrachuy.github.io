@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.6 · afa6239';
+      const VERSION = '20260628.7 · a92c000';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -982,13 +982,8 @@
             const r15 = rDraw * 1.5; // 150% base size
             // Mood-tinted glow color
             const mood = cc ? cc.mood : 'idle';
-            const glowColor = mood === 'scared'   ? '#ff5533'
-                            : mood === 'attack'   ? '#ff8822'
-                            : mood === 'pet_seek' ? '#ffdd88'
-                            : mood === 'curious'  ? '#88ddff'
-                            : mood === 'sprint'   ? '#ffffff'
-                            : '#ccaaff';
-            const glow = Math.max(0, (1 + t * 3 + local * 5) * (mood === 'scared' ? 1.6 : mood === 'sprint' ? 1.4 : 1.0));
+            const glowColor = (mood === 'scared' || mood === 'attack') ? '#ff5533' : '#ffffff';
+            const glow = Math.max(0, (1 + t * 3 + local * 5) * (mood === 'scared' || mood === 'attack' ? 1.6 : 1.0));
             pctx.save();
             pctx.translate(drawX, drawY);
             pctx.rotate(rot);
