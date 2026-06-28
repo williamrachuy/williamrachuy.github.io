@@ -186,7 +186,7 @@
       background: rgba(255,255,255,0.04);
       border: 1px solid rgba(255,255,255,0.08);
     }
-    .feed-list, .group-grid, .schedule-list, .match-list, .round-column {
+    .feed-list, .group-grid, .schedule-list, .match-list {
       display: grid;
       gap: 12px;
     }
@@ -213,7 +213,7 @@
       letter-spacing: 0.08em;
       border: 1px solid rgba(255,255,255,0.1);
     }
-    .status-live { color: var(--warn); background: rgba(255, 212, 121, 0.10); }
+    .status-live { color: var(--warn); background: rgba(255, 212, 121, 0.10); border-color: rgba(255, 212, 121, 0.25); }
     .status-upcoming { color: var(--accent); background: rgba(120, 227, 255, 0.10); }
     .status-final { color: var(--ok); background: rgba(115, 240, 169, 0.10); }
     .teams-line {
@@ -236,6 +236,15 @@
       box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
       background: rgba(255,255,255,0.08);
     }
+    .flag-lg {
+      width: 30px;
+      height: 22px;
+      object-fit: cover;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.08);
+      flex-shrink: 0;
+    }
     .group-grid {
       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     }
@@ -254,112 +263,6 @@
     .group-table th:first-child,
     .group-table td:first-child { text-align: left; }
     .group-table tr:last-child td { border-bottom: none; }
-    .knockout-grid {
-      display: grid;
-      grid-template-columns: repeat(5, minmax(260px, 1fr));
-      gap: 20px;
-      overflow-x: auto;
-      padding: 8px 4px 14px;
-      align-items: start;
-    }
-    .round-column {
-      align-content: start;
-      min-width: 260px;
-      display: grid;
-      position: relative;
-    }
-    .round-title {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      padding: 10px 12px;
-      background: rgba(8, 19, 35, 0.96);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }
-    .round-matches {
-      display: grid;
-      gap: 14px;
-    }
-    .round-column[data-round="r32"] .round-matches { margin-top: 0; gap: 12px; }
-    .round-column[data-round="r16"] .round-matches { margin-top: 52px; gap: 46px; }
-    .round-column[data-round="qf"] .round-matches { margin-top: 126px; gap: 120px; }
-    .round-column[data-round="sf"] .round-matches { margin-top: 264px; gap: 268px; }
-    .round-column[data-round="final"] .round-matches { margin-top: 404px; gap: 12px; }
-    .bracket-card {
-      position: relative;
-      background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.028));
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 18px;
-      padding: 14px;
-      min-height: 158px;
-      box-shadow: 0 14px 32px rgba(0,0,0,0.24);
-    }
-    .round-column:not([data-round="final"]) .bracket-card::after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -20px;
-      width: 20px;
-      height: 2px;
-      background: linear-gradient(90deg, rgba(120,227,255,0.55), rgba(120,227,255,0.18));
-      transform: translateY(-50%);
-    }
-    .bracket-match-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .bracket-meta {
-      color: var(--muted);
-      font-size: 0.78rem;
-      line-height: 1.45;
-    }
-    .bracket-team-list {
-      display: grid;
-      gap: 8px;
-    }
-    .bracket-team {
-      display: grid;
-      grid-template-columns: 22px 1fr auto;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      background: rgba(255,255,255,0.035);
-      border: 1px solid rgba(255,255,255,0.05);
-    }
-    .bracket-team.winner {
-      border-color: rgba(115,240,169,0.35);
-      background: rgba(115,240,169,0.08);
-    }
-    .bracket-team-name {
-      font-weight: 650;
-      line-height: 1.2;
-    }
-    .bracket-score {
-      font-size: 1.15rem;
-      font-weight: 800;
-      letter-spacing: -0.03em;
-    }
-    .bracket-stats {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.5;
-    }
-    .third-place-wrap {
-      margin-top: 18px;
-      display: grid;
-      grid-template-columns: minmax(0, 1fr);
-      max-width: 420px;
-    }
     .match-meta, .meta-line {
       color: var(--muted);
       font-size: 0.84rem;
@@ -433,19 +336,412 @@
       line-height: 1.5;
     }
     .hidden { display: none !important; }
+
+    /* ── Bracket ── */
+    .bracket-panel { overflow: visible; }
+    .bracket-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    .bracket-toggle-group {
+      display: flex;
+      gap: 0;
+      border: 1px solid rgba(120,227,255,0.25);
+      border-radius: 999px;
+      overflow: hidden;
+      background: rgba(255,255,255,0.04);
+    }
+    .bracket-toggle {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      padding: 9px 18px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .bracket-toggle.active {
+      background: rgba(120,227,255,0.16);
+      color: var(--accent);
+    }
+    .bracket-toggle:hover:not(.active) {
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+    }
+    .bracket-hint {
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    /* Full tree */
+    .bracket-tree-outer {
+      overflow: auto;
+      max-height: 680px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,0,0,0.18);
+      position: relative;
+      cursor: grab;
+      user-select: none;
+    }
+    .bracket-tree-outer:active { cursor: grabbing; }
+    .bracket-tree-inner {
+      position: relative;
+      display: inline-flex;
+      flex-direction: row;
+      align-items: flex-start;
+      padding: 24px 32px 32px 24px;
+      min-width: max-content;
+    }
+    .bracket-round-col {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex-shrink: 0;
+      width: 200px;
+    }
+    .bracket-col-header {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: rgba(7,17,31,0.92);
+      border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 12px;
+      text-align: center;
+      backdrop-filter: blur(8px);
+    }
+    .bracket-col-spacer { width: 40px; flex-shrink: 0; }
+    .bracket-cards-col {
+      display: flex;
+      flex-direction: column;
+      width: 200px;
+      position: relative;
+    }
+    .bracket-slot {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .bcard {
+      width: 200px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 14px;
+      padding: 10px 11px;
+      cursor: pointer;
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.14s;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .bcard:hover {
+      border-color: rgba(120,227,255,0.4);
+      box-shadow: 0 0 0 1px rgba(120,227,255,0.15), 0 8px 24px rgba(0,0,0,0.3);
+      transform: translateY(-1px);
+    }
+    .bcard.focused-card {
+      border-color: rgba(120,227,255,0.6);
+      box-shadow: 0 0 0 2px rgba(120,227,255,0.2), 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .bcard-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .bcard-round {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+    }
+    .bcard-team {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 6px 8px;
+      border-radius: 9px;
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.05);
+      margin-bottom: 5px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .bcard-team:last-child { margin-bottom: 0; }
+    .bcard-team.winner {
+      background: rgba(115,240,169,0.09);
+      border-color: rgba(115,240,169,0.28);
+    }
+    .bcard-team-name {
+      flex: 1;
+      font-size: 0.85rem;
+      font-weight: 600;
+      line-height: 1.2;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bcard-score {
+      font-size: 1rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      min-width: 18px;
+      text-align: right;
+    }
+    .bcard-footer {
+      margin-top: 7px;
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.4;
+      border-top: 1px solid rgba(255,255,255,0.07);
+      padding-top: 6px;
+    }
+    .bcard-tbd .bcard-team-name { color: var(--muted); font-weight: 400; font-style: italic; }
+
+    /* SVG connector overlay */
+    .bracket-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    /* Focus / Navigate mode */
+    .bracket-focus {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 8px 0 4px;
+    }
+    .focus-nav-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 520px;
+    }
+    .focus-nav-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 18px;
+      font: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+    .focus-nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .focus-nav-btn:disabled { opacity: 0.3; cursor: default; }
+    .focus-position {
+      flex: 1;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .focus-round-select {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .focus-round-btn {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font: inherit;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .focus-round-btn.active {
+      background: rgba(120,227,255,0.14);
+      color: var(--accent);
+      border-color: rgba(120,227,255,0.35);
+    }
+    .focus-feeders {
+      display: flex;
+      gap: 14px;
+      align-items: stretch;
+      justify-content: center;
+      width: 100%;
+      max-width: 520px;
+    }
+    .focus-feeder-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .focus-feeder-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--muted);
+    }
+    .focus-arrow-down {
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .focus-main-wrap {
+      width: 100%;
+      max-width: 380px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+    .focus-main-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--accent);
+    }
+    .focus-dest-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+    .focus-dest-btn {
+      appearance: none;
+      border: 1px solid rgba(120,227,255,0.25);
+      background: rgba(120,227,255,0.07);
+      color: var(--accent);
+      border-radius: 12px;
+      padding: 8px 20px;
+      font: inherit;
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .focus-dest-btn:hover { background: rgba(120,227,255,0.14); }
+
+    /* Focus card (bigger) */
+    .fcard {
+      width: 100%;
+      background: linear-gradient(145deg, rgba(255,255,255,0.065), rgba(255,255,255,0.03));
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 18px;
+      padding: 16px;
+      box-shadow: 0 12px 36px rgba(0,0,0,0.35);
+    }
+    .fcard-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .fcard-team {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      margin-bottom: 8px;
+    }
+    .fcard-team:last-of-type { margin-bottom: 0; }
+    .fcard-team.winner {
+      background: rgba(115,240,169,0.1);
+      border-color: rgba(115,240,169,0.3);
+    }
+    .fcard-team-name {
+      flex: 1;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+    .fcard-score {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      min-width: 24px;
+      text-align: right;
+    }
+    .fcard-footer {
+      margin-top: 12px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.6;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding-top: 10px;
+    }
+    .fcard-scorers {
+      margin-top: 6px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+
+    /* Feeder card (smaller) */
+    .scard {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 10px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .scard:hover {
+      border-color: rgba(120,227,255,0.35);
+      background: rgba(120,227,255,0.05);
+    }
+    .scard-team {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+    .scard-team.winner { color: var(--ok); }
+    .scard-score {
+      font-size: 0.9rem;
+      font-weight: 800;
+      min-width: 16px;
+      text-align: right;
+    }
+    .scard-meta {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 6px;
+      border-top: 1px solid rgba(255,255,255,0.06);
+      padding-top: 5px;
+    }
+
     @media (max-width: 1180px) {
       .hero, .top-grid, .team-grid { grid-template-columns: 1fr; }
       .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .knockout-grid { grid-template-columns: repeat(3, minmax(260px, 1fr)); }
-      .round-column[data-round] .round-matches { margin-top: 0; gap: 14px; }
-      .round-column .bracket-card::after { display: none; }
     }
     @media (max-width: 760px) {
       body { padding: 14px; }
       .hero, .panel { padding: 16px; }
-      .stats-grid, .record-grid, .knockout-grid { grid-template-columns: 1fr; }
+      .stats-grid, .record-grid { grid-template-columns: 1fr; }
       .timeline-item { grid-template-columns: 1fr; gap: 4px; }
-      .bracket-team { grid-template-columns: 22px 1fr auto; }
+      .focus-feeders { flex-direction: column; }
+      .focus-feeder-wrap { flex-direction: row; align-items: flex-start; }
     }
   </style>
 </head>
@@ -457,7 +753,7 @@
         <h1 class="headline">Bracket, standings, schedules, and who gets hurt next.</h1>
         <p class="subhead">
           This page pulls live tournament data directly into the browser, keeps group tables and knockout rounds in sync,
-          and lets you drill into any team’s past and future opponents without having to mentally juggle 48 teams like a caffeinated tournament director.
+          and lets you drill into any team's past and future opponents without having to mentally juggle 48 teams like a caffeinated tournament director.
         </p>
         <div class="hero-actions">
           <button class="button" id="refresh-button" type="button">Refresh live data</button>
@@ -499,15 +795,22 @@
       </section>
     </section>
 
-    <section class="panel" id="knockout-bracket">
-      <div class="panel-header">
+    <section class="panel bracket-panel" id="knockout-bracket">
+      <div class="panel-header" style="flex-wrap:wrap; gap:12px;">
         <div>
           <h2 class="panel-title">Knockout bracket</h2>
-          <p class="panel-subtitle">Round of 32 through the final. Future placeholders become actual teams as the feed resolves them.</p>
+          <p class="panel-subtitle">Round of 32 → Final. Click any card to explore.</p>
+        </div>
+        <div class="bracket-controls">
+          <div class="bracket-toggle-group">
+            <button class="bracket-toggle" id="btn-tree" type="button">Full tree</button>
+            <button class="bracket-toggle" id="btn-focus" type="button">Navigate</button>
+          </div>
+          <span class="bracket-hint" id="bracket-hint"></span>
         </div>
       </div>
-      <div class="knockout-grid" id="knockout-grid"></div>
-      <div class="third-place-wrap" id="third-place-wrap"></div>
+      <div id="bracket-view"></div>
+      <div id="third-place-wrap" style="margin-top:16px; max-width:380px;"></div>
     </section>
 
     <section class="panel">
@@ -566,6 +869,7 @@
         third: 'Third place',
         final: 'Final'
       };
+
       const state = {
         teams: [],
         groups: [],
@@ -575,24 +879,35 @@
         selectedTeamId: null
       };
 
+      const bracketState = {
+        mode: window.innerWidth < 768 ? 'focus' : 'tree',
+        focusRound: 0,
+        focusIdx: 0
+      };
+
       const summaryCards = document.getElementById('summary-cards');
       const feedList = document.getElementById('feed-list');
       const snapshotList = document.getElementById('snapshot-list');
-      const knockoutGrid = document.getElementById('knockout-grid');
+      const bracketView = document.getElementById('bracket-view');
       const thirdPlaceWrap = document.getElementById('third-place-wrap');
       const groupGrid = document.getElementById('group-grid');
       const teamSelect = document.getElementById('team-select');
-      const teamSummary = document.getElementById('team-summary');
+      const teamSummaryEl = document.getElementById('team-summary');
       const teamMatchList = document.getElementById('team-match-list');
       const updateBadge = document.getElementById('update-badge');
       const refreshButton = document.getElementById('refresh-button');
       const shareUrlNode = document.getElementById('share-url');
       const qrImage = document.getElementById('qr-image');
+      const btnTree = document.getElementById('btn-tree');
+      const btnFocus = document.getElementById('btn-focus');
+      const bracketHint = document.getElementById('bracket-hint');
 
-      function escapeHtml(value) {
-        return String(value ?? '').replace(/[&<>"']/g, char => ({
+      // ── Utilities ──────────────────────────────────────────────────────────
+
+      function esc(v) {
+        return String(v ?? '').replace(/[&<>"']/g, c => ({
           '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-        }[char]));
+        }[c]));
       }
 
       function parseFeedDate(raw) {
@@ -605,11 +920,9 @@
       }
 
       function formatDate(raw) {
-        const date = parseFeedDate(raw);
-        if (!date) return raw || 'TBD';
-        return date.toLocaleString([], {
-          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
-        });
+        const d = parseFeedDate(raw);
+        if (!d) return raw || 'TBD';
+        return d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
       }
 
       function normalizeStatus(game) {
@@ -628,14 +941,14 @@
         if (!raw || raw === 'null') return [];
         return raw
           .replace(/[{}]/g, '')
-          .replace(/[“”]/g, '"')
-          .split(/","|","|",\s*"|",|”,”/)
+          .replace(/[""]/g, '"')
+          .split(/","|","|",\s*"|",|","/)
           .map(item => item.replace(/^"|"$/g, '').trim())
           .filter(Boolean);
       }
 
       function teamMap() {
-        return new Map(state.teams.map(team => [String(team.id), team]));
+        return new Map(state.teams.map(t => [String(t.id), t]));
       }
 
       function groupTeamStats() {
@@ -649,7 +962,7 @@
       }
 
       function stadiumMap() {
-        return new Map(state.stadiums.map(stadium => [String(stadium.id), stadium]));
+        return new Map(state.stadiums.map(s => [String(s.id), s]));
       }
 
       function getTeamName(game, side) {
@@ -665,74 +978,9 @@
       function getWinnerName(game) {
         const homeName = getTeamName(game, 'home');
         const awayName = getTeamName(game, 'away');
-        if (normalizeStatus(game) !== 'final') return 'Not finished';
+        if (normalizeStatus(game) !== 'final') return null;
         if (Number(game.home_score) === Number(game.away_score)) return 'Draw';
         return Number(game.home_score) > Number(game.away_score) ? `${homeName} won` : `${awayName} won`;
-      }
-
-      function matchCard(game, compact = false) {
-        const status = normalizeStatus(game);
-        const stadium = stadiumMap().get(String(game.stadium_id || ''));
-        const homeName = getTeamName(game, 'home');
-        const awayName = getTeamName(game, 'away');
-        const homeFlag = getTeamFlag(game, 'home');
-        const awayFlag = getTeamFlag(game, 'away');
-        const homeScorers = parseScorers(game.home_scorers);
-        const awayScorers = parseScorers(game.away_scorers);
-        const scorerParts = [];
-        if (homeScorers.length) scorerParts.push(`${homeName}: ${homeScorers.join(', ')}`);
-        if (awayScorers.length) scorerParts.push(`${awayName}: ${awayScorers.join(', ')}`);
-        const winner = getWinnerName(game);
-        if (compact) {
-          const homeWon = status === 'final' && Number(game.home_score) > Number(game.away_score);
-          const awayWon = status === 'final' && Number(game.away_score) > Number(game.home_score);
-          return `
-            <article class="bracket-card">
-              <div class="bracket-match-head">
-                <span class="status-pill status-${status}">${escapeHtml(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
-                <span class="bracket-meta">${escapeHtml(`Match ${game.id}`)}</span>
-              </div>
-              <div class="bracket-meta">${escapeHtml(formatDate(game.local_date))}</div>
-              <div class="bracket-team-list" style="margin-top:10px;">
-                <div class="bracket-team ${homeWon ? 'winner' : ''}">
-                  ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : '<span></span>'}
-                  <div class="bracket-team-name">${escapeHtml(homeName)}</div>
-                  <div class="bracket-score">${escapeHtml(Number(game.home_score || 0))}</div>
-                </div>
-                <div class="bracket-team ${awayWon ? 'winner' : ''}">
-                  ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : '<span></span>'}
-                  <div class="bracket-team-name">${escapeHtml(awayName)}</div>
-                  <div class="bracket-score">${escapeHtml(Number(game.away_score || 0))}</div>
-                </div>
-              </div>
-              <div class="bracket-stats">
-                <div>${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)}${stadium?.name_en ? ` · ${escapeHtml(stadium.name_en)}` : ''}</div>
-                <div>${escapeHtml(winner)}</div>
-                ${scorerParts.length ? `<div>${escapeHtml(scorerParts.join(' | '))}</div>` : ''}
-              </div>
-            </article>`;
-        }
-        return `
-          <article class="feed-card">
-            <div class="feed-row">
-              <span class="status-pill status-${status}">${escapeHtml(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
-              <span class="meta-line">${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)}</span>
-            </div>
-            <div class="teams-line" style="margin-top:10px;">
-              ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : ''}
-              <span>${escapeHtml(homeName)}</span>
-              <span class="score-line">${escapeHtml(scoreText(game))}</span>
-              <span>${escapeHtml(awayName)}</span>
-              ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : ''}
-            </div>
-            <div class="match-meta" style="margin-top:10px;">
-              ${escapeHtml(formatDate(game.local_date))}
-              ${stadium?.name_en ? ` · ${escapeHtml(stadium.name_en)}` : ''}
-              ${game.group ? ` · ${escapeHtml(game.group)}` : ''}
-            </div>
-            <div class="meta-line" style="margin-top:8px;">${escapeHtml(winner)}</div>
-            ${scorerParts.length ? `<div class="meta-line" style="margin-top:8px;">${escapeHtml(scorerParts.join(' | '))}</div>` : ''}
-          </article>`;
       }
 
       function sortGames(games) {
@@ -743,44 +991,72 @@
         });
       }
 
+      // ── Summary / Feed / Snapshot (unchanged) ──────────────────────────────
+
       function renderSummary() {
-        const statuses = state.games.reduce((acc, game) => {
-          const status = normalizeStatus(game);
-          acc[status] = (acc[status] || 0) + 1;
-          return acc;
+        const statuses = state.games.reduce((acc, g) => {
+          const s = normalizeStatus(g); acc[s] = (acc[s] || 0) + 1; return acc;
         }, { live: 0, upcoming: 0, final: 0 });
-        const goals = state.games
-          .filter(game => normalizeStatus(game) === 'final')
-          .reduce((sum, game) => sum + Number(game.home_score || 0) + Number(game.away_score || 0), 0);
-        const knockoutRemaining = state.games.filter(game => game.type !== 'group' && normalizeStatus(game) !== 'final').length;
-        const items = [
+        const goals = state.games.filter(g => normalizeStatus(g) === 'final')
+          .reduce((s, g) => s + Number(g.home_score || 0) + Number(g.away_score || 0), 0);
+        const kr = state.games.filter(g => g.type !== 'group' && normalizeStatus(g) !== 'final').length;
+        summaryCards.innerHTML = [
           { label: 'Live matches', value: statuses.live, sub: statuses.live ? 'Something is happening right now' : 'Quiet, for the moment' },
-          { label: 'Upcoming matches', value: statuses.upcoming, sub: `Includes ${knockoutRemaining} knockout fixtures still unresolved` },
+          { label: 'Upcoming matches', value: statuses.upcoming, sub: `Includes ${kr} knockout fixtures still unresolved` },
           { label: 'Completed matches', value: statuses.final, sub: `${goals} total goals in finished games` },
           { label: 'Teams tracked', value: state.teams.length, sub: `${state.groups.length} groups in the current feed` }
-        ];
-        summaryCards.innerHTML = items.map(item => `
+        ].map(item => `
           <article class="stat-card">
-            <div class="stat-label">${escapeHtml(item.label)}</div>
-            <div class="stat-value">${escapeHtml(item.value)}</div>
-            <div class="stat-sub">${escapeHtml(item.sub)}</div>
+            <div class="stat-label">${esc(item.label)}</div>
+            <div class="stat-value">${esc(item.value)}</div>
+            <div class="stat-sub">${esc(item.sub)}</div>
           </article>`).join('');
       }
 
+      function matchCardFeed(game) {
+        const status = normalizeStatus(game);
+        const stadium = stadiumMap().get(String(game.stadium_id || ''));
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        const homeFlag = getTeamFlag(game, 'home');
+        const awayFlag = getTeamFlag(game, 'away');
+        const hs = parseScorers(game.home_scorers);
+        const as_ = parseScorers(game.away_scorers);
+        const scorers = [...hs.map(s => `${homeName}: ${s}`), ...as_.map(s => `${awayName}: ${s}`)];
+        const winner = getWinnerName(game);
+        return `
+          <article class="feed-card">
+            <div class="feed-row">
+              <span class="status-pill status-${status}">${esc(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
+              <span class="meta-line">${esc(ROUND_LABELS[game.type] || `Group ${game.group}`)}</span>
+            </div>
+            <div class="teams-line" style="margin-top:10px;">
+              ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : ''}
+              <span>${esc(homeName)}</span>
+              <span class="score-line">${esc(scoreText(game))}</span>
+              <span>${esc(awayName)}</span>
+              ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : ''}
+            </div>
+            <div class="match-meta" style="margin-top:10px;">${esc(formatDate(game.local_date))}${stadium?.name_en ? ` · ${esc(stadium.name_en)}` : ''}${game.group ? ` · ${esc(game.group)}` : ''}</div>
+            ${winner ? `<div class="meta-line" style="margin-top:8px;">${esc(winner)}</div>` : ''}
+            ${scorers.length ? `<div class="meta-line" style="margin-top:8px;">${esc(scorers.join(' | '))}</div>` : ''}
+          </article>`;
+      }
+
       function renderFeed() {
-        const live = sortGames(state.games.filter(game => normalizeStatus(game) === 'live'));
-        const upcoming = sortGames(state.games.filter(game => normalizeStatus(game) === 'upcoming')).slice(0, 4);
-        const recent = sortGames(state.games.filter(game => normalizeStatus(game) === 'final')).reverse().slice(0, 4);
+        const live = sortGames(state.games.filter(g => normalizeStatus(g) === 'live'));
+        const upcoming = sortGames(state.games.filter(g => normalizeStatus(g) === 'upcoming')).slice(0, 4);
+        const recent = sortGames(state.games.filter(g => normalizeStatus(g) === 'final')).reverse().slice(0, 4);
         const feedGames = [...live, ...upcoming, ...recent].slice(0, 8);
         feedList.innerHTML = feedGames.length
-          ? feedGames.map(game => matchCard(game)).join('')
+          ? feedGames.map(matchCardFeed).join('')
           : '<div class="feed-card">No matches found in the current feed.</div>';
       }
 
       function renderSnapshot() {
         const sorted = sortGames(state.games);
-        const finals = sorted.filter(game => normalizeStatus(game) === 'final');
-        const upcoming = sorted.filter(game => normalizeStatus(game) === 'upcoming');
+        const finals = sorted.filter(g => normalizeStatus(g) === 'final');
+        const upcoming = sorted.filter(g => normalizeStatus(g) === 'upcoming');
         const nextMatch = upcoming[0];
         const latestMatch = finals[finals.length - 1];
         const groupLeaders = state.groups.map(group => {
@@ -788,83 +1064,442 @@
           const team = teamMap().get(String(leader?.team_id || ''));
           return `${group.name}: ${team?.name_en || 'TBD'} (${leader?.pts || 0} pts)`;
         }).slice(0, 6);
-        const items = [
+        snapshotList.innerHTML = [
           ['Next kick-off', nextMatch ? `${formatDate(nextMatch.local_date)} — ${getTeamName(nextMatch, 'home')} vs ${getTeamName(nextMatch, 'away')}` : 'No future match listed'],
           ['Latest result', latestMatch ? `${getTeamName(latestMatch, 'home')} ${scoreText(latestMatch)} ${getTeamName(latestMatch, 'away')}` : 'No result listed yet'],
           ['Group leaders', groupLeaders.join(' | ') || 'No standings available'],
           ['Refresh cadence', 'Automatic refresh every 5 minutes, plus manual refresh button']
-        ];
-        snapshotList.innerHTML = items.map(([label, value]) => `
+        ].map(([label, value]) => `
           <div class="timeline-item">
-            <div class="timeline-label">${escapeHtml(label)}</div>
-            <div>${escapeHtml(value)}</div>
+            <div class="timeline-label">${esc(label)}</div>
+            <div>${esc(value)}</div>
           </div>`).join('');
       }
 
-      function renderKnockout() {
-        const sorted = sortGames(state.games.filter(game => game.type !== 'group'));
-        knockoutGrid.innerHTML = ROUND_ORDER.map(round => {
-          const games = sorted.filter(game => game.type === round);
-          return `
-            <div class="round-column" data-round="${escapeHtml(round)}">
-              <div class="round-title">${escapeHtml(ROUND_LABELS[round])}</div>
-              <div class="round-matches">
-                ${games.length ? games.map(game => matchCard(game, true)).join('') : '<div class="bracket-card">No fixtures yet.</div>'}
-              </div>
-            </div>`;
-        }).join('');
-        const thirdPlaceGame = sorted.find(game => game.type === 'third');
-        thirdPlaceWrap.innerHTML = thirdPlaceGame
-          ? `<div><div class="round-title">Third place playoff</div>${matchCard(thirdPlaceGame, true)}</div>`
-          : '';
+      // ── Bracket helpers ────────────────────────────────────────────────────
+
+      function buildRoundGames() {
+        const sorted = sortGames(state.games.filter(g => g.type !== 'group' && g.type !== 'third'));
+        const roundGames = ROUND_ORDER.map(r => sorted.filter(g => g.type === r));
+        // Pad each round to its expected size so tree positions are correct
+        const expected = [16, 8, 4, 2, 1];
+        return roundGames.map((games, ri) => {
+          const exp = expected[ri] || 1;
+          const padded = [...games];
+          while (padded.length < exp) padded.push(null);
+          return padded;
+        });
       }
 
+      function statusPill(status, elapsed) {
+        if (status === 'live') return `<span class="status-pill status-live">Live ${esc(elapsed || '')}</span>`;
+        if (status === 'final') return `<span class="status-pill status-final">Final</span>`;
+        return `<span class="status-pill status-upcoming">Soon</span>`;
+      }
+
+      // ── Bracket Tree Mode ──────────────────────────────────────────────────
+
+      const CARD_H = 105;
+      const CARD_W = 200;
+      const BASE_GAP = 12;
+      const COL_GAP = 40;
+      const COL_HEADER_H = 44;
+
+      function computePositions(roundGames) {
+        const SLOT = CARD_H + BASE_GAP;
+        const positions = [];
+
+        // R32: evenly spaced
+        positions.push(roundGames[0].map((_, i) => i * SLOT));
+
+        for (let r = 1; r < roundGames.length; r++) {
+          const prevTops = positions[r - 1];
+          const tops = roundGames[r].map((_, i) => {
+            const c0 = i * 2, c1 = i * 2 + 1;
+            const mid0 = prevTops[c0] != null ? prevTops[c0] + CARD_H / 2 : null;
+            const mid1 = prevTops[c1] != null ? prevTops[c1] + CARD_H / 2 : null;
+            if (mid0 != null && mid1 != null) return (mid0 + mid1) / 2 - CARD_H / 2;
+            if (mid0 != null) return mid0 - CARD_H / 2;
+            return i * SLOT * Math.pow(2, r);
+          });
+          positions.push(tops);
+        }
+        return positions;
+      }
+
+      function makeBracketCard(game, roundIdx, gameIdx, focusMode) {
+        if (!game) {
+          return `<div class="bcard bcard-tbd" data-round="${roundIdx}" data-idx="${gameIdx}">
+            <div class="bcard-team"><span class="bcard-team-name">TBD</span></div>
+            <div class="bcard-team" style="margin-top:5px;"><span class="bcard-team-name">TBD</span></div>
+          </div>`;
+        }
+        const status = normalizeStatus(game);
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        const homeFlag = getTeamFlag(game, 'home');
+        const awayFlag = getTeamFlag(game, 'away');
+        const homeWon = status === 'final' && Number(game.home_score) > Number(game.away_score);
+        const awayWon = status === 'final' && Number(game.away_score) > Number(game.home_score);
+        const isFocused = (focusMode && bracketState.focusRound === roundIdx && bracketState.focusIdx === gameIdx);
+        const stadium = stadiumMap().get(String(game.stadium_id || ''));
+        return `<div class="bcard${isFocused ? ' focused-card' : ''}" data-round="${roundIdx}" data-idx="${gameIdx}" data-gid="${esc(game.id)}" role="button" tabindex="0">
+          <div class="bcard-top">
+            <span class="bcard-round">${esc(ROUND_LABELS[game.type] || '')}</span>
+            ${statusPill(status, game.time_elapsed)}
+          </div>
+          <div class="bcard-team${homeWon ? ' winner' : ''}">
+            ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : '<span style="width:22px"></span>'}
+            <span class="bcard-team-name">${esc(homeName)}</span>
+            <span class="bcard-score">${status !== 'upcoming' ? esc(Number(game.home_score || 0)) : ''}</span>
+          </div>
+          <div class="bcard-team${awayWon ? ' winner' : ''}">
+            ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : '<span style="width:22px"></span>'}
+            <span class="bcard-team-name">${esc(awayName)}</span>
+            <span class="bcard-score">${status !== 'upcoming' ? esc(Number(game.away_score || 0)) : ''}</span>
+          </div>
+          <div class="bcard-footer">${esc(formatDate(game.local_date))}${stadium?.name_en ? `<br>${esc(stadium.name_en)}` : ''}</div>
+        </div>`;
+      }
+
+      function renderTreeMode(roundGames) {
+        const positions = computePositions(roundGames);
+        const totalH = roundGames[0].length * (CARD_H + BASE_GAP) + COL_HEADER_H + 48;
+        const totalW = ROUND_ORDER.length * (CARD_W + COL_GAP) + 24;
+
+        let html = `<div class="bracket-tree-outer" id="bracket-tree-outer">
+          <div class="bracket-tree-inner" id="bracket-tree-inner" style="height:${totalH}px; width:${totalW}px;">
+            <svg class="bracket-svg" id="bracket-svg" viewBox="0 0 ${totalW} ${totalH}" xmlns="http://www.w3.org/2000/svg"></svg>`;
+
+        ROUND_ORDER.forEach((round, ri) => {
+          const colLeft = ri * (CARD_W + COL_GAP);
+          html += `<div style="position:absolute; left:${colLeft}px; top:0; width:${CARD_W}px;">
+            <div class="bracket-col-header">${esc(ROUND_LABELS[round])}</div>`;
+
+          roundGames[ri].forEach((game, gi) => {
+            const cardTop = COL_HEADER_H + positions[ri][gi];
+            html += `<div style="position:absolute; top:${cardTop}px; left:0; width:${CARD_W}px;">
+              ${makeBracketCard(game, ri, gi, false)}
+            </div>`;
+          });
+
+          html += '</div>';
+        });
+
+        html += '</div></div>';
+        return html;
+      }
+
+      function drawConnectors(roundGames, positions) {
+        const svg = document.getElementById('bracket-svg');
+        if (!svg) return;
+
+        const lines = [];
+        for (let r = 1; r < roundGames.length; r++) {
+          for (let gi = 0; gi < roundGames[r].length; gi++) {
+            const parentLeft = r * (CARD_W + COL_GAP);
+            const parentMid = COL_HEADER_H + positions[r][gi] + CARD_H / 2;
+
+            [gi * 2, gi * 2 + 1].forEach(ci => {
+              if (ci >= roundGames[r - 1].length) return;
+              const childRight = (r - 1) * (CARD_W + COL_GAP) + CARD_W;
+              const childMid = COL_HEADER_H + positions[r - 1][ci] + CARD_H / 2;
+              const xMid = childRight + COL_GAP / 2;
+
+              lines.push(`<path d="M ${childRight} ${childMid} H ${xMid} V ${parentMid} H ${parentLeft}"
+                fill="none" stroke="rgba(120,227,255,0.22)" stroke-width="1.5" stroke-linecap="round"/>`);
+            });
+          }
+        }
+        svg.innerHTML = lines.join('');
+      }
+
+      // Drag-to-pan
+      function initDragPan(outer) {
+        let dragging = false, startX, startY, scrollLeft, scrollTop;
+        outer.addEventListener('mousedown', e => {
+          if (e.button !== 0) return;
+          dragging = true;
+          startX = e.pageX - outer.offsetLeft;
+          startY = e.pageY - outer.offsetTop;
+          scrollLeft = outer.scrollLeft;
+          scrollTop = outer.scrollTop;
+        });
+        outer.addEventListener('mouseleave', () => { dragging = false; });
+        outer.addEventListener('mouseup', () => { dragging = false; });
+        outer.addEventListener('mousemove', e => {
+          if (!dragging) return;
+          e.preventDefault();
+          outer.scrollLeft = scrollLeft - (e.pageX - outer.offsetLeft - startX);
+          outer.scrollTop = scrollTop - (e.pageY - outer.offsetTop - startY);
+        });
+      }
+
+      // ── Bracket Focus Mode ─────────────────────────────────────────────────
+
+      function makeFcard(game) {
+        if (!game) {
+          return `<div class="fcard">
+            <div class="fcard-team"><span class="fcard-team-name" style="color:var(--muted);font-style:italic;">TBD</span></div>
+            <div class="fcard-team" style="margin-top:8px;"><span class="fcard-team-name" style="color:var(--muted);font-style:italic;">TBD</span></div>
+          </div>`;
+        }
+        const status = normalizeStatus(game);
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        const homeFlag = getTeamFlag(game, 'home');
+        const awayFlag = getTeamFlag(game, 'away');
+        const homeWon = status === 'final' && Number(game.home_score) > Number(game.away_score);
+        const awayWon = status === 'final' && Number(game.away_score) > Number(game.home_score);
+        const stadium = stadiumMap().get(String(game.stadium_id || ''));
+        const hs = parseScorers(game.home_scorers);
+        const as_ = parseScorers(game.away_scorers);
+        const scorerParts = [
+          ...hs.map(s => `${homeName}: ${s}`),
+          ...as_.map(s => `${awayName}: ${s}`)
+        ];
+        return `<div class="fcard">
+          <div class="fcard-top">
+            ${statusPill(status, game.time_elapsed)}
+            <span style="color:var(--muted);font-size:0.82rem;">${esc(ROUND_LABELS[game.type] || '')}</span>
+          </div>
+          <div class="fcard-team${homeWon ? ' winner' : ''}">
+            ${homeFlag ? `<img class="flag-lg" src="${homeFlag}" alt="">` : ''}
+            <span class="fcard-team-name">${esc(homeName)}</span>
+            <span class="fcard-score">${status !== 'upcoming' ? esc(Number(game.home_score || 0)) : '–'}</span>
+          </div>
+          <div class="fcard-team${awayWon ? ' winner' : ''}">
+            ${awayFlag ? `<img class="flag-lg" src="${awayFlag}" alt="">` : ''}
+            <span class="fcard-team-name">${esc(awayName)}</span>
+            <span class="fcard-score">${status !== 'upcoming' ? esc(Number(game.away_score || 0)) : '–'}</span>
+          </div>
+          <div class="fcard-footer">
+            ${esc(formatDate(game.local_date))}${stadium?.name_en ? ` · ${esc(stadium.name_en)}` : ''}
+            ${scorerParts.length ? `<div class="fcard-scorers">${esc(scorerParts.join(' · '))}</div>` : ''}
+          </div>
+        </div>`;
+      }
+
+      function makeScard(game, dataRound, dataIdx) {
+        if (!game) {
+          return `<div class="scard" data-round="${dataRound}" data-idx="${dataIdx}">
+            <div class="scard-team" style="color:var(--muted);font-style:italic;">TBD</div>
+            <div class="scard-team" style="color:var(--muted);font-style:italic;">TBD</div>
+          </div>`;
+        }
+        const status = normalizeStatus(game);
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        const homeFlag = getTeamFlag(game, 'home');
+        const awayFlag = getTeamFlag(game, 'away');
+        const homeWon = status === 'final' && Number(game.home_score) > Number(game.away_score);
+        const awayWon = status === 'final' && Number(game.away_score) > Number(game.home_score);
+        return `<div class="scard" data-round="${dataRound}" data-idx="${dataIdx}" role="button" tabindex="0">
+          <div class="scard-team${homeWon ? ' winner' : ''}">
+            ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : ''}
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(homeName)}</span>
+            <span class="scard-score">${status !== 'upcoming' ? esc(Number(game.home_score || 0)) : ''}</span>
+          </div>
+          <div class="scard-team${awayWon ? ' winner' : ''}">
+            ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : ''}
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(awayName)}</span>
+            <span class="scard-score">${status !== 'upcoming' ? esc(Number(game.away_score || 0)) : ''}</span>
+          </div>
+          <div class="scard-meta">${esc(formatDate(game.local_date))}</div>
+        </div>`;
+      }
+
+      function renderFocusMode(roundGames) {
+        const ri = bracketState.focusRound;
+        const gi = bracketState.focusIdx;
+        const game = roundGames[ri]?.[gi] ?? null;
+        const gamesInRound = roundGames[ri]?.length || 1;
+        const actualCount = roundGames[ri]?.filter(Boolean).length || 0;
+
+        // Feeder games (children in previous round)
+        let feedersHtml = '';
+        if (ri > 0) {
+          const c0 = gi * 2, c1 = gi * 2 + 1;
+          const feeder0 = roundGames[ri - 1]?.[c0] ?? null;
+          const feeder1 = roundGames[ri - 1]?.[c1] ?? null;
+          feedersHtml = `<div class="focus-feeders">
+            <div class="focus-feeder-wrap">
+              <div class="focus-feeder-label">${esc(ROUND_LABELS[ROUND_ORDER[ri-1]])}</div>
+              ${makeScard(feeder0, ri - 1, c0)}
+            </div>
+            <div class="focus-feeder-wrap">
+              <div class="focus-feeder-label">${esc(ROUND_LABELS[ROUND_ORDER[ri-1]])}</div>
+              ${makeScard(feeder1, ri - 1, c1)}
+            </div>
+          </div>
+          <div style="text-align:center;color:var(--muted);font-size:1.1rem;">↓ winner advances</div>`;
+        }
+
+        // Destination game (parent in next round)
+        let destHtml = '';
+        if (ri < ROUND_ORDER.length - 1) {
+          const destRound = ri + 1;
+          const destIdx = Math.floor(gi / 2);
+          const destGame = roundGames[destRound]?.[destIdx];
+          const destLabel = ROUND_LABELS[ROUND_ORDER[destRound]];
+          const destTeams = destGame
+            ? `${getTeamName(destGame, 'home')} vs ${getTeamName(destGame, 'away')}`
+            : 'Awaiting result';
+          destHtml = `<div class="focus-dest-wrap">
+            <div style="color:var(--muted);font-size:0.78rem;text-transform:uppercase;letter-spacing:.08em;">↓ winner goes to</div>
+            <button class="focus-dest-btn" data-round="${destRound}" data-idx="${destIdx}">
+              ${esc(destLabel)} · ${esc(destTeams)}
+            </button>
+          </div>`;
+        }
+
+        // Round selector tabs
+        const roundTabs = ROUND_ORDER.map((r, i) => {
+          const label = { r32: 'R32', r16: 'R16', qf: 'QF', sf: 'SF', final: 'Final' }[r] || r;
+          const count = roundGames[i]?.filter(Boolean).length || 0;
+          return `<button class="focus-round-btn${i === ri ? ' active' : ''}" data-round="${i}" data-idx="0">${esc(label)}${count ? ` <span style="opacity:.6">${count}</span>` : ''}</button>`;
+        }).join('');
+
+        return `<div class="bracket-focus">
+          <div class="focus-round-select">${roundTabs}</div>
+          <div class="focus-nav-bar">
+            <button class="focus-nav-btn" id="focus-prev" ${gi <= 0 ? 'disabled' : ''}>← Prev</button>
+            <div class="focus-position">${esc(ROUND_LABELS[ROUND_ORDER[ri]])} · match ${gi + 1} of ${actualCount || gamesInRound}</div>
+            <button class="focus-nav-btn" id="focus-next" ${gi >= gamesInRound - 1 ? 'disabled' : ''}>Next →</button>
+          </div>
+          ${feedersHtml}
+          <div class="focus-main-wrap">
+            <div class="focus-main-label">Featured match</div>
+            ${makeFcard(game)}
+          </div>
+          ${destHtml}
+        </div>`;
+      }
+
+      // ── Bracket render dispatcher ──────────────────────────────────────────
+
+      function renderKnockout() {
+        const roundGames = buildRoundGames();
+
+        // Update toggle buttons
+        btnTree.classList.toggle('active', bracketState.mode === 'tree');
+        btnFocus.classList.toggle('active', bracketState.mode === 'focus');
+        bracketHint.textContent = bracketState.mode === 'tree'
+          ? 'Drag to pan · click a match to focus it'
+          : 'Tap feeder cards or "next round" to navigate';
+
+        if (bracketState.mode === 'tree') {
+          bracketView.innerHTML = renderTreeMode(roundGames);
+          const positions = computePositions(roundGames);
+          drawConnectors(roundGames, positions);
+          initDragPan(document.getElementById('bracket-tree-outer'));
+        } else {
+          // Clamp focus index
+          const ri = Math.min(bracketState.focusRound, ROUND_ORDER.length - 1);
+          const gamesInRound = roundGames[ri]?.length || 1;
+          bracketState.focusIdx = Math.max(0, Math.min(bracketState.focusIdx, gamesInRound - 1));
+          bracketView.innerHTML = renderFocusMode(roundGames);
+        }
+
+        // Third place
+        const sorted = sortGames(state.games);
+        const thirdGame = sorted.find(g => g.type === 'third');
+        if (thirdGame) {
+          thirdPlaceWrap.innerHTML = `<div style="font-size:.82rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:8px;">Third place playoff</div>${makeFcard(thirdGame)}`;
+        } else {
+          thirdPlaceWrap.innerHTML = '';
+        }
+
+        // Event delegation for bracket interactions
+        bracketView.addEventListener('click', handleBracketClick);
+        bracketView.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') handleBracketClick(e);
+        });
+      }
+
+      function handleBracketClick(e) {
+        const roundGames = buildRoundGames();
+
+        // Tree mode: click card → switch to focus mode on that game
+        const bcard = e.target.closest('[data-round][data-idx]');
+        if (bcard) {
+          const ri = parseInt(bcard.dataset.round, 10);
+          const gi = parseInt(bcard.dataset.idx, 10);
+          if (!isNaN(ri) && !isNaN(gi)) {
+            bracketState.mode = 'focus';
+            bracketState.focusRound = ri;
+            bracketState.focusIdx = gi;
+            renderKnockout();
+            return;
+          }
+        }
+
+        // Focus mode: prev/next buttons
+        if (e.target.id === 'focus-prev') {
+          bracketState.focusIdx = Math.max(0, bracketState.focusIdx - 1);
+          renderKnockout();
+          return;
+        }
+        if (e.target.id === 'focus-next') {
+          const ri = bracketState.focusRound;
+          const max = (roundGames[ri]?.length || 1) - 1;
+          bracketState.focusIdx = Math.min(max, bracketState.focusIdx + 1);
+          renderKnockout();
+          return;
+        }
+
+        // Focus mode: round tabs
+        const roundBtn = e.target.closest('.focus-round-btn[data-round]');
+        if (roundBtn) {
+          bracketState.focusRound = parseInt(roundBtn.dataset.round, 10);
+          bracketState.focusIdx = 0;
+          renderKnockout();
+          return;
+        }
+
+        // Focus mode: destination button
+        const destBtn = e.target.closest('.focus-dest-btn[data-round]');
+        if (destBtn) {
+          bracketState.focusRound = parseInt(destBtn.dataset.round, 10);
+          bracketState.focusIdx = parseInt(destBtn.dataset.idx, 10);
+          renderKnockout();
+          return;
+        }
+      }
+
+      // ── Group Tables ───────────────────────────────────────────────────────
+
       function renderGroups() {
-        const statsMap = groupTeamStats();
         groupGrid.innerHTML = state.groups.map(group => {
           const rows = [...(group.teams || [])].sort((a, b) => Number(b.pts) - Number(a.pts) || Number(b.gd) - Number(a.gd) || Number(b.gf) - Number(a.gf));
           return `
             <article class="group-card">
               <div class="feed-row">
-                <h3>Group ${escapeHtml(group.name)}</h3>
+                <h3>Group ${esc(group.name)}</h3>
                 <span class="badge">${rows.length} teams</span>
               </div>
               <table class="group-table">
-                <thead>
-                  <tr>
-                    <th>Team</th>
-                    <th>Pts</th>
-                    <th>MP</th>
-                    <th>GF</th>
-                    <th>GA</th>
-                    <th>GD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows.map(row => {
-                    const team = teamMap().get(String(row.team_id));
-                    return `
-                      <tr>
-                        <td>${escapeHtml(team?.name_en || 'TBD')}</td>
-                        <td>${escapeHtml(row.pts)}</td>
-                        <td>${escapeHtml(row.mp)}</td>
-                        <td>${escapeHtml(row.gf)}</td>
-                        <td>${escapeHtml(row.ga)}</td>
-                        <td>${escapeHtml(row.gd)}</td>
-                      </tr>`;
-                  }).join('')}
-                </tbody>
+                <thead><tr><th>Team</th><th>Pts</th><th>MP</th><th>GF</th><th>GA</th><th>GD</th></tr></thead>
+                <tbody>${rows.map(row => {
+                  const team = teamMap().get(String(row.team_id));
+                  return `<tr>
+                    <td>${esc(team?.name_en || 'TBD')}</td>
+                    <td>${esc(row.pts)}</td><td>${esc(row.mp)}</td>
+                    <td>${esc(row.gf)}</td><td>${esc(row.ga)}</td><td>${esc(row.gd)}</td>
+                  </tr>`;
+                }).join('')}</tbody>
               </table>
             </article>`;
         }).join('');
       }
 
+      // ── Team Explorer ──────────────────────────────────────────────────────
+
       function populateTeamSelect() {
         const teams = [...state.teams].sort((a, b) => a.name_en.localeCompare(b.name_en));
-        teamSelect.innerHTML = teams.map(team => `
-          <option value="${escapeHtml(team.id)}">${escapeHtml(team.name_en)}${team.groups ? ` (Group ${escapeHtml(team.groups)})` : ''}</option>`).join('');
-        if (!state.selectedTeamId || !teams.some(team => String(team.id) === String(state.selectedTeamId))) {
-          const liveGame = state.games.find(game => normalizeStatus(game) === 'live');
+        teamSelect.innerHTML = teams.map(t => `<option value="${esc(t.id)}">${esc(t.name_en)}${t.groups ? ` (Group ${esc(t.groups)})` : ''}</option>`).join('');
+        if (!state.selectedTeamId || !teams.some(t => String(t.id) === String(state.selectedTeamId))) {
+          const liveGame = state.games.find(g => normalizeStatus(g) === 'live');
           state.selectedTeamId = liveGame?.home_team_id || teams[0]?.id || null;
         }
         if (state.selectedTeamId != null) teamSelect.value = String(state.selectedTeamId);
@@ -874,40 +1509,40 @@
         const selectedId = String(state.selectedTeamId || '');
         const team = teamMap().get(selectedId);
         if (!team) {
-          teamSummary.innerHTML = '<div class="team-summary">No team selected.</div>';
+          teamSummaryEl.innerHTML = '<div class="team-summary">No team selected.</div>';
           teamMatchList.innerHTML = '';
           return;
         }
         const stats = groupTeamStats().get(selectedId);
-        const games = sortGames(state.games.filter(game => String(game.home_team_id) === selectedId || String(game.away_team_id) === selectedId));
-        const completed = games.filter(game => normalizeStatus(game) === 'final');
-        const pending = games.filter(game => normalizeStatus(game) !== 'final');
-        const wins = completed.filter(game => {
-          const isHome = String(game.home_team_id) === selectedId;
-          return isHome ? Number(game.home_score) > Number(game.away_score) : Number(game.away_score) > Number(game.home_score);
+        const games = sortGames(state.games.filter(g => String(g.home_team_id) === selectedId || String(g.away_team_id) === selectedId));
+        const completed = games.filter(g => normalizeStatus(g) === 'final');
+        const pending = games.filter(g => normalizeStatus(g) !== 'final');
+        const wins = completed.filter(g => {
+          const isHome = String(g.home_team_id) === selectedId;
+          return isHome ? Number(g.home_score) > Number(g.away_score) : Number(g.away_score) > Number(g.home_score);
         }).length;
-        const draws = completed.filter(game => Number(game.home_score) === Number(game.away_score)).length;
+        const draws = completed.filter(g => Number(g.home_score) === Number(g.away_score)).length;
         const losses = completed.length - wins - draws;
-        const goalsFor = completed.reduce((sum, game) => sum + Number(String(game.home_team_id) === selectedId ? game.home_score : game.away_score), 0);
-        const goalsAgainst = completed.reduce((sum, game) => sum + Number(String(game.home_team_id) === selectedId ? game.away_score : game.home_score), 0);
+        const goalsFor = completed.reduce((s, g) => s + Number(String(g.home_team_id) === selectedId ? g.home_score : g.away_score), 0);
+        const goalsAgainst = completed.reduce((s, g) => s + Number(String(g.home_team_id) === selectedId ? g.away_score : g.home_score), 0);
         const nextOpponent = pending[0]
           ? String(pending[0].home_team_id) === selectedId ? getTeamName(pending[0], 'away') : getTeamName(pending[0], 'home')
           : 'None listed';
 
-        teamSummary.innerHTML = `
+        teamSummaryEl.innerHTML = `
           <article class="team-summary">
             <div class="team-header">
-              <img src="${escapeHtml(team.flag || '')}" alt="">
+              <img src="${esc(team.flag || '')}" alt="">
               <div>
-                <h3>${escapeHtml(team.name_en)}</h3>
-                <div class="panel-subtitle">${team.fifa_code ? escapeHtml(team.fifa_code) + ' · ' : ''}Group ${escapeHtml(stats?.group || team.groups || '—')}</div>
+                <h3>${esc(team.name_en)}</h3>
+                <div class="panel-subtitle">${team.fifa_code ? esc(team.fifa_code) + ' · ' : ''}Group ${esc(stats?.group || team.groups || '—')}</div>
               </div>
             </div>
             <div class="record-grid">
               <div class="record-card"><div class="label">Record</div><div class="value">${wins}-${draws}-${losses}</div></div>
               <div class="record-card"><div class="label">Goals</div><div class="value">${goalsFor}:${goalsAgainst}</div></div>
-              <div class="record-card"><div class="label">Points</div><div class="value">${escapeHtml(stats?.pts || 0)}</div></div>
-              <div class="record-card"><div class="label">Next opponent</div><div class="value" style="font-size:1rem;line-height:1.2;">${escapeHtml(nextOpponent)}</div></div>
+              <div class="record-card"><div class="label">Points</div><div class="value">${esc(stats?.pts || 0)}</div></div>
+              <div class="record-card"><div class="label">Next opp.</div><div class="value" style="font-size:0.95rem;line-height:1.2;">${esc(nextOpponent)}</div></div>
             </div>
             <div class="timeline">
               <div class="timeline-item"><div class="timeline-label">Played</div><div>${completed.length} match${completed.length === 1 ? '' : 'es'}</div></div>
@@ -926,14 +1561,16 @@
           return `
             <article class="schedule-card">
               <div class="feed-row">
-                <strong>${escapeHtml(opponent)}</strong>
-                <span class="status-pill status-${status}">${escapeHtml(result)}</span>
+                <strong>${esc(opponent)}</strong>
+                <span class="status-pill status-${status}">${esc(result)}</span>
               </div>
-              <div class="meta-line" style="margin-top:8px;">${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)} · ${escapeHtml(formatDate(game.local_date))}</div>
-              <div class="meta-line" style="margin-top:6px;">Score: ${escapeHtml(scoreText(game))}${venue ? ` · ${escapeHtml(venue)}` : ''}</div>
+              <div class="meta-line" style="margin-top:8px;">${esc(ROUND_LABELS[game.type] || `Group ${game.group}`)} · ${esc(formatDate(game.local_date))}</div>
+              <div class="meta-line" style="margin-top:6px;">Score: ${esc(scoreText(game))}${venue ? ` · ${esc(venue)}` : ''}</div>
             </article>`;
         }).join('') || '<div class="schedule-card">No matches found for this team.</div>';
       }
+
+      // ── Share / QR ─────────────────────────────────────────────────────────
 
       function renderShareUrl() {
         const current = new URL(window.location.href);
@@ -944,10 +1581,12 @@
         qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(canonical)}`;
       }
 
+      // ── Data loading ───────────────────────────────────────────────────────
+
       async function fetchJson(endpoint) {
-        const response = await fetch(`${DATA_BASE}/${endpoint}`, { cache: 'no-store' });
-        if (!response.ok) throw new Error(`Failed to fetch ${endpoint}: ${response.status}`);
-        return response.json();
+        const res = await fetch(`${DATA_BASE}/${endpoint}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Failed to fetch ${endpoint}: ${res.status}`);
+        return res.json();
       }
 
       async function loadData() {
@@ -961,6 +1600,7 @@
           state.teams = teamsData.teams || [];
           state.stadiums = stadiumsData.stadiums || [];
           state.lastUpdated = new Date();
+
           renderSummary();
           renderFeed();
           renderSnapshot();
@@ -968,18 +1608,28 @@
           renderGroups();
           populateTeamSelect();
           renderTeamExplorer();
-          updateBadge.textContent = `Live feed updated ${state.lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-        } catch (error) {
-          console.error(error);
+          updateBadge.textContent = `Live · updated ${state.lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        } catch (err) {
+          console.error(err);
           updateBadge.textContent = 'Live feed failed. Try refreshing again.';
-          feedList.innerHTML = `<div class="feed-card">${escapeHtml(error.message)}</div>`;
+          feedList.innerHTML = `<div class="feed-card">${esc(err.message)}</div>`;
         }
       }
+
+      // ── Event listeners ────────────────────────────────────────────────────
 
       refreshButton.addEventListener('click', loadData);
       teamSelect.addEventListener('change', () => {
         state.selectedTeamId = teamSelect.value;
         renderTeamExplorer();
+      });
+      btnTree.addEventListener('click', () => {
+        bracketState.mode = 'tree';
+        renderKnockout();
+      });
+      btnFocus.addEventListener('click', () => {
+        bracketState.mode = 'focus';
+        renderKnockout();
       });
 
       renderShareUrl();
