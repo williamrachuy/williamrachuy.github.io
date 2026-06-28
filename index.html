@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.3 · d4e5721';
+      const VERSION = '20260628.4 · 2d0f139';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -293,7 +293,7 @@
       function seedParticles() {
         particles.length = 0;
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 1;
-        const count = isMobile ? 240 : 432;
+        const count = isMobile ? 288 : 518;
         for (let i = 0; i < count; i++) {
           const r0 = Math.random() > 0.86 ? 1.0 : 0.5; // 3D radius; visual diameter = r0*2
           particles.push({
@@ -647,7 +647,7 @@
           // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (!ap.audio && ve.scaleCurrent > 5 && !ve.liberated) {
+          if (!ap.audio && ve.active && ve.scaleCurrent > 5 && !ve.liberated) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 60 * accelBoost / (d * 0.04 + 1);
@@ -1418,9 +1418,9 @@
       // ─── Volta — arc lightning creature ─────────────────────────────────────
 
       const VOLTA_ARC_DIST = 116; // 150% link range; keeps the constellation coherent
-      const VOLTA_SEARCH_R = 104; // radius around creature center for harvesting nodes
+      const VOLTA_SEARCH_R = 145; // radius around creature center for harvesting nodes
       const VOLTA_SPEED    = 28;  // px/s toward target
-      const VOLTA_MAX_ARCS = 22;  // constellation budget
+      const VOLTA_MAX_ARCS = 24;  // constellation budget
 
       function scheduleVoltaSpawn() {
         const delay = Math.max(20000, gaussianRandom(120000, 60000));
@@ -1513,7 +1513,7 @@
         }
         const w = stage.clientWidth, h = stage.clientHeight;
         // Arc energy pool regens continuously — arcs consume it, giving ebb-and-flow brightness
-        volta.pool = Math.min(1.0, volta.pool + dt * 0.00045);
+        volta.pool = Math.min(1.0, volta.pool + dt * 0.00070);
 
         if (volta.state === 'infecting') {
           volta.cx = ve.x; volta.cy = ve.y;
@@ -1552,14 +1552,14 @@
             volta.cy += ((sy / cnt) - volta.cy) * clamp(dt * 0.014, 0, 1);
           }
           // Still drift toward VE so the arc body eventually reaches it
-          const tx = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
-          const ty = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
+          const tx = (ve.active && ve.scaleCurrent > 5) ? ve.x : w * 0.5;
+          const ty = (ve.active && ve.scaleCurrent > 5) ? ve.y : h * 0.5;
           const ddx = tx - volta.cx, ddy = ty - volta.cy;
           const dd  = Math.hypot(ddx, ddy) || 1;
           volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           // Check infection trigger: creature reaches VE — burst of attack arcs at the moment of contact
-          if (ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
+          if (ve.active && ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
             // Stinger burst: connect every arc endpoint to nearest VE vertex
             if (ve.vertNodes) {
@@ -1666,8 +1666,8 @@
         }
 
         // Traversal: organic arc search toward VE
-        const veX = ve.scaleCurrent > 5 ? ve.x : w * 0.5;
-        const veY = ve.scaleCurrent > 5 ? ve.y : h * 0.5;
+        const veX = (ve.active && ve.scaleCurrent > 5) ? ve.x : w * 0.5;
+        const veY = (ve.active && ve.scaleCurrent > 5) ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
 
         // Volta's forward direction (toward VE)
@@ -1713,7 +1713,7 @@
 
         // Attempt ONE new arc per frame — all arcs must stay contiguous (connected chain)
         // Spawn up to 4 new arcs per frame — constellation branching from any existing node
-        const spawnBudget = Math.min(4, VOLTA_MAX_ARCS - volta.arcs.length);
+        const spawnBudget = Math.min(6, VOLTA_MAX_ARCS - volta.arcs.length);
         if (spawnBudget > 0 && nearby.length >= 2) {
           nearby.sort((a, b) => b.score - a.score);
           // Build set of all nodes already in the arc graph
@@ -1727,11 +1727,14 @@
               const srcPool = nearby.slice(0, Math.max(2, Math.ceil(nearby.length * 0.5)));
               src = srcPool[Math.floor(Math.random() * srcPool.length)].p;
             } else {
-              // Branch from any existing node in the graph — enables multi-arc nodes
+              // Branch from any existing node; fall back to top scorer if none are in nearby
               const connected = nearby.filter(({p}) => existingPts.has(p));
               if (connected.length > 0) {
                 connected.sort((a, b) => b.score - a.score);
                 src = connected[Math.floor(Math.random() * Math.min(5, connected.length))].p;
+              } else {
+                // Existing arc nodes drifted out of search radius — bridge from a new top scorer
+                src = nearby[0].p;
               }
             }
             if (!src) break;
@@ -1743,17 +1746,16 @@
             if (targets.length === 0) continue;
             targets.sort((a, b) => b.score - a.score);
             const tgt = targets[Math.floor(Math.random() * Math.min(4, targets.length))].p;
-            // Flat cost — mass still affects score, not cost, so pool stays full enough to sustain constellation
             const arcCost = 0.04 / Math.max(tgt.mass || 0.1, 0.1);
             const strength = clamp(1 - arcCost * 0.4, 0.35, 1.0);
             volta.pool = Math.max(0, volta.pool - arcCost);
-            volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(55, 220), strength });
+            volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(100, 360), strength });
             existingPts.add(src); existingPts.add(tgt);
           }
         }
 
         // Attack arcs: when Volta is close enough to VE, bridge from constellation to VE vertices
-        if (ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
+        if (ve.active && ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
           const distToVE = Math.hypot(volta.cx - ve.x, volta.cy - ve.y);
           const attackRange = ve.scaleCurrent * 5.0 + VOLTA_ARC_DIST;
           if (distToVE < attackRange && volta.arcs.length > 0) {
@@ -1882,9 +1884,9 @@
         if (volta.tapTimes.length >= 12 && !volta.active) {
           spawnVolta(); scheduleVoltaSpawn(); volta.tapTimes.length = 0;
         }
-        // Spike to 100%, settle to 70% (mouse click) or 30% (touch hold)
+        // Spike to 100%, settle to 47% (mouse click) or 20% (touch hold) — 67% of prior
         const touch = e.pointerType === 'touch';
-        pointerLight(e, 1.0, touch ? 0.30 : 0.70);
+        pointerLight(e, 1.0, touch ? 0.20 : 0.47);
         if (e.button === 0 || touch) {
           ve.ωx += (Math.random() * 2 - 1) * 0.0035;
           ve.ωy += (Math.random() * 2 - 1) * 0.0035;
@@ -1894,12 +1896,12 @@
       stage.addEventListener('pointermove', e => {
         catCursorX = e.clientX; catCursorY = e.clientY;
         if (e.pointerType === 'mouse') {
-          if (e.buttons & 1) pointerLight(e, null, 0.70);  // held click — sustain 70%
-          else               pointerLight(e, 0.30, 0.30);  // hover — steady 30%
+          if (e.buttons & 1) pointerLight(e, null, 0.47);  // held click — sustain 47%
+          else               pointerLight(e, 0.20, 0.20);  // hover — steady 20%
         } else if (e.buttons) {
-          // Touch swipe: speed scales sustain from 30% to 70%
+          // Touch swipe: speed scales sustain from 20% to 47% — 67% of prior range
           const speed = Math.hypot(e.movementX || 0, e.movementY || 0);
-          const sus   = Math.min(0.70, 0.30 + speed * 0.08);
+          const sus   = Math.min(0.47, 0.20 + speed * 0.054);
           pointerLight(e, null, sus);
         }
       });
