@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260627.33 · 192b77e';
+      const VERSION = '20260628.1 · 2d2a067';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -113,6 +113,7 @@
       const appParticles     = []; // living particles — one per sub-page, immune to ablation
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
+      const catOrbImg = new Image(); catOrbImg.src = 'catorb.png';
       let lastFrame       = 0;
       let holdActive      = false; // true while mouse/touch is held down
       let lastStageW      = 0;
@@ -260,7 +261,7 @@
           { path: 'blog',             color: '#5c3333' }, // dark dusty rose
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
-          { path: 'world-cup',        color: '#772277' }, // bright pink like the soccer player shoes??
+          { path: 'world-cup',        color: '#772277', orbImg: catOrbImg }, // cat orb
           { audio: true,              color: '#32465f' }, // Nautilus — fast, cursor-independent
         ];
         const w = stage.clientWidth, h = stage.clientHeight;
@@ -717,29 +718,39 @@
           const jitter = unstable ? ap.r0 * 0.24 : 0;
           const drawX  = ap.x + Math.sin(now * 0.39) * jitter;
           const drawY  = ap.y + Math.cos(now * 0.47 + 0.8) * jitter;
-          // Dark base — always present
-          pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1);
-          pctx.shadowBlur  = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0));
-          pctx.shadowColor = ap.brightColor;
-          pctx.fillStyle   = ap.color;
-          pctx.beginPath();
-          pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
-          pctx.fill();
-          // Bright color overlay: expands with pulse
-          pctx.globalAlpha = t * 0.34 + local * 0.23;  // reduced max overlay brightness
-          pctx.shadowBlur  = 0;
-          pctx.fillStyle   = ap.brightColor;
-          pctx.beginPath();
-          pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
-          pctx.fill();
-          // 3D highlight — brightens at peak expansion
-          pctx.globalAlpha = 0.05 + t * 0.09 + local * 0.09;
-          pctx.fillStyle   = '#fff';
-          pctx.beginPath();
-          pctx.arc(drawX - rDraw * (0.28 + (unstable ? vibration * 0.12 : 0)),
-                   drawY - rDraw * (0.30 - (unstable ? vibration * 0.10 : 0)),
-                   rDraw * (0.38 + (unstable ? vibration * 0.12 : 0)), 0, Math.PI * 2);
-          pctx.fill();
+          if (ap.orbImg && ap.orbImg.complete && ap.orbImg.naturalWidth > 0) {
+            // Image orb — draw PNG scaled to orb size, glow follows the image alpha
+            const glow = Math.max(0, 1 + t * 5 + local * 8);
+            pctx.globalAlpha = clamp(0.82 + t * 0.18 + local * 0.05, 0.3, 1);
+            pctx.shadowBlur  = glow;
+            pctx.shadowColor = ap.brightColor;
+            pctx.drawImage(ap.orbImg, drawX - rDraw, drawY - rDraw, rDraw * 2, rDraw * 2);
+            pctx.shadowBlur  = 0;
+          } else {
+            // Dark base — always present
+            pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1);
+            pctx.shadowBlur  = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0));
+            pctx.shadowColor = ap.brightColor;
+            pctx.fillStyle   = ap.color;
+            pctx.beginPath();
+            pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
+            pctx.fill();
+            // Bright color overlay: expands with pulse
+            pctx.globalAlpha = t * 0.34 + local * 0.23;
+            pctx.shadowBlur  = 0;
+            pctx.fillStyle   = ap.brightColor;
+            pctx.beginPath();
+            pctx.arc(drawX, drawY, rDraw, 0, Math.PI * 2);
+            pctx.fill();
+            // 3D highlight — brightens at peak expansion
+            pctx.globalAlpha = 0.05 + t * 0.09 + local * 0.09;
+            pctx.fillStyle   = '#fff';
+            pctx.beginPath();
+            pctx.arc(drawX - rDraw * (0.28 + (unstable ? vibration * 0.12 : 0)),
+                     drawY - rDraw * (0.30 - (unstable ? vibration * 0.10 : 0)),
+                     rDraw * (0.38 + (unstable ? vibration * 0.12 : 0)), 0, Math.PI * 2);
+            pctx.fill();
+          }
         }
         pctx.globalAlpha = 1;
         pctx.shadowBlur  = 0;
