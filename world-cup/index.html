@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>World Cup Live Tracker</title>
+  <meta name="description" content="Live 2026 World Cup bracket, standings, schedules, results, and team trackers.">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #07111f;
+      --panel: rgba(8, 19, 35, 0.86);
+      --panel-2: rgba(14, 28, 51, 0.92);
+      --line: rgba(132, 168, 220, 0.20);
+      --text: #edf4ff;
+      --muted: #9db1ca;
+      --accent: #78e3ff;
+      --accent-2: #82ffa2;
+      --warn: #ffd479;
+      --danger: #ff8e8e;
+      --shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+      --radius: 20px;
+      --ok: #73f0a9;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at top, rgba(85, 150, 255, 0.16), transparent 26%),
+        linear-gradient(180deg, #081120 0%, #04070d 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    body { padding: 24px; }
+    a { color: var(--accent); }
+    .page {
+      max-width: 1500px;
+      margin: 0 auto;
+      display: grid;
+      gap: 22px;
+    }
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(260px, 340px);
+      gap: 24px;
+      padding: 28px;
+    }
+    h1, h2, h3, p { margin: 0; }
+    .eyebrow {
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 0.78rem;
+      margin-bottom: 10px;
+    }
+    .headline {
+      font-size: clamp(2rem, 5vw, 3.85rem);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+      margin-bottom: 14px;
+    }
+    .subhead {
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.55;
+      max-width: 78ch;
+    }
+    .hero-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .button {
+      appearance: none;
+      border: 1px solid rgba(120, 227, 255, 0.3);
+      background: rgba(120, 227, 255, 0.12);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 11px 16px;
+      font: inherit;
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .button:hover { transform: translateY(-1px); background: rgba(120, 227, 255, 0.18); }
+    .hero-side {
+      display: grid;
+      gap: 14px;
+      align-content: start;
+    }
+    .qr-wrap {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+    }
+    .qr-wrap img {
+      width: min(100%, 210px);
+      aspect-ratio: 1;
+      border-radius: 12px;
+      background: #fff;
+      padding: 10px;
+    }
+    .share-url {
+      width: 100%;
+      font-size: 0.85rem;
+      color: var(--muted);
+      word-break: break-word;
+      text-align: center;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .stat-card {
+      padding: 16px 18px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+    }
+    .stat-label {
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin-bottom: 8px;
+    }
+    .stat-value {
+      font-size: clamp(1.45rem, 3vw, 2rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+    .stat-sub {
+      color: var(--muted);
+      font-size: 0.84rem;
+      margin-top: 5px;
+    }
+    .top-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 22px;
+    }
+    .panel {
+      padding: 20px;
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .panel-title {
+      font-size: 1.2rem;
+      letter-spacing: -0.03em;
+    }
+    .panel-subtitle, .tiny {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 0.84rem;
+      padding: 8px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .feed-list, .group-grid, .schedule-list, .match-list, .round-column {
+      display: grid;
+      gap: 12px;
+    }
+    .feed-card, .match-card, .group-card, .team-summary, .schedule-card {
+      background: rgba(255,255,255,0.035);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 14px;
+    }
+    .feed-row, .team-row, .match-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 5px 10px;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .status-live { color: var(--warn); background: rgba(255, 212, 121, 0.10); }
+    .status-upcoming { color: var(--accent); background: rgba(120, 227, 255, 0.10); }
+    .status-final { color: var(--ok); background: rgba(115, 240, 169, 0.10); }
+    .teams-line {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      font-weight: 600;
+    }
+    .score-line {
+      font-size: 1.2rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+    }
+    .flag {
+      width: 22px;
+      height: 16px;
+      object-fit: cover;
+      border-radius: 3px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.08);
+    }
+    .group-grid {
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    }
+    .group-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      margin-top: 10px;
+    }
+    .group-table th,
+    .group-table td {
+      padding: 7px 6px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      text-align: right;
+    }
+    .group-table th:first-child,
+    .group-table td:first-child { text-align: left; }
+    .group-table tr:last-child td { border-bottom: none; }
+    .knockout-grid {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(230px, 1fr));
+      gap: 14px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .round-column {
+      align-content: start;
+      min-width: 230px;
+    }
+    .round-title {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      padding: 10px 12px;
+      background: rgba(8, 19, 35, 0.96);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      font-weight: 700;
+    }
+    .match-meta, .meta-line {
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+    .team-grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+      gap: 22px;
+    }
+    label { display: block; margin-bottom: 8px; color: var(--muted); }
+    select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(4,10,18,0.9);
+      color: var(--text);
+      font: inherit;
+    }
+    .team-summary {
+      display: grid;
+      gap: 14px;
+    }
+    .team-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .team-header img {
+      width: 48px;
+      height: 36px;
+      object-fit: cover;
+      border-radius: 6px;
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.14);
+    }
+    .record-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .record-card {
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.035);
+      padding: 12px;
+    }
+    .record-card .label { color: var(--muted); font-size: 0.8rem; }
+    .record-card .value { font-size: 1.3rem; font-weight: 700; margin-top: 4px; }
+    .match-list {
+      max-height: 760px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+    .timeline {
+      display: grid;
+      gap: 8px;
+    }
+    .timeline-item {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 12px;
+      align-items: start;
+      font-size: 0.92rem;
+    }
+    .timeline-label { color: var(--muted); }
+    .footer-note {
+      padding: 2px 4px 10px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 1180px) {
+      .hero, .top-grid, .team-grid { grid-template-columns: 1fr; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .knockout-grid { grid-template-columns: repeat(3, minmax(230px, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      body { padding: 14px; }
+      .hero, .panel { padding: 16px; }
+      .stats-grid, .record-grid, .knockout-grid { grid-template-columns: 1fr; }
+      .timeline-item { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">2026 FIFA World Cup tracker</div>
+        <h1 class="headline">Bracket, standings, schedules, and who gets hurt next.</h1>
+        <p class="subhead">
+          This page pulls live tournament data directly into the browser, keeps group tables and knockout rounds in sync,
+          and lets you drill into any team’s past and future opponents without having to mentally juggle 48 teams like a caffeinated tournament director.
+        </p>
+        <div class="hero-actions">
+          <button class="button" id="refresh-button" type="button">Refresh live data</button>
+          <a class="button" href="#team-explorer">Jump to team explorer</a>
+          <a class="button" href="#knockout-bracket">Jump to bracket</a>
+        </div>
+      </div>
+      <div class="hero-side">
+        <div class="qr-wrap">
+          <img id="qr-image" alt="QR code linking to this World Cup tracker page">
+          <div class="share-url" id="share-url"></div>
+          <div class="tiny">Scan this and it opens the tracker directly.</div>
+        </div>
+        <div class="badge" id="update-badge">Waiting for live feed…</div>
+      </div>
+    </section>
+
+    <section class="stats-grid" id="summary-cards"></section>
+
+    <section class="top-grid">
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Now / next / just happened</h2>
+            <p class="panel-subtitle">A quick match feed for the stuff worth paying attention to first.</p>
+          </div>
+        </div>
+        <div class="feed-list" id="feed-list"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div>
+            <h2 class="panel-title">Tournament snapshot</h2>
+            <p class="panel-subtitle">Standings and schedule totals pulled from the current feed.</p>
+          </div>
+        </div>
+        <div class="timeline" id="snapshot-list"></div>
+      </section>
+    </section>
+
+    <section class="panel" id="knockout-bracket">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Knockout bracket</h2>
+          <p class="panel-subtitle">Round of 32 through the final. Future placeholders become actual teams as the feed resolves them.</p>
+        </div>
+      </div>
+      <div class="knockout-grid" id="knockout-grid"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Group tables</h2>
+          <p class="panel-subtitle">Points, goals for/against, and differential for every group.</p>
+        </div>
+      </div>
+      <div class="group-grid" id="group-grid"></div>
+    </section>
+
+    <section class="panel" id="team-explorer">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">Team explorer</h2>
+          <p class="panel-subtitle">Pick any team to see its record, completed matches, and future path.</p>
+        </div>
+      </div>
+      <div class="team-grid">
+        <div class="team-summary">
+          <div>
+            <label for="team-select">Team</label>
+            <select id="team-select"></select>
+          </div>
+          <div id="team-summary"></div>
+        </div>
+        <div>
+          <div class="panel-header" style="margin-bottom: 10px;">
+            <div>
+              <h3 class="panel-title" style="font-size:1rem;">Team schedule and results</h3>
+              <p class="panel-subtitle">Completed matches first, then what is still ahead.</p>
+            </div>
+          </div>
+          <div class="match-list" id="team-match-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="footer-note">
+      Data source: <a href="https://worldcup26.ir" target="_blank" rel="noreferrer noopener">worldcup26.ir</a> JSON endpoints.
+      Team flags from FlagCDN. This page refreshes automatically every 5 minutes and can also be refreshed manually.
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const DATA_BASE = 'https://worldcup26.ir/get';
+      const REFRESH_MS = 5 * 60 * 1000;
+      const ROUND_ORDER = ['r32', 'r16', 'qf', 'sf', 'third', 'final'];
+      const ROUND_LABELS = {
+        r32: 'Round of 32',
+        r16: 'Round of 16',
+        qf: 'Quarterfinals',
+        sf: 'Semifinals',
+        third: 'Third place',
+        final: 'Final'
+      };
+      const state = {
+        teams: [],
+        groups: [],
+        games: [],
+        stadiums: [],
+        lastUpdated: null,
+        selectedTeamId: null
+      };
+
+      const summaryCards = document.getElementById('summary-cards');
+      const feedList = document.getElementById('feed-list');
+      const snapshotList = document.getElementById('snapshot-list');
+      const knockoutGrid = document.getElementById('knockout-grid');
+      const groupGrid = document.getElementById('group-grid');
+      const teamSelect = document.getElementById('team-select');
+      const teamSummary = document.getElementById('team-summary');
+      const teamMatchList = document.getElementById('team-match-list');
+      const updateBadge = document.getElementById('update-badge');
+      const refreshButton = document.getElementById('refresh-button');
+      const shareUrlNode = document.getElementById('share-url');
+      const qrImage = document.getElementById('qr-image');
+
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, char => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+        }[char]));
+      }
+
+      function parseFeedDate(raw) {
+        if (!raw) return null;
+        const [datePart, timePart = '00:00'] = raw.split(' ');
+        const [month, day, year] = datePart.split('/').map(Number);
+        const [hour, minute] = timePart.split(':').map(Number);
+        if ([month, day, year, hour, minute].some(Number.isNaN)) return null;
+        return new Date(year, month - 1, day, hour, minute);
+      }
+
+      function formatDate(raw) {
+        const date = parseFeedDate(raw);
+        if (!date) return raw || 'TBD';
+        return date.toLocaleString([], {
+          month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'
+        });
+      }
+
+      function normalizeStatus(game) {
+        const elapsed = String(game.time_elapsed || '').toLowerCase();
+        const finished = String(game.finished || '').toUpperCase() === 'TRUE';
+        if (finished || elapsed === 'finished') return 'final';
+        if (elapsed && elapsed !== 'notstarted') return 'live';
+        return 'upcoming';
+      }
+
+      function scoreText(game) {
+        return `${Number(game.home_score || 0)} – ${Number(game.away_score || 0)}`;
+      }
+
+      function parseScorers(raw) {
+        if (!raw || raw === 'null') return [];
+        return raw
+          .replace(/[{}]/g, '')
+          .replace(/[“”]/g, '"')
+          .split(/","|","|",\s*"|",|”,”/)
+          .map(item => item.replace(/^"|"$/g, '').trim())
+          .filter(Boolean);
+      }
+
+      function teamMap() {
+        return new Map(state.teams.map(team => [String(team.id), team]));
+      }
+
+      function groupTeamStats() {
+        const stats = new Map();
+        for (const group of state.groups) {
+          for (const team of group.teams || []) {
+            stats.set(String(team.team_id), { ...team, group: group.name });
+          }
+        }
+        return stats;
+      }
+
+      function stadiumMap() {
+        return new Map(state.stadiums.map(stadium => [String(stadium.id), stadium]));
+      }
+
+      function getTeamName(game, side) {
+        return game[`${side}_team_name_en`] || game[`${side}_team_label`] || 'TBD';
+      }
+
+      function getTeamFlag(game, side) {
+        const id = String(game[`${side}_team_id`] || '');
+        const team = teamMap().get(id);
+        return team?.flag || '';
+      }
+
+      function matchCard(game, compact = false) {
+        const status = normalizeStatus(game);
+        const stadium = stadiumMap().get(String(game.stadium_id || ''));
+        const homeName = getTeamName(game, 'home');
+        const awayName = getTeamName(game, 'away');
+        const homeFlag = getTeamFlag(game, 'home');
+        const awayFlag = getTeamFlag(game, 'away');
+        const homeScorers = parseScorers(game.home_scorers);
+        const awayScorers = parseScorers(game.away_scorers);
+        const scorerParts = [];
+        if (homeScorers.length) scorerParts.push(`${homeName}: ${homeScorers.join(', ')}`);
+        if (awayScorers.length) scorerParts.push(`${awayName}: ${awayScorers.join(', ')}`);
+        const winner = status === 'final'
+          ? Number(game.home_score) === Number(game.away_score)
+            ? 'Draw'
+            : Number(game.home_score) > Number(game.away_score) ? `${homeName} won` : `${awayName} won`
+          : 'Not finished';
+        return `
+          <article class="${compact ? 'match-card' : 'feed-card'}">
+            <div class="feed-row">
+              <span class="status-pill status-${status}">${escapeHtml(status === 'final' ? 'Final' : status === 'live' ? `Live ${game.time_elapsed || ''}` : 'Upcoming')}</span>
+              <span class="meta-line">${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)}</span>
+            </div>
+            <div class="teams-line" style="margin-top:10px;">
+              ${homeFlag ? `<img class="flag" src="${homeFlag}" alt="">` : ''}
+              <span>${escapeHtml(homeName)}</span>
+              <span class="score-line">${escapeHtml(scoreText(game))}</span>
+              <span>${escapeHtml(awayName)}</span>
+              ${awayFlag ? `<img class="flag" src="${awayFlag}" alt="">` : ''}
+            </div>
+            <div class="match-meta" style="margin-top:10px;">
+              ${escapeHtml(formatDate(game.local_date))}
+              ${stadium?.name_en ? ` · ${escapeHtml(stadium.name_en)}` : ''}
+              ${game.group ? ` · ${escapeHtml(game.group)}` : ''}
+            </div>
+            <div class="meta-line" style="margin-top:8px;">${escapeHtml(winner)}</div>
+            ${scorerParts.length ? `<div class="meta-line" style="margin-top:8px;">${escapeHtml(scorerParts.join(' | '))}</div>` : ''}
+          </article>`;
+      }
+
+      function sortGames(games) {
+        return [...games].sort((a, b) => {
+          const ad = parseFeedDate(a.local_date)?.getTime() || 0;
+          const bd = parseFeedDate(b.local_date)?.getTime() || 0;
+          return ad - bd || Number(a.id) - Number(b.id);
+        });
+      }
+
+      function renderSummary() {
+        const statuses = state.games.reduce((acc, game) => {
+          const status = normalizeStatus(game);
+          acc[status] = (acc[status] || 0) + 1;
+          return acc;
+        }, { live: 0, upcoming: 0, final: 0 });
+        const goals = state.games
+          .filter(game => normalizeStatus(game) === 'final')
+          .reduce((sum, game) => sum + Number(game.home_score || 0) + Number(game.away_score || 0), 0);
+        const knockoutRemaining = state.games.filter(game => game.type !== 'group' && normalizeStatus(game) !== 'final').length;
+        const items = [
+          { label: 'Live matches', value: statuses.live, sub: statuses.live ? 'Something is happening right now' : 'Quiet, for the moment' },
+          { label: 'Upcoming matches', value: statuses.upcoming, sub: `Includes ${knockoutRemaining} knockout fixtures still unresolved` },
+          { label: 'Completed matches', value: statuses.final, sub: `${goals} total goals in finished games` },
+          { label: 'Teams tracked', value: state.teams.length, sub: `${state.groups.length} groups in the current feed` }
+        ];
+        summaryCards.innerHTML = items.map(item => `
+          <article class="stat-card">
+            <div class="stat-label">${escapeHtml(item.label)}</div>
+            <div class="stat-value">${escapeHtml(item.value)}</div>
+            <div class="stat-sub">${escapeHtml(item.sub)}</div>
+          </article>`).join('');
+      }
+
+      function renderFeed() {
+        const live = sortGames(state.games.filter(game => normalizeStatus(game) === 'live'));
+        const upcoming = sortGames(state.games.filter(game => normalizeStatus(game) === 'upcoming')).slice(0, 4);
+        const recent = sortGames(state.games.filter(game => normalizeStatus(game) === 'final')).reverse().slice(0, 4);
+        const feedGames = [...live, ...upcoming, ...recent].slice(0, 8);
+        feedList.innerHTML = feedGames.length
+          ? feedGames.map(game => matchCard(game)).join('')
+          : '<div class="feed-card">No matches found in the current feed.</div>';
+      }
+
+      function renderSnapshot() {
+        const sorted = sortGames(state.games);
+        const finals = sorted.filter(game => normalizeStatus(game) === 'final');
+        const upcoming = sorted.filter(game => normalizeStatus(game) === 'upcoming');
+        const nextMatch = upcoming[0];
+        const latestMatch = finals[finals.length - 1];
+        const groupLeaders = state.groups.map(group => {
+          const leader = [...(group.teams || [])].sort((a, b) => Number(b.pts) - Number(a.pts) || Number(b.gd) - Number(a.gd))[0];
+          const team = teamMap().get(String(leader?.team_id || ''));
+          return `${group.name}: ${team?.name_en || 'TBD'} (${leader?.pts || 0} pts)`;
+        }).slice(0, 6);
+        const items = [
+          ['Next kick-off', nextMatch ? `${formatDate(nextMatch.local_date)} — ${getTeamName(nextMatch, 'home')} vs ${getTeamName(nextMatch, 'away')}` : 'No future match listed'],
+          ['Latest result', latestMatch ? `${getTeamName(latestMatch, 'home')} ${scoreText(latestMatch)} ${getTeamName(latestMatch, 'away')}` : 'No result listed yet'],
+          ['Group leaders', groupLeaders.join(' | ') || 'No standings available'],
+          ['Refresh cadence', 'Automatic refresh every 5 minutes, plus manual refresh button']
+        ];
+        snapshotList.innerHTML = items.map(([label, value]) => `
+          <div class="timeline-item">
+            <div class="timeline-label">${escapeHtml(label)}</div>
+            <div>${escapeHtml(value)}</div>
+          </div>`).join('');
+      }
+
+      function renderKnockout() {
+        const sorted = sortGames(state.games.filter(game => game.type !== 'group'));
+        knockoutGrid.innerHTML = ROUND_ORDER.map(round => {
+          const games = sorted.filter(game => game.type === round);
+          return `
+            <div class="round-column">
+              <div class="round-title">${escapeHtml(ROUND_LABELS[round])}</div>
+              ${games.length ? games.map(game => matchCard(game, true)).join('') : '<div class="match-card">No fixtures yet.</div>'}
+            </div>`;
+        }).join('');
+      }
+
+      function renderGroups() {
+        const statsMap = groupTeamStats();
+        groupGrid.innerHTML = state.groups.map(group => {
+          const rows = [...(group.teams || [])].sort((a, b) => Number(b.pts) - Number(a.pts) || Number(b.gd) - Number(a.gd) || Number(b.gf) - Number(a.gf));
+          return `
+            <article class="group-card">
+              <div class="feed-row">
+                <h3>Group ${escapeHtml(group.name)}</h3>
+                <span class="badge">${rows.length} teams</span>
+              </div>
+              <table class="group-table">
+                <thead>
+                  <tr>
+                    <th>Team</th>
+                    <th>Pts</th>
+                    <th>MP</th>
+                    <th>GF</th>
+                    <th>GA</th>
+                    <th>GD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows.map(row => {
+                    const team = teamMap().get(String(row.team_id));
+                    return `
+                      <tr>
+                        <td>${escapeHtml(team?.name_en || 'TBD')}</td>
+                        <td>${escapeHtml(row.pts)}</td>
+                        <td>${escapeHtml(row.mp)}</td>
+                        <td>${escapeHtml(row.gf)}</td>
+                        <td>${escapeHtml(row.ga)}</td>
+                        <td>${escapeHtml(row.gd)}</td>
+                      </tr>`;
+                  }).join('')}
+                </tbody>
+              </table>
+            </article>`;
+        }).join('');
+      }
+
+      function populateTeamSelect() {
+        const teams = [...state.teams].sort((a, b) => a.name_en.localeCompare(b.name_en));
+        teamSelect.innerHTML = teams.map(team => `
+          <option value="${escapeHtml(team.id)}">${escapeHtml(team.name_en)}${team.groups ? ` (Group ${escapeHtml(team.groups)})` : ''}</option>`).join('');
+        if (!state.selectedTeamId || !teams.some(team => String(team.id) === String(state.selectedTeamId))) {
+          const liveGame = state.games.find(game => normalizeStatus(game) === 'live');
+          state.selectedTeamId = liveGame?.home_team_id || teams[0]?.id || null;
+        }
+        if (state.selectedTeamId != null) teamSelect.value = String(state.selectedTeamId);
+      }
+
+      function renderTeamExplorer() {
+        const selectedId = String(state.selectedTeamId || '');
+        const team = teamMap().get(selectedId);
+        if (!team) {
+          teamSummary.innerHTML = '<div class="team-summary">No team selected.</div>';
+          teamMatchList.innerHTML = '';
+          return;
+        }
+        const stats = groupTeamStats().get(selectedId);
+        const games = sortGames(state.games.filter(game => String(game.home_team_id) === selectedId || String(game.away_team_id) === selectedId));
+        const completed = games.filter(game => normalizeStatus(game) === 'final');
+        const pending = games.filter(game => normalizeStatus(game) !== 'final');
+        const wins = completed.filter(game => {
+          const isHome = String(game.home_team_id) === selectedId;
+          return isHome ? Number(game.home_score) > Number(game.away_score) : Number(game.away_score) > Number(game.home_score);
+        }).length;
+        const draws = completed.filter(game => Number(game.home_score) === Number(game.away_score)).length;
+        const losses = completed.length - wins - draws;
+        const goalsFor = completed.reduce((sum, game) => sum + Number(String(game.home_team_id) === selectedId ? game.home_score : game.away_score), 0);
+        const goalsAgainst = completed.reduce((sum, game) => sum + Number(String(game.home_team_id) === selectedId ? game.away_score : game.home_score), 0);
+        const nextOpponent = pending[0]
+          ? String(pending[0].home_team_id) === selectedId ? getTeamName(pending[0], 'away') : getTeamName(pending[0], 'home')
+          : 'None listed';
+
+        teamSummary.innerHTML = `
+          <article class="team-summary">
+            <div class="team-header">
+              <img src="${escapeHtml(team.flag || '')}" alt="">
+              <div>
+                <h3>${escapeHtml(team.name_en)}</h3>
+                <div class="panel-subtitle">${team.fifa_code ? escapeHtml(team.fifa_code) + ' · ' : ''}Group ${escapeHtml(stats?.group || team.groups || '—')}</div>
+              </div>
+            </div>
+            <div class="record-grid">
+              <div class="record-card"><div class="label">Record</div><div class="value">${wins}-${draws}-${losses}</div></div>
+              <div class="record-card"><div class="label">Goals</div><div class="value">${goalsFor}:${goalsAgainst}</div></div>
+              <div class="record-card"><div class="label">Points</div><div class="value">${escapeHtml(stats?.pts || 0)}</div></div>
+              <div class="record-card"><div class="label">Next opponent</div><div class="value" style="font-size:1rem;line-height:1.2;">${escapeHtml(nextOpponent)}</div></div>
+            </div>
+            <div class="timeline">
+              <div class="timeline-item"><div class="timeline-label">Played</div><div>${completed.length} match${completed.length === 1 ? '' : 'es'}</div></div>
+              <div class="timeline-item"><div class="timeline-label">Still ahead</div><div>${pending.length} fixture${pending.length === 1 ? '' : 's'}</div></div>
+              <div class="timeline-item"><div class="timeline-label">Group standing</div><div>${stats ? `${stats.pts} pts · GD ${stats.gd} · ${stats.gf} GF / ${stats.ga} GA` : 'No group table entry available'}</div></div>
+            </div>
+          </article>`;
+
+        teamMatchList.innerHTML = [...completed.reverse(), ...pending].map(game => {
+          const opponent = String(game.home_team_id) === selectedId ? getTeamName(game, 'away') : getTeamName(game, 'home');
+          const venue = stadiumMap().get(String(game.stadium_id || ''))?.name_en || '';
+          const status = normalizeStatus(game);
+          const teamScore = String(game.home_team_id) === selectedId ? Number(game.home_score || 0) : Number(game.away_score || 0);
+          const oppScore = String(game.home_team_id) === selectedId ? Number(game.away_score || 0) : Number(game.home_score || 0);
+          const result = status === 'final' ? (teamScore === oppScore ? 'Draw' : teamScore > oppScore ? 'Win' : 'Loss') : 'Upcoming';
+          return `
+            <article class="schedule-card">
+              <div class="feed-row">
+                <strong>${escapeHtml(opponent)}</strong>
+                <span class="status-pill status-${status}">${escapeHtml(result)}</span>
+              </div>
+              <div class="meta-line" style="margin-top:8px;">${escapeHtml(ROUND_LABELS[game.type] || `Group ${game.group}`)} · ${escapeHtml(formatDate(game.local_date))}</div>
+              <div class="meta-line" style="margin-top:6px;">Score: ${escapeHtml(scoreText(game))}${venue ? ` · ${escapeHtml(venue)}` : ''}</div>
+            </article>`;
+        }).join('') || '<div class="schedule-card">No matches found for this team.</div>';
+      }
+
+      function renderShareUrl() {
+        const current = new URL(window.location.href);
+        const canonical = current.hostname.includes('github.io') || current.hostname === 'localhost'
+          ? 'https://www.adividiardi.com/world-cup/'
+          : current.href;
+        shareUrlNode.textContent = canonical;
+        qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(canonical)}`;
+      }
+
+      async function fetchJson(endpoint) {
+        const response = await fetch(`${DATA_BASE}/${endpoint}`, { cache: 'no-store' });
+        if (!response.ok) throw new Error(`Failed to fetch ${endpoint}: ${response.status}`);
+        return response.json();
+      }
+
+      async function loadData() {
+        updateBadge.textContent = 'Refreshing live feed…';
+        try {
+          const [gamesData, groupsData, teamsData, stadiumsData] = await Promise.all([
+            fetchJson('games'), fetchJson('groups'), fetchJson('teams'), fetchJson('stadiums')
+          ]);
+          state.games = gamesData.games || [];
+          state.groups = groupsData.groups || [];
+          state.teams = teamsData.teams || [];
+          state.stadiums = stadiumsData.stadiums || [];
+          state.lastUpdated = new Date();
+          renderSummary();
+          renderFeed();
+          renderSnapshot();
+          renderKnockout();
+          renderGroups();
+          populateTeamSelect();
+          renderTeamExplorer();
+          updateBadge.textContent = `Live feed updated ${state.lastUpdated.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+        } catch (error) {
+          console.error(error);
+          updateBadge.textContent = 'Live feed failed. Try refreshing again.';
+          feedList.innerHTML = `<div class="feed-card">${escapeHtml(error.message)}</div>`;
+        }
+      }
+
+      refreshButton.addEventListener('click', loadData);
+      teamSelect.addEventListener('change', () => {
+        state.selectedTeamId = teamSelect.value;
+        renderTeamExplorer();
+      });
+
+      renderShareUrl();
+      loadData();
+      setInterval(loadData, REFRESH_MS);
+    })();
+  </script>
+</body>
+</html>
