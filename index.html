@@ -95,7 +95,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.8 · 9f792aa';
+      const VERSION = '20260628.9 · 6ee4040';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -754,7 +754,7 @@
 
         const voltaScary = voltaDist < 290;
         const cursorNear = cursorDist < 185;
-        const orbNear    = nearOrb && nearDist < 230;
+        const orbNear    = nearOrb && nearDist < 340;
 
         // ── State machine ─────────────────────────────────────────────────────
 
@@ -804,21 +804,21 @@
         // Idle timer: decide next vibe
         if (c.mood === 'idle' && c.moodTimer <= 0) {
           const r = Math.random();
-          if (r < 0.12) {
-            // ZOOMIES
+          if (r < 0.22) {
+            // ZOOMIES — more frequent
             c.mood = 'sprint';
             const a = Math.random() * Math.PI * 2;
             c.sprintDX = Math.cos(a); c.sprintDY = Math.sin(a);
-            c.moodTimer = 380 + Math.random() * 820;
-          } else if (r < 0.62) {
-            // Wander to a random spot
+            c.moodTimer = 400 + Math.random() * 900;
+          } else if (r < 0.72) {
+            // Wander — bias targets toward center half so cat stays in the scene
             c.mood = 'wander';
-            c.targetX = w * 0.12 + Math.random() * w * 0.76;
-            c.targetY = h * 0.12 + Math.random() * h * 0.76;
-            c.moodTimer = 3500 + Math.random() * 4500;
+            c.targetX = w * 0.20 + Math.random() * w * 0.60;
+            c.targetY = h * 0.20 + Math.random() * h * 0.60;
+            c.moodTimer = 2500 + Math.random() * 3500;
           } else {
             // Sit a bit longer
-            c.moodTimer = 1200 + Math.random() * 2800;
+            c.moodTimer = 700 + Math.random() * 1500;
           }
         }
 
@@ -837,10 +837,13 @@
 
         switch (c.mood) {
           case 'idle': {
-            cat.vx *= Math.pow(0.86, dt / 16);
-            cat.vy *= Math.pow(0.86, dt / 16);
-            cat.vx += (Math.random() - 0.5) * 0.007 * dt;
-            cat.vy += (Math.random() - 0.5) * 0.007 * dt;
+            // Soft drift toward canvas center so the cat stays in the scene
+            const cxPull = (w * 0.5 - cat.x) * 0.000012 * dt;
+            const cyPull = (h * 0.5 - cat.y) * 0.000012 * dt;
+            cat.vx *= Math.pow(0.91, dt / 16);
+            cat.vy *= Math.pow(0.91, dt / 16);
+            cat.vx += (Math.random() - 0.5) * 0.014 * dt + cxPull;
+            cat.vy += (Math.random() - 0.5) * 0.014 * dt + cyPull;
             c.rotTarget = Math.sin(now * 0.00088) * D20 * 0.28 + Math.sin(now * 0.00063) * D20 * 0.14;
             if (Math.random() < 0.0004 * dt) c.rotTarget += (Math.random() - 0.5) * D20 * 1.6; // tail flick
             c.scaTarget = 1.0;
