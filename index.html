@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.3 · 404c3cd';
+      const VERSION = '20260629.4 · b4c209a';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -216,6 +216,7 @@
         charge: 0,             // 0→1 during infection — drives VE wildness
         idleSince: 0,          // when Volta last became eligible to reappear
         interactionPressure: 0, // accumulates user clicks/taps until the next spawn
+        activeTimeMs: 0,       // only increments while the VE is actively engaged
         nextSpawnCheck: 0,     // throttles probabilistic spawn checks
         tapTimes: [],          // timestamps for 12-tap summon detection
       };
@@ -646,6 +647,7 @@
             continue;
           }
           if (ap.orbImg) continue; // cat has its own behavioral update
+          const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
           // Slow wander — more active after VE is destroyed (no pull to mask the drift)
           const wanderStr = ve.liberated ? 0.0042 : 0.001;
           ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
@@ -654,7 +656,7 @@
           // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (!ap.audioEl && !ap.orbImg && ve.scaleCurrent > 5 && !ve.liberated) {
+          if (!ap.audioEl && !ap.orbImg && veInteractive && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 60 * accelBoost / (d * 0.04 + 1);
@@ -1109,25 +1111,21 @@
           ve.y += ve.vy * dt;
         }
 
-        // Count orbs inside a fixed-radius presence zone (independent of current scale,
-        // so a shrinking VE doesn't expel its own sustaining orbs)
+        const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
         const presenceR = ve.scale * 0.80; // ≈ inradius at full scale (~42px)
         let orbsInPresence = 0;
-        for (const ap of appParticles) {
-          if (!ap.audio && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
+        if (veInteractive) {
+          for (const ap of appParticles) {
+            if (!ap.audioEl && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
+          }
         }
-        ve.orbsInside = orbsInPresence; // exposed to drawVE for oscillation scaling
+        ve.orbsInside = veInteractive ? orbsInPresence : 0; // exposed to drawVE for oscillation scaling
 
-        // Alpha/scale: full when active; orb-sustained when idle; fades when empty
+        // Alpha/scale: full when active or being held; otherwise fade to inert
         const inRate = clamp(dt * 0.005, 0, 1);
-        if (ve.active || ve.voltaHeld) {
+        if (veInteractive) {
           ve.alphaP += (1 - ve.alphaP) * inRate;
           ve.scaleP += (1 - ve.scaleP) * inRate;
-        } else if (orbsInPresence > 0) {
-          // Each orb adds 5% to the 50% idle floor (max ~90%)
-          const sustainScale = Math.min(0.90, 0.50 + orbsInPresence * 0.05);
-          ve.scaleP += (sustainScale - ve.scaleP) * clamp(dt * 0.003, 0, 1);
-          ve.alphaP += (0.88 - ve.alphaP) * clamp(dt * 0.003, 0, 1);
         } else {
           ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);
           ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);
@@ -1149,10 +1147,12 @@
         ve.scaleCurrent = ve.scale * ve.scaleP * strainDim;
 
         // Count orbs inside VE footprint → drive excitement
-        const captureR = ve.scaleCurrent * 1.2;
+        const captureR = veInteractive ? ve.scaleCurrent * 1.2 : 0;
         let orbsIn = 0;
-        for (const ap of appParticles) {
-          if (Math.hypot(ap.x - ve.x, ap.y - ve.y) < captureR) orbsIn++;
+        if (veInteractive) {
+          for (const ap of appParticles) {
+            if (Math.hypot(ap.x - ve.x, ap.y - ve.y) < captureR) orbsIn++;
+          }
         }
         const targetEx = appParticles.length > 0 ? orbsIn / appParticles.length : 0;
         ve.excitement += (targetEx - ve.excitement) * clamp(dt * 0.003, 0, 1);
@@ -1430,14 +1430,15 @@
       function resetVoltaSpawnPressure(now = performance.now()) {
         volta.idleSince = now;
         volta.interactionPressure = 0;
+        volta.activeTimeMs = 0;
         volta.nextSpawnCheck = now + 8000; // brief quiet period so Volta does not photobomb immediately
       }
 
       function maybeSpawnVolta(now) {
         if (volta.active || now < volta.nextSpawnCheck) return false;
         volta.nextSpawnCheck = now + 240;
-        const idleMs = now - volta.idleSince;
-        const idleCurve = clamp(idleMs / 120000, 0, 1.8);
+        const activeTimeMs = volta.activeTimeMs;
+        const idleCurve = clamp(activeTimeMs / 120000, 0, 1.8);
         const interactionCurve = clamp(volta.interactionPressure / 18, 0, 1.6);
         const mean = -2.6 + idleCurve * 3.2 + interactionCurve * 2.4;
         const stddev = 0.38 + idleCurve * 0.95 + interactionCurve * 0.72;
@@ -1465,6 +1466,7 @@
         volta.idleSince        = now;
         volta.nextSpawnCheck   = Infinity;
         volta.interactionPressure = 0;
+        volta.activeTimeMs      = 0;
       }
 
       function voltaJags(x1, y1, x2, y2) {
@@ -1530,6 +1532,7 @@
 
       function updateVolta(dt, now) {
         if (!volta.active) {
+          if (ve.active && !ve.liberated) volta.activeTimeMs += dt;
           maybeSpawnVolta(now);
           return;
         }
@@ -1574,14 +1577,15 @@
             volta.cy += ((sy / cnt) - volta.cy) * clamp(dt * 0.014, 0, 1);
           }
           // Still drift toward VE so the arc body eventually reaches it
-          const tx = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
-          const ty = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
+          const veAttackable = (ve.active || ve.voltaHeld) && !ve.liberated && ve.scaleCurrent > 5;
+          const tx = veAttackable ? ve.x : w * 0.5;
+          const ty = veAttackable ? ve.y : h * 0.5;
           const ddx = tx - volta.cx, ddy = ty - volta.cy;
           const dd  = Math.hypot(ddx, ddy) || 1;
           volta.cx += (ddx / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           volta.cy += (ddy / dd) * Math.min(VOLTA_SPEED * 0.55 * dt * 0.001, dd);
           // Check infection trigger: creature reaches VE — burst of attack arcs at the moment of contact
-          if (ve.scaleCurrent > 5 && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
+          if (veAttackable && Math.hypot(volta.cx - ve.x, volta.cy - ve.y) < ve.scaleCurrent * 1.5) {
             volta.state = 'infecting'; volta.infectedTimer = 0; ve.voltaHeld = true;
             // Stinger burst: connect every arc endpoint to nearest VE vertex
             if (ve.vertNodes) {
@@ -1688,8 +1692,9 @@
         }
 
         // Traversal: organic arc search toward VE
-        const veX = (ve.scaleCurrent > 5) ? ve.x : w * 0.5;
-        const veY = (ve.scaleCurrent > 5) ? ve.y : h * 0.5;
+        const veAttackable = (ve.active || ve.voltaHeld) && !ve.liberated && ve.scaleCurrent > 5;
+        const veX = veAttackable ? ve.x : w * 0.5;
+        const veY = veAttackable ? ve.y : h * 0.5;
         const veDist = Math.hypot(stage.clientWidth, stage.clientHeight);
 
         // Volta's forward direction (toward VE)
@@ -1735,7 +1740,7 @@
 
         // Attempt ONE new arc per frame — all arcs must stay contiguous (connected chain)
         // Spawn up to 4 new arcs per frame — constellation branching from any existing node
-        const spawnBudget = Math.min(6, VOLTA_MAX_ARCS - volta.arcs.length);
+        const spawnBudget = Math.min(2, VOLTA_MAX_ARCS - volta.arcs.length);
         if (spawnBudget > 0 && nearby.length >= 2) {
           nearby.sort((a, b) => b.score - a.score);
           // Build set of all nodes already in the arc graph
@@ -1761,23 +1766,29 @@
             }
             if (!src) break;
 
-            const targets = nearby.filter(({p}) => p !== src
-                            && Math.hypot(p.x - src.x, p.y - src.y) < VOLTA_ARC_DIST
-                            && Math.hypot(p.x - src.x, p.y - src.y) > 10
+            const targets = nearby.map(({p, score}) => {
+              const arcDist = Math.hypot(p.x - src.x, p.y - src.y);
+              return { p, score, arcDist };
+            }).filter(({p, arcDist}) => p !== src
+                            && arcDist < VOLTA_ARC_DIST
+                            && arcDist > 10
                             && !volta.arcs.some(arc => (arc.a === src && arc.b === p) || (arc.a === p && arc.b === src)));
             if (targets.length === 0) continue;
-            targets.sort((a, b) => b.score - a.score);
-            const tgt = targets[Math.floor(Math.random() * Math.min(4, targets.length))].p;
-            const arcCost = 0.04 / Math.max(tgt.mass || 0.1, 0.1);
-            const strength = clamp(1 - arcCost * 0.4, 0.35, 1.0);
+            targets.sort((a, b) => (b.score + (1 - b.arcDist / VOLTA_ARC_DIST) * 0.55) - (a.score + (1 - a.arcDist / VOLTA_ARC_DIST) * 0.55));
+            const targetPick = targets[Math.floor(Math.random() * Math.min(4, targets.length))];
+            const tgt = targetPick.p;
+            const arcReach = clamp(1 - targetPick.arcDist / VOLTA_ARC_DIST, 0.08, 1);
+            if (Math.random() > arcReach * arcReach) continue;
+            const arcCost = (0.025 + (1 - arcReach) * 0.055) / Math.max(tgt.mass || 0.1, 0.1);
+            const strength = clamp(0.30 + arcReach * 0.70 - arcCost * 0.25, 0.20, 1.0);
             volta.pool = Math.max(0, volta.pool - arcCost);
-            volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(100, 360), strength });
+            volta.arcs.push({ a: src, b: tgt, born: now, maxAge: rand(90, 280), strength });
             existingPts.add(src); existingPts.add(tgt);
           }
         }
 
         // Attack arcs: when Volta is close enough to VE, bridge from constellation to VE vertices
-        if (ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
+        if ((ve.active || ve.voltaHeld) && ve.scaleCurrent > 5 && !ve.liberated && ve.vertNodes) {
           const distToVE = Math.hypot(volta.cx - ve.x, volta.cy - ve.y);
           const attackRange = ve.scaleCurrent * 5.0 + VOLTA_ARC_DIST;
           if (distToVE < attackRange && volta.arcs.length > 0) {
