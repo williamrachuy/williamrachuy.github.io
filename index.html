@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.17';
+      const VERSION = '20260629.19';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -339,17 +339,16 @@
         p.heat += (heatTarget - p.heat) * clamp(dt * heatRate, 0, 1);
       }
 
-      function endlessTwinkleAt(x, y, phase, now, endlessOrb, reach) {
+      function endlessTwinkleAt(x, y, phase, now, endlessOrb, reach, reach2) {
         if (!endlessOrb || !endlessOrb.playing || reach <= 0) return 0;
         const dx = x - endlessOrb.x, dy = y - endlessOrb.y;
-        const d = Math.hypot(dx, dy);
-        const prox = clamp(1 - d / reach, 0, 1);
-        if (prox <= 0) return 0;
-        const shimmer = Math.sin(now * 0.034 + phase * 7.1 + dx * 0.024) * 0.52
-                      + Math.sin(now * 0.061 + phase * 13.7 + dy * 0.019 + 0.9) * 0.40
-                      + Math.sin(now * 0.103 + phase * 19.9 + (dx - dy) * 0.012 + 1.8) * 0.30;
-        const feather = 0.26 + Math.pow(prox, 1.75) * 1.75;
-        return Math.max(0, feather * (0.62 + shimmer * 0.66));
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= reach2) return 0;
+        const prox = 1 - d2 / reach2;
+        const shimmer = Math.sin(now * 0.032 + phase * 6.7 + dx * 0.020) * 0.54
+                      + Math.sin(now * 0.071 + phase * 12.9 + dy * 0.016 + 0.9) * 0.38;
+        const feather = 0.18 + prox * prox * 1.28;
+        return Math.max(0, feather * (0.48 + shimmer * 0.52));
       }
 
       function updateParticles(dt) {
@@ -415,14 +414,16 @@
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         const endlessOrb = appParticles.find(ap => ap.audioKey === 'endless');
-        const endlessReach = endlessOrb && endlessOrb.playing ? Math.hypot(stage.clientWidth, stage.clientHeight) * 1.35 : 0;
+        const endlessReach = endlessOrb && endlessOrb.playing ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.92 : 0;
+        const endlessReach2 = endlessReach * endlessReach;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
           const local = lightAt(p.x, p.y, now);
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
-          if (p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15) continue;
+          const baseVisible = !(p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15);
+          if (!baseVisible) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const zPressure = endlessTwinkleAt(p.x, p.y, p.tw, now, endlessOrb, endlessReach);
+          const zPressure = endlessTwinkleAt(p.x, p.y, p.tw, now, endlessOrb, endlessReach, endlessReach2);
           const alpha  = (p.alpha * 0.59) + local * (0.32 + pulse * 0.18) + zPressure * (0.82 + local * 0.68);
           const color  = heatColor(p.heat);
           const emission = Math.max(local, p.heat);
@@ -430,13 +431,13 @@
           const speed  = Math.hypot(p.vx, p.vy);
 
           // Comet tail — only when moving + lit; no shadowBlur on trail segments (perf)
-          if (luminous > 0.04 && speed > 0.002 && p.trail.length > 1) {
+          if (emission > 0.04 && speed > 0.002 && p.trail.length > 1) {
             pctx.shadowBlur = 0;
             const tailLen = p.trail.length;
             for (let t = 0; t < tailLen; t++) {
               const frac   = (t + 1) / tailLen;
               const evap   = Math.pow(1 - frac, 1.6);
-              const tAlpha = alpha * evap * luminous * 0.55;
+              const tAlpha = alpha * evap * emission * 0.55;
               if (tAlpha < 0.005) break;
               pctx.globalAlpha = tAlpha;
               pctx.fillStyle   = color;
@@ -446,8 +447,11 @@
 
           // Particle head — glow only on particles with significant illumination (perf)
           const heatSq = luminous * luminous;
-          pctx.globalAlpha = Math.min(1, alpha + p.heat * 0.22 + zPressure * 0.52);
-          pctx.shadowBlur  = luminous > 0.14 ? ((2 + heatSq * 18) * (1 + zPressure * 1.9) + zPressure * 36) : 0;
+          pctx.globalAlpha = Math.min(1, alpha + p.heat * 0.22 + zPressure * 0.36);
+          const baseBlur = emission > 0.32 ? (1 + emission * emission * 10) : 0;
+          pctx.shadowBlur  = zPressure > 0.14
+            ? Math.min(28, baseBlur * (1 + zPressure * 1.1) + zPressure * 10)
+            : baseBlur;
           pctx.shadowColor = color;
           pctx.fillStyle   = color;
           pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
