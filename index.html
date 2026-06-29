@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.15';
+      const VERSION = '20260629.17';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -339,24 +339,21 @@
         p.heat += (heatTarget - p.heat) * clamp(dt * heatRate, 0, 1);
       }
 
-      function endlessZPressureAt(x, y, phase, now, endlessOrb) {
-        if (!endlessOrb || !endlessOrb.playing) return 0;
+      function endlessTwinkleAt(x, y, phase, now, endlessOrb, reach) {
+        if (!endlessOrb || !endlessOrb.playing || reach <= 0) return 0;
         const dx = x - endlessOrb.x, dy = y - endlessOrb.y;
         const d = Math.hypot(dx, dy);
-        const reach = Math.hypot(stage.clientWidth, stage.clientHeight) * 1.35;
-        const prox = clamp(1 - d / Math.max(reach, 1), 0, 1);
+        const prox = clamp(1 - d / reach, 0, 1);
         if (prox <= 0) return 0;
-        const shimmer = Math.sin(now * 0.030 + phase * 7.1 + dx * 0.024) * 0.46
-                      + Math.sin(now * 0.053 + phase * 13.7 + dy * 0.019 + 0.9) * 0.36
-                      + Math.sin(now * 0.087 + phase * 19.9 + (dx - dy) * 0.012 + 1.8) * 0.28
-                      + Math.sin(now * 0.141 + phase * 29.0 + (dx + dy) * 0.006 + 0.4) * 0.18;
-        const feather = 0.18 + Math.pow(prox, 1.65) * 1.35;
-        return Math.max(0, feather * (0.52 + shimmer * 0.58));
+        const shimmer = Math.sin(now * 0.034 + phase * 7.1 + dx * 0.024) * 0.52
+                      + Math.sin(now * 0.061 + phase * 13.7 + dy * 0.019 + 0.9) * 0.40
+                      + Math.sin(now * 0.103 + phase * 19.9 + (dx - dy) * 0.012 + 1.8) * 0.30;
+        const feather = 0.26 + Math.pow(prox, 1.75) * 1.75;
+        return Math.max(0, feather * (0.62 + shimmer * 0.66));
       }
 
-      function updateParticles(dt, now) {
+      function updateParticles(dt) {
         const w = stage.clientWidth, h = stage.clientHeight;
-        const endlessOrb = appParticles.find(ap => ap.audioKey === 'endless');
         // dr/dt = (net dm/dt) / (3r²), m ∝ r³, uniform density
         const kLoss = 0.00022;   // ablation rate — ~3s to evaporate at 50% light radius
         const kGain = 0.000015;  // recovery rate via ODE phase
@@ -381,10 +378,6 @@
             }
           }
 
-          const endlessPressure = endlessZPressureAt(p.x, p.y, p.tw, now, endlessOrb);
-          if (endlessPressure > 0 && p.mass > 0.01) {
-            thermalInput = Math.max(thermalInput, endlessPressure * 1.95);
-          }
 
           // Shared thermal response: force and arc energy heat identically;
           // absence of either cools the material back toward ambient.
@@ -422,13 +415,14 @@
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         const endlessOrb = appParticles.find(ap => ap.audioKey === 'endless');
+        const endlessReach = endlessOrb && endlessOrb.playing ? Math.hypot(stage.clientWidth, stage.clientHeight) * 1.35 : 0;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
           const local = lightAt(p.x, p.y, now);
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
           if (p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const zPressure = endlessZPressureAt(p.x, p.y, p.tw, now, endlessOrb);
+          const zPressure = endlessTwinkleAt(p.x, p.y, p.tw, now, endlessOrb, endlessReach);
           const alpha  = (p.alpha * 0.59) + local * (0.32 + pulse * 0.18) + zPressure * (0.82 + local * 0.68);
           const color  = heatColor(p.heat);
           const emission = Math.max(local, p.heat);
@@ -1905,7 +1899,7 @@
         updateLights(dt);
         updateVE(dt);
         updateVolta(dt, now);
-        updateParticles(dt, now);
+        updateParticles(dt);
         updateAppParticles(dt);
         updateCat(dt, now);
         updateLiberatedNodes(dt, now);
