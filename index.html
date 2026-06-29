@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.4 · b4c209a';
+      const VERSION = '20260629.5 · 374959f';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
@@ -1112,20 +1112,25 @@
         }
 
         const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
+        const vePresent = !ve.liberated && (veInteractive || ve.alphaP > 0.16 || ve.scaleP > 0.16);
         const presenceR = ve.scale * 0.80; // ≈ inradius at full scale (~42px)
         let orbsInPresence = 0;
-        if (veInteractive) {
+        if (vePresent) {
           for (const ap of appParticles) {
             if (!ap.audioEl && Math.hypot(ap.x - ve.x, ap.y - ve.y) < presenceR) orbsInPresence++;
           }
         }
-        ve.orbsInside = veInteractive ? orbsInPresence : 0; // exposed to drawVE for oscillation scaling
+        ve.orbsInside = vePresent ? orbsInPresence : 0; // exposed to drawVE for oscillation scaling
 
-        // Alpha/scale: full when active or being held; otherwise fade to inert
+        // Alpha/scale: full when active or being held; orb-sustained while still visibly present; otherwise fade to inert
         const inRate = clamp(dt * 0.005, 0, 1);
         if (veInteractive) {
           ve.alphaP += (1 - ve.alphaP) * inRate;
           ve.scaleP += (1 - ve.scaleP) * inRate;
+        } else if (vePresent && orbsInPresence > 0) {
+          const sustainScale = Math.min(0.90, 0.50 + orbsInPresence * 0.05);
+          ve.scaleP += (sustainScale - ve.scaleP) * clamp(dt * 0.003, 0, 1);
+          ve.alphaP += (0.88 - ve.alphaP) * clamp(dt * 0.003, 0, 1);
         } else {
           ve.alphaP += -ve.alphaP * clamp(dt * 0.002, 0, 1);
           ve.scaleP += -ve.scaleP * clamp(dt * 0.0008, 0, 1);
@@ -1147,9 +1152,9 @@
         ve.scaleCurrent = ve.scale * ve.scaleP * strainDim;
 
         // Count orbs inside VE footprint → drive excitement
-        const captureR = veInteractive ? ve.scaleCurrent * 1.2 : 0;
+        const captureR = vePresent ? ve.scaleCurrent * 1.2 : 0;
         let orbsIn = 0;
-        if (veInteractive) {
+        if (vePresent) {
           for (const ap of appParticles) {
             if (Math.hypot(ap.x - ve.x, ap.y - ve.y) < captureR) orbsIn++;
           }
