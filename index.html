@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.21';
+      const VERSION = '20260629.23';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -549,6 +549,7 @@
       }
 
       function pointerLight(event, strength, sustainStrength) {
+        if (orbInteractionActive) return;
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
         const tx    = p.clientX - rect.left;
@@ -1946,8 +1947,8 @@
         }
         // Spike to 100%, settle to 47% (mouse click) or 20% (touch hold) — 67% of prior
         const touch = e.pointerType === 'touch';
-        pointerLight(e, 1.0, touch ? 0.20 : 0.47);
-        if (e.button === 0 || touch) {
+        if (!orbInteractionActive) pointerLight(e, 1.0, touch ? 0.20 : 0.47);
+        if (!orbInteractionActive && (e.button === 0 || touch)) {
           ve.ωx += (Math.random() * 2 - 1) * 0.0035;
           ve.ωy += (Math.random() * 2 - 1) * 0.0035;
           ve.ωz += (Math.random() * 2 - 1) * 0.0018;
@@ -1956,9 +1957,12 @@
       stage.addEventListener('pointermove', e => {
         catCursorX = e.clientX; catCursorY = e.clientY;
         if (e.pointerType === 'mouse') {
-          if (e.buttons & 1) pointerLight(e, null, 0.47);  // held click — sustain 47%
-          else               pointerLight(e, 0.20, 0.20);  // hover — steady 20%
-        } else if (e.buttons) {
+          if (e.buttons & 1) {
+            if (!orbInteractionActive) pointerLight(e, null, 0.47);  // held click — sustain 47%
+          } else if (!orbInteractionActive) {
+            pointerLight(e, 0.20, 0.20);  // hover — steady 20%
+          }
+        } else if (e.buttons && !orbInteractionActive) {
           // Touch swipe: speed scales sustain from 20% to 47% — 67% of prior range
           const speed = Math.hypot(e.movementX || 0, e.movementY || 0);
           const sus   = Math.min(0.47, 0.20 + speed * 0.054);
