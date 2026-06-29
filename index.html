@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.24';
+      const VERSION = '20260629.25';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -340,16 +340,20 @@
         p.heat += (heatTarget - p.heat) * clamp(dt * heatRate, 0, 1);
       }
 
-      function endlessTwinkleAt(x, y, phase, now, endlessOrb, reach, reach2) {
-        if (!endlessOrb || !endlessOrb.playing || reach <= 0) return 0;
-        const dx = x - endlessOrb.x, dy = y - endlessOrb.y;
-        const d2 = dx * dx + dy * dy;
-        if (d2 >= reach2) return 0;
-        const prox = 1 - d2 / reach2;
-        const shimmer = Math.sin(now * 0.032 + phase * 6.7 + dx * 0.020) * 0.54
-                      + Math.sin(now * 0.071 + phase * 12.9 + dy * 0.016 + 0.9) * 0.38;
-        const feather = 0.18 + prox * prox * 1.28;
-        return feather * shimmer;
+      function soundOrbTwinkleAt(x, y, phase, now, activeAudioOrbs, reach, reach2) {
+        if (activeAudioOrbs.length === 0 || reach <= 0) return 0;
+        let twinkle = 0;
+        for (const orb of activeAudioOrbs) {
+          const dx = x - orb.x, dy = y - orb.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 >= reach2) continue;
+          const prox = 1 - d2 / reach2;
+          const shimmer = Math.sin(now * 0.032 + phase * 6.7 + dx * 0.020) * 0.54
+                        + Math.sin(now * 0.071 + phase * 12.9 + dy * 0.016 + 0.9) * 0.38;
+          const feather = 0.18 + prox * prox * 1.28;
+          twinkle += feather * shimmer;
+        }
+        return clamp(twinkle, -1.2, 1.2);
       }
 
       function updateParticles(dt) {
@@ -414,9 +418,9 @@
 
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
-        const endlessOrb = appParticles.find(ap => ap.audioKey === 'endless');
-        const endlessReach = endlessOrb && endlessOrb.playing ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.92 : 0;
-        const endlessReach2 = endlessReach * endlessReach;
+        const activeAudioOrbs = appParticles.filter(ap => ap.audioEl && ap.playing);
+        const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.92 : 0;
+        const soundOrbReach2 = soundOrbReach * soundOrbReach;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
           const local = lightAt(p.x, p.y, now);
@@ -424,7 +428,7 @@
           const baseVisible = !(p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15);
           if (!baseVisible) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
-          const twinkle = endlessTwinkleAt(p.x, p.y, p.tw, now, endlessOrb, endlessReach, endlessReach2);
+          const twinkle = soundOrbTwinkleAt(p.x, p.y, p.tw, now, activeAudioOrbs, soundOrbReach, soundOrbReach2);
           const twinkleLift = clamp(1 + twinkle * 0.85, 0.35, 2.2);
           const alpha  = ((p.alpha * 0.59) + local * (0.32 + pulse * 0.18)) * clamp(1 + twinkle * 0.72, 0.45, 2.1);
           const color  = heatColor(p.heat);
