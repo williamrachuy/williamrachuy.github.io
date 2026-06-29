@@ -96,7 +96,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.19';
+      const VERSION = '20260629.21';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -124,6 +124,7 @@
       let catCursorY    = -9999;
       let lastFrame       = 0;
       let holdActive      = false; // true while mouse/touch is held down
+      let orbInteractionActive = false; // suppress VE activation while pressing an orb
       let lastStageW      = 0;
       let lastStageH      = 0;
 
@@ -537,6 +538,16 @@
 
       // strength: spike value (null = no spike, just update sustain)
       // sustainStrength: the level it decays toward after the spike
+      function appParticleAtClient(clientX, clientY) {
+        const rect = stage.getBoundingClientRect();
+        const cx = clientX - rect.left;
+        const cy = clientY - rect.top;
+        for (const ap of appParticles) {
+          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) return ap;
+        }
+        return null;
+      }
+
       function pointerLight(event, strength, sustainStrength) {
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
@@ -544,8 +555,8 @@
         const ty    = p.clientY - rect.top;
         const touch = event.pointerType === 'touch' || !!event.touches;
         const veActivate = touch || (event.pointerType === 'mouse' && (event.buttons & 1));
-        // VE cannot be summoned while Volta holds it, or after it has been destroyed
-        if (veActivate && !ve.voltaHeld && !ve.liberated) {
+        // VE cannot be summoned while Volta holds it, after it has been destroyed, or while an orb press is active
+        if (veActivate && !orbInteractionActive && !ve.voltaHeld && !ve.liberated) {
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.targetX = tx; ve.targetY = ty;
           ve.active = true;
@@ -581,6 +592,7 @@
 
       const releasePointerLight = () => {
         holdActive = false;
+        orbInteractionActive = false;
         ve.active = false;
         // Inherit cursor velocity at moment of release — this is the "throw"
         ve.vx = ve.cvx * 0.45;
@@ -1923,6 +1935,7 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
+        orbInteractionActive = !!appParticleAtClient(e.clientX, e.clientY);
         const tNow = performance.now();
         if (!volta.active) volta.interactionPressure = Math.min(36, volta.interactionPressure + 1);
         // 12-tap summon: rapid taps within 2.5s summon the Volta creature
@@ -1959,20 +1972,14 @@
 
       // Navigate on tap/click of an app particle
       stage.addEventListener('click', e => {
-        const rect = stage.getBoundingClientRect();
-        const cx = e.clientX - rect.left;
-        const cy = e.clientY - rect.top;
-        for (const ap of appParticles) {
-          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) {
-            if (ap.audioEl) {
-              if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
-              else ap.audioEl.pause();
-              return;
-            }
-            window.location.href = '/' + ap.path;
-            return;
-          }
+        const ap = appParticleAtClient(e.clientX, e.clientY);
+        if (!ap) return;
+        if (ap.audioEl) {
+          if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
+          else ap.audioEl.pause();
+          return;
         }
+        window.location.href = '/' + ap.path;
       });
 
       const syncAudioOrb = (audioKey) => {
