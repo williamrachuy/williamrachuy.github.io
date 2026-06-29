@@ -91,17 +91,20 @@
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
   <audio id="nautilus-audio" src="audio/Nautilus.mp3" preload="metadata"></audio>
+  <audio id="endless-audio" src="audio/endless.mp3" preload="metadata"></audio>
 
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260628.9 · 6ee4040';
+      const VERSION = '20260629.3 · 404c3cd';
 
       const stage          = document.getElementById('stage');
       const particlesCanvas = document.getElementById('particles');
       const pctx           = particlesCanvas.getContext('2d');
       const word           = document.getElementById('wordmark');
-      const nautilusAudio  = document.getElementById('nautilus-audio');
+      const nautilusAudio   = document.getElementById('nautilus-audio');
+      const endlessAudio    = document.getElementById('endless-audio');
+      const audioElements   = { nautilus: nautilusAudio, endless: endlessAudio };
       if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
@@ -211,7 +214,9 @@
         infectedTimer: 0,
         infectedDuration: 0,
         charge: 0,             // 0→1 during infection — drives VE wildness
-        nextSpawn: 0,
+        idleSince: 0,          // when Volta last became eligible to reappear
+        interactionPressure: 0, // accumulates user clicks/taps until the next spawn
+        nextSpawnCheck: 0,     // throttles probabilistic spawn checks
         tapTimes: [],          // timestamps for 12-tap summon detection
       };
 
@@ -266,7 +271,8 @@
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
           { path: 'world-cup',        color: '#772277', orbImg: catOrbImg }, // cat orb
-          { audio: true,              color: '#32465f' }, // Nautilus — fast, cursor-independent
+          { audioKey: 'nautilus',      color: '#32465f' }, // Nautilus — fast, cursor-independent
+          { audioKey: 'endless',       color: '#5c284f' }, // Endless — violet and equally stubborn
         ];
         const w = stage.clientWidth, h = stage.clientHeight;
         const margin = 40;
@@ -282,8 +288,9 @@
             wAngle:      Math.random() * Math.PI * 2,
             breathPhase: Math.random() * Math.PI * 2,
             breathRate:  0.0006 + Math.random() * 0.0004,
-            speed: page.audio ? 2.2 : 1,
+            speed: page.audioKey ? 2.2 : 1,
             playing: false,
+            audioEl: page.audioKey ? audioElements[page.audioKey] : null,
           });
         }
       }
@@ -632,7 +639,7 @@
         const w = stage.clientWidth, h = stage.clientHeight;
         const now = performance.now();
         for (const ap of appParticles) {
-          if (ap.audio && ap.playing) {
+          if (ap.audioEl && ap.playing) {
             // Sound-producing orb holds position; rendering supplies the violent jitter.
             ap.vx = 0;
             ap.vy = 0;
@@ -647,7 +654,7 @@
           // Attracted to VE center while it lives; nothing once VE is destroyed
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (!ap.audio && !ap.orbImg && ve.scaleCurrent > 5 && !ve.liberated) {
+          if (!ap.audioEl && !ap.orbImg && ve.scaleCurrent > 5 && !ve.liberated) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 60 * accelBoost / (d * 0.04 + 1);
@@ -665,7 +672,7 @@
             }
           }
           // Orbs sense Volta arcs and steer their wander path away — not a push, a redirect
-          if (volta.active && !ap.audio) {
+          if (volta.active && !ap.audioEl) {
             let avoidX = 0, avoidY = 0;
             for (const arc of volta.arcs) {
               if (arc.veNode) continue; // VE-internal arcs don't register as threats
@@ -967,7 +974,7 @@
       function drawAppParticles(now) {
         for (const ap of appParticles) {
           const local  = lightAt(ap.x, ap.y, now);
-          const unstable = ap.audio && ap.playing;
+          const unstable = ap.audioEl && ap.playing;
           const vibration = unstable
             ? Math.sin(now * 0.105) * 0.52 + Math.sin(now * 0.173 + 1.7) * 0.31 + Math.sin(now * 0.247) * 0.17
             : 0;
@@ -1420,12 +1427,26 @@
       const VOLTA_SPEED    = 28;  // px/s toward target
       const VOLTA_MAX_ARCS = 24;  // constellation budget
 
-      function scheduleVoltaSpawn() {
-        const delay = Math.max(20000, gaussianRandom(120000, 60000));
-        volta.nextSpawn = performance.now() + delay;
+      function resetVoltaSpawnPressure(now = performance.now()) {
+        volta.idleSince = now;
+        volta.interactionPressure = 0;
+        volta.nextSpawnCheck = now + 8000; // brief quiet period so Volta does not photobomb immediately
       }
 
-      function spawnVolta() {
+      function maybeSpawnVolta(now) {
+        if (volta.active || now < volta.nextSpawnCheck) return false;
+        volta.nextSpawnCheck = now + 240;
+        const idleMs = now - volta.idleSince;
+        const idleCurve = clamp(idleMs / 120000, 0, 1.8);
+        const interactionCurve = clamp(volta.interactionPressure / 18, 0, 1.6);
+        const mean = -2.6 + idleCurve * 3.2 + interactionCurve * 2.4;
+        const stddev = 0.38 + idleCurve * 0.95 + interactionCurve * 0.72;
+        if (gaussianRandom(mean, stddev) < 2.85) return false;
+        spawnVolta(now);
+        return true;
+      }
+
+      function spawnVolta(now = performance.now()) {
         if (volta.active) return;
         const w = stage.clientWidth, h = stage.clientHeight;
         switch (Math.floor(Math.random() * 4)) {
@@ -1441,6 +1462,9 @@
         volta.charge           = 0;
         volta.state            = 'entering';
         volta.active           = true;
+        volta.idleSince        = now;
+        volta.nextSpawnCheck   = Infinity;
+        volta.interactionPressure = 0;
       }
 
       function voltaJags(x1, y1, x2, y2) {
@@ -1506,7 +1530,7 @@
 
       function updateVolta(dt, now) {
         if (!volta.active) {
-          if (now >= volta.nextSpawn) { spawnVolta(); scheduleVoltaSpawn(); }
+          maybeSpawnVolta(now);
           return;
         }
         const w = stage.clientWidth, h = stage.clientHeight;
@@ -1536,7 +1560,7 @@
             volta.energy -= dt * 0.003;
             if (volta.energy <= 0) {
               volta.active = false; volta.state = 'dormant'; volta.charge = 0;
-              ve.voltaHeld = false; scheduleVoltaSpawn(); return;
+              ve.voltaHeld = false; resetVoltaSpawnPressure(now); return;
             }
           }
         } else {
@@ -1705,7 +1729,7 @@
         } else {
           volta.energy -= dt * 0.000011;
           if (volta.energy <= 0) {
-            volta.active = false; volta.state = 'dormant'; scheduleVoltaSpawn(); return;
+            volta.active = false; volta.state = 'dormant'; resetVoltaSpawnPressure(now); return;
           }
         }
 
@@ -1875,12 +1899,13 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
-        // 12-tap summon: rapid taps within 2.5s summon the Volta creature
         const tNow = performance.now();
+        if (!volta.active) volta.interactionPressure = Math.min(36, volta.interactionPressure + 1);
+        // 12-tap summon: rapid taps within 2.5s summon the Volta creature
         volta.tapTimes.push(tNow);
         while (volta.tapTimes.length > 0 && tNow - volta.tapTimes[0] > 2500) volta.tapTimes.shift();
         if (volta.tapTimes.length >= 12 && !volta.active) {
-          spawnVolta(); scheduleVoltaSpawn(); volta.tapTimes.length = 0;
+          spawnVolta(tNow); volta.tapTimes.length = 0;
         }
         // Spike to 100%, settle to 47% (mouse click) or 20% (touch hold) — 67% of prior
         const touch = e.pointerType === 'touch';
@@ -1915,9 +1940,9 @@
         const cy = e.clientY - rect.top;
         for (const ap of appParticles) {
           if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) {
-            if (ap.audio) {
-              if (nautilusAudio.paused) nautilusAudio.play().catch(() => { ap.playing = false; });
-              else nautilusAudio.pause();
+            if (ap.audioEl) {
+              if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
+              else ap.audioEl.pause();
               return;
             }
             window.location.href = '/' + ap.path;
@@ -1926,19 +1951,30 @@
         }
       });
 
-      const syncNautilusOrb = () => {
-        const orb = appParticles.find(ap => ap.audio);
-        if (orb) orb.playing = !nautilusAudio.paused && !nautilusAudio.ended;
+      const syncAudioOrb = (audioKey) => {
+        const orb = appParticles.find(ap => ap.audioKey === audioKey);
+        const audio = audioElements[audioKey];
+        if (orb && audio) orb.playing = !audio.paused && !audio.ended;
       };
-      nautilusAudio.addEventListener('play', syncNautilusOrb);
-      nautilusAudio.addEventListener('pause', syncNautilusOrb);
-      nautilusAudio.addEventListener('ended', syncNautilusOrb);
+      for (const audioKey of Object.keys(audioElements)) {
+        const audio = audioElements[audioKey];
+        audio.addEventListener('play', () => {
+          for (const [otherKey, otherAudio] of Object.entries(audioElements)) {
+            if (otherKey === audioKey) continue;
+            if (!otherAudio.paused) otherAudio.pause();
+            syncAudioOrb(otherKey);
+          }
+          syncAudioOrb(audioKey);
+        });
+        audio.addEventListener('pause', () => syncAudioOrb(audioKey));
+        audio.addEventListener('ended', () => syncAudioOrb(audioKey));
+      }
 
       document.getElementById('ver-stamp').textContent = VERSION;
       resize();
       seedAppParticles();
       initCat();
-      scheduleVoltaSpawn();
+      resetVoltaSpawnPressure(performance.now());
       requestAnimationFrame(frame);
     })();
   </script>
