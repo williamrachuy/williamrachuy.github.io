@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.43';
+      const VERSION = '20260629.44';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -892,21 +892,28 @@
             const inf = Math.max(0, 1 - d / 220) * light.strength * lightIntensity(light, now);
             localLight = Math.max(localLight, inf);
           }
-          titleGlow = Math.max(titleGlow, localLight);
 
-          // Low-pass filter on glow only — no position or scale response.
+          // Fast enough rise, but release/dim is linear over ~2s.
           if (l.smoothGlow === undefined) l.smoothGlow = 0;
-          l.smoothGlow += (localLight - l.smoothGlow) * 0.12;
+          if (localLight > l.smoothGlow) {
+            l.smoothGlow += (localLight - l.smoothGlow) * 0.16;
+          } else {
+            l.smoothGlow = Math.max(localLight, l.smoothGlow - dt / 2000);
+          }
+
           const glow = clamp(l.smoothGlow, 0, 1);
-          l.el.style.color      = `rgba(232,224,209,${(0.22 + glow * 0.58).toFixed(3)})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${(glow * 14).toFixed(1)}px rgba(232,224,209,${(glow * 0.11).toFixed(3)})`;
+          titleGlow = Math.max(titleGlow, glow);
+
+          // Darker unlit baseline; lighting lifts it gently.
+          l.el.style.color      = `rgba(232,224,209,${(0.105 + glow * 0.62).toFixed(3)})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.006), 0 0 ${(glow * 13).toFixed(1)}px rgba(232,224,209,${(glow * 0.10).toFixed(3)})`;
           l.el.style.transform  = 'translate(-50%, -50%)';
         }
 
         word.style.filter     = 'none';
-        word.style.opacity    = (0.68 + titleGlow * 0.16).toFixed(3);
-        word.style.textShadow = `0 0 ${(titleGlow * 10).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.055).toFixed(3)})`;
-        word.style.setProperty('--after-opacity', (0.02 + titleGlow * 0.045).toFixed(3));
+        word.style.opacity    = (0.46 + titleGlow * 0.26).toFixed(3);
+        word.style.textShadow = `0 0 ${(titleGlow * 9).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.05).toFixed(3)})`;
+        word.style.setProperty('--after-opacity', (0.006 + titleGlow * 0.040).toFixed(3));
       }
 
       // ─── App particle update & draw ─────────────────────────────────────────
