@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.66';
+      const VERSION = '20260629.67';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -148,6 +148,7 @@
       let orbReleaseClickAllowed = false;
       let suppressClickUntil = 0;
       let vePointerActiveUntil = 0;
+      let veActivationPendingFrame = false; // every eligible pointerdown must reach updateVE at least once
       let lastStageW      = 0;
       let lastStageH      = 0;
       const pointerPressure = {
@@ -543,6 +544,7 @@
         orbReleaseClickAllowed = false;
         suppressClickUntil = 0;
         vePointerActiveUntil = 0;
+        veActivationPendingFrame = false;
         catCursorX = -9999;
         catCursorY = -9999;
 
@@ -847,14 +849,18 @@
         // Very quick taps can pointerup before the next animation frame. Keep VE
         // active briefly so updateVE sees the activation at least once.
         const now = performance.now();
-        if (ve.active && !holdActive && !ve.voltaHeld && vePointerActiveUntil && now >= vePointerActiveUntil) {
+        if (ve.active && !holdActive && !ve.voltaHeld && !veActivationPendingFrame
+            && vePointerActiveUntil && now >= vePointerActiveUntil) {
           ve.active = false;
           vePointerActiveUntil = 0;
         }
       }
 
       function updateVEPointerTarget(event, activate = true) {
-        if (orbInteractionActive || ve.voltaHeld || ve.liberated) return false;
+        // Liberation and its reinitialization delay are the only period in which
+        // a rising edge is intentionally ignored. Orb and Volta state must not
+        // swallow an otherwise valid VE activation.
+        if (ve.liberated) return false;
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
         const tx    = p.clientX - rect.left;
@@ -862,6 +868,7 @@
         if (activate) {
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.active = true;
+          veActivationPendingFrame = true;
           vePointerActiveUntil = Math.max(vePointerActiveUntil, performance.now() + VE_POINTER_TAP_LATCH_MS);
         }
         ve.targetX = tx; ve.targetY = ty;
@@ -964,7 +971,8 @@
         holdActive = false;
         orbInteractionActive = false;
         const now = performance.now();
-        ve.active = !!(vePointerActiveUntil && now < vePointerActiveUntil && !ve.voltaHeld && !ve.liberated);
+        ve.active = !!((veActivationPendingFrame || (vePointerActiveUntil && now < vePointerActiveUntil))
+          && !ve.voltaHeld && !ve.liberated);
         // Inherit cursor velocity at moment of release — this is the "throw"
         ve.vx = ve.cvx * 0.45;
         ve.vy = ve.cvy * 0.45;
@@ -1620,8 +1628,9 @@
             const strainedX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
             const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
             const strainedR = rDraw * (1 - strain * 0.12);
+            const emojiBrightnessScale = ap.path === 'world-cup' ? 0.62 : 0.80;
             pctx.save();
-            pctx.globalAlpha = clamp(0.72 + t * 0.16 + local * 0.06, 0.24, 0.92) * 0.80;
+            pctx.globalAlpha = clamp(0.72 + t * 0.16 + local * 0.06, 0.24, 0.92) * emojiBrightnessScale;
             pctx.shadowBlur = Math.max(0, 2 + t * 6 + local * 10 + strain * 6);
             pctx.shadowColor = '#ffffff';
             pctx.font = `${Math.max(12, strainedR * 2.15)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
@@ -1635,10 +1644,11 @@
             const strainedX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
             const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
             const strainedR = rDraw * (1 - strain * 0.26);
+            const orbBrightnessScale = ap.resetOrb ? 0.58 : 1;
             const baseColor = strain > 0 ? desaturateColor(ap.color, Math.min(0.85, strain * 0.82)) : ap.color;
             const brightColor = strain > 0 ? desaturateColor(ap.brightColor, Math.min(0.90, strain * 0.88)) : ap.brightColor;
             // Dark base — always present
-            pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1);
+            pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1) * orbBrightnessScale;
             pctx.shadowBlur  = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0) + strain * 10);
             pctx.shadowColor = brightColor;
             pctx.fillStyle   = baseColor;
@@ -1646,14 +1656,14 @@
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
             // Bright color overlay: expands with pulse
-            pctx.globalAlpha = t * (0.34 - strain * 0.12) + local * 0.23;
+            pctx.globalAlpha = (t * (0.34 - strain * 0.12) + local * 0.23) * orbBrightnessScale;
             pctx.shadowBlur  = 0;
             pctx.fillStyle   = brightColor;
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
             // 3D highlight — brightens at peak expansion
-            pctx.globalAlpha = 0.05 + t * 0.09 + local * 0.09;
+            pctx.globalAlpha = (0.05 + t * 0.09 + local * 0.09) * orbBrightnessScale;
             pctx.fillStyle   = '#fff';
             pctx.beginPath();
             pctx.arc(strainedX - strainedR * (0.28 + (unstable ? vibration * 0.12 : 0)),
@@ -1662,14 +1672,14 @@
             pctx.fill();
 
             if (ap.resetOrb) {
-              pctx.globalAlpha = clamp(0.25 + t * 0.18 + local * 0.20, 0.18, 0.72);
+              pctx.globalAlpha = clamp(0.25 + t * 0.18 + local * 0.20, 0.18, 0.72) * 0.72;
               pctx.strokeStyle = '#ffffff';
               pctx.lineWidth = 0.9;
               pctx.beginPath();
               pctx.arc(strainedX, strainedY, strainedR * 1.34, 0, Math.PI * 2);
               pctx.stroke();
 
-              pctx.globalAlpha = clamp(0.36 + t * 0.24 + local * 0.20, 0.22, 0.86);
+              pctx.globalAlpha = clamp(0.36 + t * 0.24 + local * 0.20, 0.22, 0.86) * 0.72;
               pctx.fillStyle = '#ffffff';
               pctx.beginPath();
               pctx.arc(strainedX, strainedY, Math.max(1.2, strainedR * 0.18), 0, Math.PI * 2);
@@ -1710,6 +1720,9 @@
       }
 
       function updateVE(dt) {
+        // Consume the rising-edge latch only here. Time-based latching alone can
+        // expire before the next animation frame when the main thread is busy.
+        const consumedActivationEdge = veActivationPendingFrame;
         // Raw cursor velocity this frame (px/ms)
         const rawVx = (ve.targetX - ve.prevTX) / Math.max(dt, 1);
         const rawVy = (ve.targetY - ve.prevTY) / Math.max(dt, 1);
@@ -1936,6 +1949,7 @@
           const cr = 2.3 * (c.drawScale || 1.0);
           liberatedNodes.push({ x: c.x, y: c.y, vx: c.vx, vy: c.vy, mass: 8, alpha: 1.0, r: cr, r0: cr });
         }
+        if (consumedActivationEdge) veActivationPendingFrame = false;
       }
 
       function drawVE() {
@@ -2090,6 +2104,8 @@
         ve.liberated = false;
         ve.voltaHeld = false;
         ve.active = false;
+        veActivationPendingFrame = false;
+        vePointerActiveUntil = 0;
         ve.destroyedEdges.clear();
         ve.edgeEnergies = null;
         ve.edgeDrainRates = null;
@@ -2654,6 +2670,10 @@
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
         const touch = e.pointerType === 'touch';
+        const primaryActivationEdge = e.isPrimary !== false && (e.button === 0 || touch);
+        const veActivatedByPointer = primaryActivationEdge
+          ? updateVEPointerTarget(e, true)
+          : false;
         const pressHitScale = touch ? TOUCH_ORB_POINTER_CAPTURE_SCALE : ORB_POINTER_CAPTURE_SCALE;
         const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY, pressHitScale);
         const pressedOrb = !!pressedAppOrb;
@@ -2671,11 +2691,9 @@
         if (volta.tapTimes.length >= 12 && !volta.active) {
           spawnVolta(tNow); volta.tapTimes.length = 0;
         }
-        let veActivatedByPointer = false;
         if (!orbInteractionActive) {
           emitPointerPulse(e, touch ? 0.9 : 1.0);
           beginPointerPressure(e);
-          if (e.button === 0 || touch) veActivatedByPointer = updateVEPointerTarget(e, true);
         }
         if (veActivatedByPointer) {
           ve.ωx += (Math.random() * 2 - 1) * 0.0035;
