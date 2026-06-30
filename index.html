@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.6';
+      const VERSION = '20260630.7';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -1851,20 +1851,27 @@
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
-            // Optional glyph for symbolic site orbs. It pulse-scales with the
-            // orb radius and brightens at the same point in the breathing cycle.
+            // Optional glyph for symbolic site orbs. Keep the font size stable
+            // and use the canvas transform so the mark scales continuously with
+            // the orb's own breathing radius instead of stepping like font-size.
             if (ap.glyph) {
-              const glyphPulseScale = 1.00 + t * 0.18;
-              const glyphSize = Math.max(16, strainedR * 1.68 * glyphPulseScale);
-              pctx.globalAlpha = clamp(0.34 + t * 0.16 + local * 0.16, 0.28, 0.62) * orbBrightnessScale;
-              pctx.shadowBlur  = Math.max(2, 3 + t * 7 + local * 9);
+              const baseR = Math.max(1, ap.r0 || strainedR || 1);
+              const orbScale = strainedR / baseR;
+              const glyphSize = Math.max(16, baseR * 1.76);
+              const glyphY = strainedR * 0.040 / Math.max(orbScale, 0.001);
+
+              pctx.save();
+              pctx.translate(strainedX, strainedY);
+              pctx.scale(orbScale, orbScale);
+              pctx.globalAlpha = clamp(0.42 + t * 0.18 + local * 0.18, 0.34, 0.72) * orbBrightnessScale;
+              pctx.shadowBlur  = Math.max(2, 3 + t * 8 + local * 10);
               pctx.shadowColor = brightColor;
               pctx.fillStyle   = brightColor;
               pctx.font = `${glyphSize}px "${ap.glyphFont || 'Times New Roman'}", "Times New Roman", serif`;
               pctx.textAlign = 'center';
               pctx.textBaseline = 'middle';
-              pctx.fillText(ap.glyph, strainedX, strainedY + strainedR * 0.040);
-              pctx.shadowBlur = 0;
+              pctx.fillText(ap.glyph, 0, glyphY);
+              pctx.restore();
             }
 
           }
