@@ -124,33 +124,6 @@ PY
 git add index.html meowdividiardi/index.html version.json
 git commit -m "Bump site version to $next_version"
 
-commit_id="$(git rev-parse --short=7 HEAD)"
-export COMMIT_ID="$commit_id"
-python3 - <<'PY'
-import json
-import os
-import re
-from pathlib import Path
-
-commit_id = os.environ['COMMIT_ID']
-commit_pattern = re.compile(r"(const COMMIT  = ')[^']+(')")
-
-for path in (Path('index.html'), Path('meowdividiardi/index.html')):
-    text = path.read_text()
-    updated, count = commit_pattern.subn(rf"\g<1>{commit_id}\2", text, count=1)
-    if count != 1:
-        raise SystemExit(f'Could not stamp COMMIT in {path}')
-    path.write_text(updated)
-
-version_path = Path('version.json')
-data = json.loads(version_path.read_text())
-data['commit'] = commit_id
-version_path.write_text(json.dumps(data, indent=2) + '\n')
-PY
-
-git add index.html meowdividiardi/index.html version.json
-git commit --amend --no-edit
-
 # Push dev so origin/dev becomes the canonical shared development state.
 git push origin dev
 
