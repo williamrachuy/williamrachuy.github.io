@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.23';
+      const VERSION = '20260630.24';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -157,6 +157,8 @@
       let veInteractionSuppressedByObject = false; // foreground-object pointerdown blocks VE activation/release latch
       let lastStageW      = 0;
       let lastStageH      = 0;
+      let hoverClientX    = null;
+      let hoverClientY    = null;
       const pointerPressure = {
         active: false,
         x: 0, y: 0,
@@ -1123,6 +1125,24 @@
         const appParticle = appParticleAtClient(clientX, clientY, hitScale);
         if (appParticle) return { kind: 'appParticle', target: appParticle };
         return null;
+      }
+
+      function refreshInteractiveCursor() {
+        if (hoverClientX === null || hoverClientY === null) {
+          stage.style.cursor = 'default';
+          return;
+        }
+
+        // While dragging/holding, keep the cursor neutral. Hover affordance is for
+        // identifying foreground clickable objects before interaction.
+        if (holdActive || orbInteractionActive || veInteractionSuppressedByObject) {
+          stage.style.cursor = 'default';
+          return;
+        }
+
+        stage.style.cursor = interactiveObjectAtClient(hoverClientX, hoverClientY, 1.0)
+          ? 'pointer'
+          : 'default';
       }
 
       const releasePointerLight = () => {
@@ -2936,6 +2956,7 @@
         drawVE();
         drawLiberatedNodes();
         drawVolta(now);
+        refreshInteractiveCursor();
         requestAnimationFrame(frame);
       }
 
@@ -2993,6 +3014,9 @@
       });
       stage.addEventListener('pointermove', e => {
         catCursorX = e.clientX; catCursorY = e.clientY;
+        hoverClientX = e.clientX;
+        hoverClientY = e.clientY;
+        refreshInteractiveCursor();
 
         if (veInteractionSuppressedByObject && orbPressedTarget) {
           const rect = stage.getBoundingClientRect();
@@ -3032,6 +3056,9 @@
       stage.addEventListener('pointerleave', () => {
         catCursorX = -9999;
         catCursorY = -9999;
+        hoverClientX = null;
+        hoverClientY = null;
+        stage.style.cursor = 'default';
       });
       stage.addEventListener('pointerup', e => {
         const pressedTarget = orbPressedTarget;
@@ -3057,6 +3084,8 @@
         orbPressStartedOnOrb = false;
         orbPressedTarget = null;
 
+        refreshInteractiveCursor();
+
         if (fullOrbRelease) {
           suppressClickUntil = performance.now() + 400;
           activateAppParticle(pressedTarget, e);
@@ -3068,6 +3097,7 @@
         orbReleaseClickAllowed = false;
         endPointerPressure();
         releasePointerLight();
+        refreshInteractiveCursor();
       });
       stage.addEventListener('touchend', e => {
         endPointerPressure();
