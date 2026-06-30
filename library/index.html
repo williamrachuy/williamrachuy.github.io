@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Library · Adividiardi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #040507;
+      --bg2: #090b10;
+      --panel: rgba(255,255,255,0.022);
+      --panel-strong: rgba(255,255,255,0.036);
+      --ink: rgba(232,224,209,0.82);
+      --muted: rgba(232,224,209,0.58);
+      --rule: rgba(232,224,209,0.10);
+      --accent: rgba(232,224,209,0.14);
+      --accent-strong: rgba(232,224,209,0.24);
+      --shadow: 0 24px 80px rgba(0,0,0,0.30);
+      scroll-behavior: smooth;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(232,224,209,0.04), transparent 26%),
+        linear-gradient(180deg, var(--bg2), var(--bg));
+      color: var(--ink);
+      font-family: Cambria, Georgia, "Times New Roman", serif;
+    }
+    body {
+      min-height: 100dvh;
+      padding: 32px 18px 64px;
+    }
+    main {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+      border: 1px solid var(--rule);
+      border-radius: 28px;
+      padding: clamp(26px, 5vw, 54px);
+      background: rgba(255,255,255,0.018);
+      box-shadow: var(--shadow);
+    }
+    a {
+      color: rgba(232,224,209,0.58);
+      text-decoration: none;
+    }
+    a:hover { color: rgba(232,224,209,0.88); }
+    .back {
+      display: inline-block;
+      margin-bottom: 34px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0 0 14px;
+      font-weight: 400;
+      font-size: clamp(42px, 8vw, 76px);
+      line-height: 0.95;
+      color: rgba(232,224,209,0.88);
+    }
+
+    .entries {
+      margin-top: 38px;
+      display: grid;
+      gap: 24px;
+    }
+    .entry {
+      display: grid;
+      grid-template-columns: minmax(160px, 240px) minmax(0, 1fr);
+      gap: clamp(20px, 3vw, 34px);
+      align-items: stretch;
+      padding: clamp(18px, 3vw, 28px);
+      border: 1px solid var(--rule);
+      border-radius: 24px;
+      background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+      scroll-margin-top: 28px;
+      transition: border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+      outline: none;
+    }
+    .entry:target,
+    .entry.is-focused {
+      border-color: var(--accent-strong);
+      box-shadow: 0 0 0 1px rgba(232,224,209,0.08), 0 20px 44px rgba(0,0,0,0.26);
+      background: linear-gradient(180deg, rgba(255,255,255,0.048), rgba(255,255,255,0.026));
+    }
+    .art {
+      min-height: 100%;
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(232,224,209,0.08);
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+    .art img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      transform: scale(1.01);
+      display: block;
+    }
+    .meta {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(232,224,209,0.42);
+    }
+    h2 {
+      margin: 0;
+      font-weight: 400;
+      font-size: clamp(30px, 4.2vw, 44px);
+      line-height: 1.04;
+      color: rgba(232,224,209,0.9);
+    }
+    .author {
+      margin: -2px 0 0;
+      font-size: 18px;
+      color: rgba(232,224,209,0.64);
+    }
+    p {
+      margin: 0;
+      font-size: clamp(17px, 2vw, 20px);
+      line-height: 1.62;
+      color: var(--ink);
+      max-width: 60ch;
+    }
+    blockquote {
+      margin: 2px 0 0;
+      padding-left: 16px;
+      border-left: 1px solid rgba(232,224,209,0.18);
+      font-size: clamp(18px, 2.1vw, 22px);
+      line-height: 1.55;
+      color: rgba(232,224,209,0.78);
+      font-style: italic;
+      max-width: 28ch;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(232,224,209,0.14);
+      background: rgba(255,255,255,0.03);
+      color: rgba(232,224,209,0.82);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+    .button:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(232,224,209,0.24);
+      transform: translateY(-1px);
+    }
+    .button.secondary {
+      color: rgba(232,224,209,0.60);
+    }
+    @media (max-width: 760px) {
+      body { padding-inline: 12px; }
+      main { border-radius: 24px; }
+      .entry {
+        grid-template-columns: 1fr;
+      }
+      .art {
+        max-width: min(320px, 100%);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="/">Adividiardi</a>
+    <h1>Library</h1>
+
+    <section class="entries" aria-label="Library entries">
+      <article class="entry" id="pale-blue-dot" tabindex="-1">
+        <div class="art">
+          <img src="/assets/pale-blue-dot-cover.jpg" alt="Pale Blue Dot cover art">
+        </div>
+        <div class="meta">
+          <div class="eyebrow">Book</div>
+          <h2>Pale Blue Dot</h2>
+          <p class="author">Carl Sagan</p>
+          <blockquote>“Look again at that dot. That's here. That's home. That's us.”</blockquote>
+          <div class="actions">
+            <a class="button" href="https://cominsitu.wordpress.com/wp-content/uploads/2019/06/carl-sagan-pale-blue-dot_-a-vision-of-the-human-future-in-space-1997.pdf" target="_blank" rel="noreferrer">Download PDF</a>
+            <a class="button secondary" href="https://en.wikipedia.org/wiki/Pale_Blue_Dot_(book)" target="_blank" rel="noreferrer">Wikipedia</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" id="godel-escher-bach" tabindex="-1">
+        <div class="art">
+          <img src="/assets/geb-cover.jpg" alt="Godel, Escher, Bach cover art">
+        </div>
+        <div class="meta">
+          <div class="eyebrow">Book</div>
+          <h2>Godel, Escher, Bach</h2>
+          <p class="author">Douglas Hofstadter</p>
+          <blockquote>“What is real, then, and what is fantasy?”</blockquote>
+          <div class="actions">
+            <a class="button" href="https://www.physixfan.com/wp-content/files/GEBen.pdf" target="_blank" rel="noreferrer">Download PDF</a>
+            <a class="button secondary" href="https://en.wikipedia.org/wiki/G%C3%B6del,_Escher,_Bach" target="_blank" rel="noreferrer">Wikipedia</a>
+          </div>
+        </div>
+      </article>
+
+      <article class="entry" id="schilds-ladder" tabindex="-1">
+        <div class="art">
+          <img src="/assets/greg-egan-cover.jpg" alt="Schild's Ladder cover art">
+        </div>
+        <div class="meta">
+          <div class="eyebrow">Novel</div>
+          <h2>Schild's Ladder</h2>
+          <p class="author">Greg Egan</p>
+          <blockquote>“You'll never stop changing...”</blockquote>
+          <div class="actions">
+            <a class="button" href="https://www.gregegan.net/SCHILD/SCHILD.html" target="_blank" rel="noreferrer">Go to Website</a>
+            <a class="button secondary" href="https://en.wikipedia.org/wiki/Schild%27s_Ladder" target="_blank" rel="noreferrer">Wikipedia</a>
+          </div>
+        </div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const id = decodeURIComponent(window.location.hash || '').replace(/^#/, '');
+      if (!id) return;
+      const entry = document.getElementById(id);
+      if (!entry) return;
+      const focusEntry = () => {
+        entry.classList.add('is-focused');
+        entry.focus({ preventScroll: true });
+        entry.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      };
+      if (document.readyState === 'complete') {
+        focusEntry();
+      } else {
+        window.addEventListener('load', focusEntry, { once: true });
+      }
+    })();
+  </script>
+</body>
+</html>
