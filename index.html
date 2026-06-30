@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.40';
+      const VERSION = '20260629.41';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -619,7 +619,7 @@
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         const activeAudioOrbs = appParticles.filter(ap => ap.audioEl && ap.playing);
-        const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.3082 : 0;
+        const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.09246 : 0;
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
