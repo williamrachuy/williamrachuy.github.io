@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.35';
+      const VERSION = '20260629.36';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -750,7 +750,7 @@
             ap.vy -= (dy / d) * pull / mass;
           }
           // Any orb moving within the VE footprint feeds some angular momentum into VE rotation.
-          if (veInteractive && ve.scaleCurrent > 5) {
+          if (veVisible && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const innerR = ve.scaleCurrent * 0.92;
