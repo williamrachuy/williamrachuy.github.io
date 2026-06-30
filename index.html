@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.50';
+      const VERSION = '20260629.51';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -154,9 +154,13 @@
       let holdActive      = false; // true while mouse/touch is held down
       let orbInteractionActive = false; // suppress VE activation while pressing an orb
       const ORB_RELEASE_CLICK_WINDOW_MS = 500;
+      const ORB_POINTER_CAPTURE_SCALE = 1.12;       // pointerdown capture only; click still uses normal radius
+      const TOUCH_ORB_POINTER_CAPTURE_SCALE = 1.24; // touch gets a little forgiveness without stealing VE taps
+      const VE_POINTER_TAP_LATCH_MS = 140;          // lets very quick taps survive until the next animation frame
       let orbPressStartedAt = 0;
       let orbPressStartedOnOrb = false;
       let orbReleaseClickAllowed = false;
+      let vePointerActiveUntil = 0;
       let lastStageW      = 0;
       let lastStageH      = 0;
       const pointerPressure = {
@@ -439,6 +443,8 @@
             emoji: page.emoji || null,
             voltaStrain: 0,
             voltaStrainTarget: 0,
+            voltaEvasiveUntil: 0,
+            voltaEvasiveAmp: 0,
           });
         }
       }
@@ -495,6 +501,7 @@
         orbPressStartedAt = 0;
         orbPressStartedOnOrb = false;
         orbReleaseClickAllowed = false;
+        vePointerActiveUntil = 0;
         catCursorX = -9999;
         catCursorY = -9999;
 
@@ -795,10 +802,18 @@
         // pointermove keeps replenishing it.
         pointerPressure.amp *= Math.exp(-dt * 0.020);
         if (!pointerPressure.active && pointerPressure.amp < 0.001) pointerPressure.amp = 0;
+
+        // Very quick taps can pointerup before the next animation frame. Keep VE
+        // active briefly so updateVE sees the activation at least once.
+        const now = performance.now();
+        if (ve.active && !holdActive && !ve.voltaHeld && vePointerActiveUntil && now >= vePointerActiveUntil) {
+          ve.active = false;
+          vePointerActiveUntil = 0;
+        }
       }
 
       function updateVEPointerTarget(event, activate = true) {
-        if (orbInteractionActive || ve.voltaHeld || ve.liberated) return;
+        if (orbInteractionActive || ve.voltaHeld || ve.liberated) return false;
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
         const tx    = p.clientX - rect.left;
@@ -806,8 +821,10 @@
         if (activate) {
           if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
           ve.active = true;
+          vePointerActiveUntil = Math.max(vePointerActiveUntil, performance.now() + VE_POINTER_TAP_LATCH_MS);
         }
         ve.targetX = tx; ve.targetY = ty;
+        return true;
       }
 
       function pointerStagePoint(event) {
@@ -892,12 +909,12 @@
         });
       }
 
-      function appParticleAtClient(clientX, clientY) {
+      function appParticleAtClient(clientX, clientY, hitScale = 1.5) {
         const rect = stage.getBoundingClientRect();
         const cx = clientX - rect.left;
         const cy = clientY - rect.top;
         for (const ap of appParticles) {
-          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) return ap;
+          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * hitScale) return ap;
         }
         return null;
       }
@@ -905,7 +922,8 @@
       const releasePointerLight = () => {
         holdActive = false;
         orbInteractionActive = false;
-        ve.active = false;
+        const now = performance.now();
+        ve.active = !!(vePointerActiveUntil && now < vePointerActiveUntil && !ve.voltaHeld && !ve.liberated);
         // Inherit cursor velocity at moment of release — this is the "throw"
         ve.vx = ve.cvx * 0.45;
         ve.vy = ve.cvy * 0.45;
@@ -1017,11 +1035,29 @@
             // Reset orb: slow, graceful wander around page-center home.
             // Sound orbs: faster and a little more erratic.
             // Site orbs: slower, steadier wander.
+            // If Volta is arcing to an orb, it gets a 0.2s evasive burst:
+            // roughly 2x wander speed plus extra direction jitter and outward escape.
+            const evasiveActive = volta.active && now < (ap.voltaEvasiveUntil || 0);
+            const evasiveT = evasiveActive ? clamp(((ap.voltaEvasiveUntil || 0) - now) / 200, 0, 1) : 0;
+            const evasiveAmp = evasiveActive ? Math.max(evasiveT, ap.voltaEvasiveAmp || 0.35) : 0;
+            const evasiveSpeed = evasiveActive ? 2.0 : 1.0;
+            const evasiveJitter = evasiveActive ? 3.4 : 1.0;
+
             const wanderStr = isReset ? 0.00034 : isSound ? 0.00138 : 0.00076;
             const angleJitter = isReset ? 0.00032 : isSound ? 0.00155 : 0.00078;
-            ap.wAngle += (Math.random() - 0.5) * angleJitter * dt * ap.speed * liberatedBoost;
-            ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed * liberatedBoost;
-            ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed * liberatedBoost;
+            ap.wAngle += (Math.random() - 0.5) * angleJitter * evasiveJitter * dt * ap.speed * liberatedBoost;
+            ap.vx += Math.cos(ap.wAngle) * wanderStr * evasiveSpeed * ap.speed * liberatedBoost;
+            ap.vy += Math.sin(ap.wAngle) * wanderStr * evasiveSpeed * ap.speed * liberatedBoost;
+
+            if (evasiveActive) {
+              const ex = ap.x - volta.cx;
+              const ey = ap.y - volta.cy;
+              const ed = Math.hypot(ex, ey) || 1;
+              const escapeKick = (isSound ? 0.0034 : 0.0027) * dt * evasiveAmp;
+              ap.vx += (ex / ed) * escapeKick;
+              ap.vy += (ey / ed) * escapeKick;
+              ap.wAngle += (Math.random() - 0.5) * 0.022 * dt * evasiveAmp;
+            }
 
             if (isReset) {
               // Reset orb's smaller home is always page-center.
@@ -1055,16 +1091,48 @@
             ap.vx -= (dx / d) * pull / mass;
             ap.vy -= (dy / d) * pull / mass;
           }
-          // Any orb moving within the VE footprint feeds some angular momentum into VE rotation.
+          // Orbs moving inside the VE transfer a little momentum into the VE.
+          // Tangential motion becomes visible rotation; crossing/radial motion gives
+          // a soft tumble; average orb velocity gives tiny center drift. This is
+          // deliberately damped while the user is holding/controlling the VE.
           if (veVisible && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const innerR = ve.scaleCurrent * 0.92;
+            const innerR = ve.scaleCurrent * 0.96;
             if (d < innerR) {
-              const infl = 0.0000018 * dt;
-              ve.ωz += ((dx / innerR) * ap.vy - (dy / innerR) * ap.vx) * infl;
-              ve.ωx += ap.vy * infl * 0.4;
-              ve.ωy -= ap.vx * infl * 0.4;
+              const ux = dx / d, uy = dy / d;
+              const nx = dx / innerR, ny = dy / innerR;
+              const speed = Math.hypot(ap.vx, ap.vy);
+              const inside = Math.pow(clamp(1 - d / innerR, 0, 1), 0.55);
+              const speedT = clamp(speed / 4.2, 0, 1.35);
+              const userControlDamp = holdActive ? 0.32 : 1.0;
+              const voltaDamp = ve.voltaHeld ? 0.35 : 1.0;
+              const transfer = inside * speedT * userControlDamp * voltaDamp;
+
+              // 2D cross product: orbital/tangential motion around VE center.
+              const tangential = nx * ap.vy - ny * ap.vx;
+              // Radial crossing motion gives a little tumble instead of pure spin.
+              const radial = ux * ap.vx + uy * ap.vy;
+
+              ve.ωz += tangential * transfer * dt * 0.0000044;
+              ve.ωx += (ap.vy * 0.56 + uy * radial * 0.42) * transfer * dt * 0.0000015;
+              ve.ωy -= (ap.vx * 0.56 + ux * radial * 0.42) * transfer * dt * 0.0000015;
+
+              // Tiny translational inheritance, only when the user is not directly
+              // steering the VE. This makes it feel alive without stealing control.
+              if (!holdActive && !ve.voltaHeld) {
+                ve.vx += ap.vx * transfer * dt * 0.000010;
+                ve.vy += ap.vy * transfer * dt * 0.000010;
+              }
+
+              // Safety caps: visible but never allowed to overpower pointer control.
+              const maxW = holdActive ? 0.0048 : 0.0105;
+              ve.ωx = clamp(ve.ωx, -maxW, maxW);
+              ve.ωy = clamp(ve.ωy, -maxW, maxW);
+              ve.ωz = clamp(ve.ωz, -maxW, maxW);
+              const maxV = holdActive ? 0.18 : 0.42;
+              ve.vx = clamp(ve.vx, -maxV, maxV);
+              ve.vy = clamp(ve.vy, -maxV, maxV);
             }
           }
           // Strained orbs shake, jitter, and try to throw off Volta arcs rather than fleeing the creature.
@@ -2188,11 +2256,22 @@
 
         // ── Arc management ──────────────────────────────────────────────────
         volta.arcs = volta.arcs.filter(arc => now - arc.born < arc.maxAge);
-        for (const ap of appParticles) ap.voltaStrainTarget = 0;
+        for (const ap of appParticles) {
+          ap.voltaStrainTarget = 0;
+          if (now > (ap.voltaEvasiveUntil || 0)) ap.voltaEvasiveAmp = 0;
+        }
+        const markVoltaArcedOrb = (node, vitality) => {
+          if (!appParticles.includes(node)) return;
+          node.voltaStrainTarget = Math.max(node.voltaStrainTarget || 0, vitality);
+          // Each active arc refreshes a short escape window. The orb acts like it
+          // is trying to shake loose while the arc is touching it, then settles.
+          node.voltaEvasiveUntil = Math.max(node.voltaEvasiveUntil || 0, now + 200);
+          node.voltaEvasiveAmp = Math.max(node.voltaEvasiveAmp || 0, vitality);
+        };
         for (const arc of volta.arcs) {
           const vitality = Math.sin(((now - arc.born) / arc.maxAge) * Math.PI);
-          if (appParticles.includes(arc.a)) arc.a.voltaStrainTarget = Math.max(arc.a.voltaStrainTarget || 0, vitality);
-          if (appParticles.includes(arc.b)) arc.b.voltaStrainTarget = Math.max(arc.b.voltaStrainTarget || 0, vitality);
+          markVoltaArcedOrb(arc.a, vitality);
+          markVoltaArcedOrb(arc.b, vitality);
         }
 
         // VE node drawScale: jitter scale 90-110% when newly arced; retain on disconnect
@@ -2508,7 +2587,9 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
-        const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY);
+        const touch = e.pointerType === 'touch';
+        const pressHitScale = touch ? TOUCH_ORB_POINTER_CAPTURE_SCALE : ORB_POINTER_CAPTURE_SCALE;
+        const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY, pressHitScale);
         const pressedOrb = !!pressedAppOrb;
         orbPressStartedAt = performance.now();
         orbPressStartedOnOrb = pressedOrb;
@@ -2523,13 +2604,13 @@
         if (volta.tapTimes.length >= 12 && !volta.active) {
           spawnVolta(tNow); volta.tapTimes.length = 0;
         }
-        const touch = e.pointerType === 'touch';
+        let veActivatedByPointer = false;
         if (!orbInteractionActive) {
           emitPointerPulse(e, touch ? 0.9 : 1.0);
           beginPointerPressure(e);
-          if (e.button === 0 || touch) updateVEPointerTarget(e, true);
+          if (e.button === 0 || touch) veActivatedByPointer = updateVEPointerTarget(e, true);
         }
-        if (!orbInteractionActive && (e.button === 0 || touch)) {
+        if (veActivatedByPointer) {
           ve.ωx += (Math.random() * 2 - 1) * 0.0035;
           ve.ωy += (Math.random() * 2 - 1) * 0.0035;
           ve.ωz += (Math.random() * 2 - 1) * 0.0018;
