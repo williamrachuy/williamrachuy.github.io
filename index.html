@@ -42,8 +42,8 @@
       position: relative;
       display: inline-block;
       transform-origin: center center;
-      animation: breathe 15s ease-in-out infinite;
-      will-change: opacity, filter, transform;
+      animation: none;
+      will-change: opacity, filter;
     }
     #wordmark::after {
       content: "";
@@ -62,13 +62,9 @@
       transform: translate(-50%, -50%);
       white-space: pre;
       color: rgba(232,224,209,0.24);
-      font-weight: 700;
+      font-weight: 400;
       text-shadow: 0 1px 0 rgba(255,255,255,0.02);
-      will-change: transform, color, text-shadow;
-    }
-    @keyframes breathe {
-      0%, 100% { transform: scale(0.95); }
-      50%       { transform: scale(1.05); }
+      will-change: color, text-shadow;
     }
   #ver-stamp {
     position: fixed;
@@ -112,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.41';
+      const VERSION = '20260629.42';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -296,7 +292,7 @@
         word.innerHTML = '';
         const fontSize = clamp(stage.clientWidth * 0.105, 38, 108);
         const tracking = fontSize * 0.08;
-        measureCtx.font = `700 ${fontSize}px Cambria, Georgia, Times New Roman, serif`;
+        measureCtx.font = `400 ${fontSize}px Cambria, Georgia, Times New Roman, serif`;
         const widths = [...TITLE].map(ch => measureCtx.measureText(ch).width);
         const total  = widths.reduce((a, b) => a + b, 0) + tracking * (widths.length - 1);
         word.style.width  = `${Math.ceil(total)}px`;
@@ -860,49 +856,42 @@
       };
 
       // ─── Title letters ──────────────────────────────────────────────────────
-      // Springy but viscous: pushed away from tap, spring back to rest.
-      // smoothGlow per-letter eliminates quantized scale steps.
+      // Static title: no pulsation, no spring movement, no interaction scaling.
+      // Lighting is sampled at each rendered letter's actual screen position.
 
       function updateTitle(dt) {
-        const w        = stage.clientWidth, h = stage.clientHeight;
-        const wordLeft = (w - word.offsetWidth) * 0.5;
-        let titleGlow  = 0;
+        const stageRect = stage.getBoundingClientRect();
+        const wordRect  = word.getBoundingClientRect();
+        const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
+        let titleGlow   = 0;
 
         for (const l of titleLetters) {
-          let fx = 0, fy = 0, localLight = 0;
+          let localLight = 0;
+          const lx = wordRect.left - stageRect.left + l.baseX;
+          const ly = letterY;
+
           for (const light of lights) {
-            const lx = wordLeft + l.baseX;
-            const ly = h * 0.5;
             const dx = lx - light.x;
             const dy = ly - light.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const inf = Math.max(0, 1 - d / 240) * light.strength;
+            const inf = Math.max(0, 1 - d / 240) * light.strength * lightIntensity(light, performance.now());
             localLight = Math.max(localLight, inf);
-            fx += (dx / d) * inf * 0.045;
-            fy += (dy / d) * inf * 0.028;
           }
           titleGlow = Math.max(titleGlow, localLight);
 
-          l.vx += fx + (l.baseX - l.x) * 0.065;
-          l.vy += fy + (0       - l.y) * 0.068;
-          l.vx *= 0.90;
-          l.vy *= 0.90;
-          l.x += l.vx * dt * 0.038;
-          l.y += l.vy * dt * 0.038;
-
-          // Low-pass filter on glow — eliminates quantized scale jumps
+          // Low-pass filter on glow only — no position or scale response.
           if (l.smoothGlow === undefined) l.smoothGlow = 0;
           l.smoothGlow += (localLight - l.smoothGlow) * 0.12;
           const glow = clamp(l.smoothGlow, 0, 1);
-          l.el.style.color      = `rgba(232,224,209,${(0.24 + glow * 0.76).toFixed(3)})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${(glow * 22).toFixed(1)}px rgba(232,224,209,${(glow * 0.16).toFixed(3)})`;
-          l.el.style.transform  = `translate(-50%,-50%) translate(${l.x - l.baseX}px,${l.y}px) scale(${1 + glow * 0.035},${1 - glow * 0.012})`;
+          l.el.style.color      = `rgba(232,224,209,${(0.22 + glow * 0.58).toFixed(3)})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.01), 0 0 ${(glow * 14).toFixed(1)}px rgba(232,224,209,${(glow * 0.11).toFixed(3)})`;
+          l.el.style.transform  = 'translate(-50%, -50%)';
         }
 
-        word.style.filter     = `blur(${(titleGlow * 0.18).toFixed(2)}px)`;
-        word.style.opacity    = (0.72 + titleGlow * 0.28).toFixed(3);
-        word.style.textShadow = `0 0 ${(titleGlow * 20).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.09).toFixed(3)})`;
-        word.style.setProperty('--after-opacity', (0.04 + titleGlow * 0.10).toFixed(3));
+        word.style.filter     = 'none';
+        word.style.opacity    = (0.68 + titleGlow * 0.16).toFixed(3);
+        word.style.textShadow = `0 0 ${(titleGlow * 10).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.055).toFixed(3)})`;
+        word.style.setProperty('--after-opacity', (0.02 + titleGlow * 0.045).toFixed(3));
       }
 
       // ─── App particle update & draw ─────────────────────────────────────────
