@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.7';
+      const VERSION = '20260630.8';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -131,6 +131,7 @@
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
+      const aboutQuestionImg = new Image(); aboutQuestionImg.src = 'about/question.svg';
       const catMeowAudio = new Audio('meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
@@ -479,7 +480,7 @@
           { path: 'calculator',       color: '#6a5410' }, // dark ochre
           { path: 'clock',            color: '#263d4a' }, // dark slate
           { path: 'cellularautomata', color: '#47301e' }, // dark umber
-          { path: 'about',            color: '#4a4258', glyph: '?', glyphFont: 'Times New Roman', speed: 0.96 }, // about orb
+          { path: 'about',            color: '#4a4258', overlayImg: aboutQuestionImg, speed: 0.96 }, // about orb
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
@@ -1851,26 +1852,23 @@
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
-            // Optional glyph for symbolic site orbs. Keep the font size stable
-            // and use the canvas transform so the mark scales continuously with
-            // the orb's own breathing radius instead of stepping like font-size.
-            if (ap.glyph) {
+            // Optional SVG overlay for symbolic site orbs. The image is drawn
+            // through the same transform scale as the orb, so it breathes with
+            // the orb continuously instead of stepping like font-size.
+            if (ap.overlayImg && ap.overlayImg.complete && ap.overlayImg.naturalWidth > 0) {
               const baseR = Math.max(1, ap.r0 || strainedR || 1);
               const orbScale = strainedR / baseR;
-              const glyphSize = Math.max(16, baseR * 1.76);
-              const glyphY = strainedR * 0.040 / Math.max(orbScale, 0.001);
+              const overlaySize = baseR * 1.42;
 
               pctx.save();
               pctx.translate(strainedX, strainedY);
               pctx.scale(orbScale, orbScale);
-              pctx.globalAlpha = clamp(0.42 + t * 0.18 + local * 0.18, 0.34, 0.72) * orbBrightnessScale;
-              pctx.shadowBlur  = Math.max(2, 3 + t * 8 + local * 10);
+              pctx.globalAlpha = clamp(0.56 + t * 0.22 + local * 0.18, 0.48, 0.88) * orbBrightnessScale;
+              pctx.shadowBlur  = Math.max(3, 4 + t * 8 + local * 10);
               pctx.shadowColor = brightColor;
-              pctx.fillStyle   = brightColor;
-              pctx.font = `${glyphSize}px "${ap.glyphFont || 'Times New Roman'}", "Times New Roman", serif`;
-              pctx.textAlign = 'center';
-              pctx.textBaseline = 'middle';
-              pctx.fillText(ap.glyph, 0, glyphY);
+              pctx.filter = 'brightness(2.15)';
+              pctx.drawImage(ap.overlayImg, -overlaySize * 0.5, -overlaySize * 0.5, overlaySize, overlaySize);
+              pctx.filter = 'none';
               pctx.restore();
             }
 
