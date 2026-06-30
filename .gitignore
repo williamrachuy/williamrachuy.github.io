@@ -3,6 +3,7 @@ CLAUDE.md
 .claude/
 AGENTS.md
 PLAN.md
+serve-tailnet.sh
 *.local
 *.log
 .env
