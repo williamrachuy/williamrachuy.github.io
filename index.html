@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.5';
+      const VERSION = '20260630.6';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -1851,18 +1851,19 @@
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
-            // Optional faint glyph for symbolic site orbs. Default circular
-            // orbs intentionally no longer draw the white reflective shine, so
-            // this mark can sit cleanly inside the orb instead of competing with it.
+            // Optional glyph for symbolic site orbs. It pulse-scales with the
+            // orb radius and brightens at the same point in the breathing cycle.
             if (ap.glyph) {
-              pctx.globalAlpha = clamp(0.20 + t * 0.05 + local * 0.10, 0.16, 0.34) * orbBrightnessScale;
-              pctx.shadowBlur  = Math.max(0, 1 + local * 6);
+              const glyphPulseScale = 1.00 + t * 0.18;
+              const glyphSize = Math.max(16, strainedR * 1.68 * glyphPulseScale);
+              pctx.globalAlpha = clamp(0.34 + t * 0.16 + local * 0.16, 0.28, 0.62) * orbBrightnessScale;
+              pctx.shadowBlur  = Math.max(2, 3 + t * 7 + local * 9);
               pctx.shadowColor = brightColor;
               pctx.fillStyle   = brightColor;
-              pctx.font = `${Math.max(15, strainedR * 1.52)}px "${ap.glyphFont || 'Times New Roman'}", "Times New Roman", serif`;
+              pctx.font = `${glyphSize}px "${ap.glyphFont || 'Times New Roman'}", "Times New Roman", serif`;
               pctx.textAlign = 'center';
               pctx.textBaseline = 'middle';
-              pctx.fillText(ap.glyph, strainedX, strainedY + strainedR * 0.035);
+              pctx.fillText(ap.glyph, strainedX, strainedY + strainedR * 0.040);
               pctx.shadowBlur = 0;
             }
 
