@@ -25,8 +25,6 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Prepare site artifact
-        env:
-          GITHUB_SHA: ${{ github.sha }}
         run: |
           mkdir -p _site
           rsync -a --delete \
@@ -34,19 +32,6 @@ jobs:
             --exclude='.github' \
             --exclude='.claude' \
             ./ _site/
-          python3 - <<'PY'
-          import json, os, re
-          from pathlib import Path
-          index = Path('_site/index.html')
-          text = index.read_text()
-          match = re.search(r"const VERSION = '(\d{8}\.\d+)'", text)
-          version = match.group(1) if match else 'unknown'
-          commit = os.environ.get('GITHUB_SHA', '')[:7]
-          Path('_site/version.json').write_text(json.dumps({
-            'version': version,
-            'commit': commit,
-          }, indent=2) + '\n')
-          PY
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
