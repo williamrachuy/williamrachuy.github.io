@@ -102,13 +102,17 @@ from pathlib import Path
 
 next_version = os.environ['NEXT_VERSION']
 files = [Path('index.html'), Path('meowdividiardi/index.html')]
-pattern = re.compile(r"(const VERSION = ')\d{8}\.\d+(')")
+version_pattern = re.compile(r"(const VERSION = ')\d{8}\.\d+(')")
+commit_pattern = re.compile(r"(const COMMIT  = ')[^']+(')")
 
 for path in files:
     text = path.read_text()
-    updated, count = pattern.subn(rf"\g<1>{next_version}\2", text, count=1)
-    if count != 1:
+    updated, version_count = version_pattern.subn(rf"\g<1>{next_version}\2", text, count=1)
+    updated, commit_count = commit_pattern.subn(r"\g<1>pending\2", updated, count=1)
+    if version_count != 1:
         raise SystemExit(f'Could not update VERSION in {path}')
+    if commit_count != 1:
+        raise SystemExit(f'Could not update COMMIT in {path}')
     path.write_text(updated)
 
 Path('version.json').write_text(json.dumps({
@@ -125,15 +129,26 @@ export COMMIT_ID="$commit_id"
 python3 - <<'PY'
 import json
 import os
+import re
 from pathlib import Path
+
+commit_id = os.environ['COMMIT_ID']
+commit_pattern = re.compile(r"(const COMMIT  = ')[^']+(')")
+
+for path in (Path('index.html'), Path('meowdividiardi/index.html')):
+    text = path.read_text()
+    updated, count = commit_pattern.subn(rf"\g<1>{commit_id}\2", text, count=1)
+    if count != 1:
+        raise SystemExit(f'Could not stamp COMMIT in {path}')
+    path.write_text(updated)
 
 version_path = Path('version.json')
 data = json.loads(version_path.read_text())
-data['commit'] = os.environ['COMMIT_ID']
+data['commit'] = commit_id
 version_path.write_text(json.dumps(data, indent=2) + '\n')
 PY
 
-git add version.json
+git add index.html meowdividiardi/index.html version.json
 git commit --amend --no-edit
 
 # Push dev so origin/dev becomes the canonical shared development state.

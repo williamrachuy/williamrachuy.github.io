@@ -89,7 +89,8 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.61';
+      const VERSION = '20260629.62';
+      const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -143,7 +144,9 @@
       const VE_POINTER_TAP_LATCH_MS = 140;          // lets very quick taps survive until the next animation frame
       let orbPressStartedAt = 0;
       let orbPressStartedOnOrb = false;
+      let orbPressedTarget = null;
       let orbReleaseClickAllowed = false;
+      let suppressClickUntil = 0;
       let vePointerActiveUntil = 0;
       let lastStageW      = 0;
       let lastStageH      = 0;
@@ -536,7 +539,9 @@
         orbInteractionActive = false;
         orbPressStartedAt = 0;
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         orbReleaseClickAllowed = false;
+        suppressClickUntil = 0;
         vePointerActiveUntil = 0;
         catCursorX = -9999;
         catCursorY = -9999;
@@ -977,6 +982,33 @@
         catMeowAudio.play().catch(() => {});
       };
 
+      function activateAppParticle(ap, event) {
+        if (!ap) return false;
+        if (ap.resetOrb) {
+          softResetScene(event);
+          return true;
+        }
+        if (ap.audioKey) {
+          const audio = getAudioElement(ap.audioKey);
+          if (!audio) return true;
+          if (audio.paused) {
+            unloadOtherAudio(ap.audioKey);
+            audio.play().catch(() => {
+              ap.playing = false;
+              unloadAudioElement(ap.audioKey);
+            });
+          } else {
+            unloadAudioElement(ap.audioKey);
+          }
+          return true;
+        }
+        if (ap.path) {
+          window.location.href = '/' + ap.path;
+          return true;
+        }
+        return false;
+      }
+
       // ─── Title letters ──────────────────────────────────────────────────────
       // Static title: no pulsation, no spring movement, no interaction scaling.
       // Lighting is sampled at each rendered letter's actual screen position.
@@ -986,10 +1018,7 @@
         const stageRect = stage.getBoundingClientRect();
         const wordRect  = word.getBoundingClientRect();
         const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
-        const cursorX   = catCursorX - stageRect.left;
-        const cursorY   = catCursorY - stageRect.top;
-        const cursorInStage = catCursorX >= stageRect.left && catCursorX <= stageRect.right
-                           && catCursorY >= stageRect.top  && catCursorY <= stageRect.bottom;
+        const veTitleLightActive = !ve.liberated && (ve.active || ve.voltaHeld || ve.alphaP > 0.12 || ve.scaleP > 0.12);
         let titleGlow   = 0;
 
         for (const l of titleLetters) {
@@ -997,12 +1026,13 @@
           const lx = wordRect.left - stageRect.left + l.baseX;
           const ly = letterY;
 
-          // Passive cursor proximity: title lights up without clicking/holding.
-          if (cursorInStage) {
-            const cdx = lx - cursorX;
-            const cdy = ly - cursorY;
-            const cd  = Math.hypot(cdx, cdy) || 1;
-            localLight = Math.max(localLight, Math.max(0, 1 - cd / 260) * 0.72);
+          // VE presence now illuminates the title instead of raw cursor proximity.
+          if (veTitleLightActive) {
+            const vdx = lx - ve.x;
+            const vdy = ly - ve.y;
+            const vd  = Math.hypot(vdx, vdy) || 1;
+            const veGlow = Math.max(0, 1 - vd / 280) * (0.42 + clamp(ve.scaleP, 0, 1) * 0.30 + clamp(ve.alphaP, 0, 1) * 0.18);
+            localLight = Math.max(localLight, veGlow);
           }
 
           // Actual click/tap pulse lights, sampled at the rendered letter position.
@@ -1591,7 +1621,7 @@
             const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
             const strainedR = rDraw * (1 - strain * 0.12);
             pctx.save();
-            pctx.globalAlpha = clamp(0.72 + t * 0.16 + local * 0.06, 0.24, 0.92);
+            pctx.globalAlpha = clamp(0.72 + t * 0.16 + local * 0.06, 0.24, 0.92) * 0.80;
             pctx.shadowBlur = Math.max(0, 2 + t * 6 + local * 10 + strain * 6);
             pctx.shadowColor = '#ffffff';
             pctx.font = `${Math.max(12, strainedR * 2.15)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
@@ -2629,6 +2659,7 @@
         const pressedOrb = !!pressedAppOrb;
         orbPressStartedAt = performance.now();
         orbPressStartedOnOrb = pressedOrb;
+        orbPressedTarget = pressedAppOrb;
         orbReleaseClickAllowed = false;
         orbInteractionActive = pressedOrb;
         noteCatTapInterest(e, pressedAppOrb);
@@ -2664,14 +2695,23 @@
         catCursorY = -9999;
       });
       stage.addEventListener('pointerup', e => {
+        const pressedTarget = orbPressedTarget;
         if (orbPressStartedOnOrb) {
           orbReleaseClickAllowed = (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS;
         }
+        const quickOrbRelease = !!pressedTarget && orbReleaseClickAllowed;
         endPointerPressure();
         releasePointerLight();
+        orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
+        if (quickOrbRelease) {
+          suppressClickUntil = performance.now() + 400;
+          activateAppParticle(pressedTarget, e);
+        }
       });
       stage.addEventListener('pointercancel', e => {
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         orbReleaseClickAllowed = false;
         endPointerPressure();
         releasePointerLight();
@@ -2684,12 +2724,14 @@
 
       // Navigate/play only on a quick tap/click-release of an app particle.
       stage.addEventListener('click', e => {
+        if (performance.now() < suppressClickUntil) return;
         const ap = appParticleAtClient(e.clientX, e.clientY);
         const pressStartedOnOrb = orbPressStartedOnOrb;
         const quickOrbRelease = orbReleaseClickAllowed
           || (orbPressStartedOnOrb && (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS);
         orbReleaseClickAllowed = false;
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         if (!quickOrbRelease) {
           if (pressStartedOnOrb && ap && ap.orbImg) {
             playCatMeow(0.70);
@@ -2697,29 +2739,12 @@
           return;
         }
 
-        if (!ap) return;
-        if (ap.resetOrb) {
-          softResetScene(e);
-          return;
-        }
-        if (ap.audioKey) {
-          const audio = getAudioElement(ap.audioKey);
-          if (!audio) return;
-          if (audio.paused) {
-            unloadOtherAudio(ap.audioKey);
-            audio.play().catch(() => {
-              ap.playing = false;
-              unloadAudioElement(ap.audioKey);
-            });
-          } else {
-            unloadAudioElement(ap.audioKey);
-          }
-          return;
-        }
-        if (ap.path) window.location.href = '/' + ap.path;
+        activateAppParticle(ap, e);
       });
 
-      versionStamp.textContent = VERSION;
+      versionStamp.textContent = COMMIT && COMMIT !== 'pending'
+        ? `${VERSION} · ${COMMIT}`
+        : VERSION;
       const versionParts = (value) => {
         const match = /^(\d{8})\.(\d+)$/.exec(value || '');
         return match ? [Number(match[1]), Number(match[2])] : null;

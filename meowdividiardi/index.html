@@ -109,6 +109,7 @@
     (() => {
       const TITLE   = 'MEOWDIVIDIARDI';
       const VERSION = '20260629.60';
+      const COMMIT  = 'pending';
       const MEOW_MODE = true;
 
       const stage          = document.getElementById('stage');
@@ -162,9 +163,13 @@
       let holdActive      = false; // true while mouse/touch is held down
       let orbInteractionActive = false; // suppress VE activation while pressing an orb
       const ORB_RELEASE_CLICK_WINDOW_MS = 500;
+      const ORB_POINTER_CAPTURE_SCALE = 1.12;
+      const TOUCH_ORB_POINTER_CAPTURE_SCALE = 1.24;
       let orbPressStartedAt = 0;
       let orbPressStartedOnOrb = false;
+      let orbPressedTarget = null;
       let orbReleaseClickAllowed = false;
+      let suppressClickUntil = 0;
       let lastStageW      = 0;
       let lastStageH      = 0;
       const pointerPressure = {
@@ -504,7 +509,9 @@
         orbInteractionActive = false;
         orbPressStartedAt = 0;
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         orbReleaseClickAllowed = false;
+        suppressClickUntil = 0;
         catCursorX = -9999;
         catCursorY = -9999;
 
@@ -902,12 +909,12 @@
         });
       }
 
-      function appParticleAtClient(clientX, clientY) {
+      function appParticleAtClient(clientX, clientY, hitScale = 1.5) {
         const rect = stage.getBoundingClientRect();
         const cx = clientX - rect.left;
         const cy = clientY - rect.top;
         for (const ap of appParticles) {
-          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * 1.5) return ap;
+          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * hitScale) return ap;
         }
         return null;
       }
@@ -929,6 +936,26 @@
         voice.play().catch(() => {});
       };
 
+      function activateAppParticle(ap, event) {
+        if (!ap) return false;
+        if (ap.isCatOrb) playCatMeow(ap.audioEl ? 0.62 : 0.70);
+        if (ap.resetOrb) {
+          softResetScene(event);
+          return true;
+        }
+        if (ap.audioEl) {
+          if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
+          else ap.audioEl.pause();
+          return true;
+        }
+        if (ap.path) {
+          playCatMeow(0.72);
+          setTimeout(() => { window.location.href = '/' + ap.path; }, 90);
+          return true;
+        }
+        return false;
+      }
+
       // ─── Title letters ──────────────────────────────────────────────────────
       // Static title: no pulsation, no spring movement, no interaction scaling.
       // Lighting is sampled at each rendered letter's actual screen position.
@@ -938,10 +965,7 @@
         const stageRect = stage.getBoundingClientRect();
         const wordRect  = word.getBoundingClientRect();
         const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
-        const cursorX   = catCursorX - stageRect.left;
-        const cursorY   = catCursorY - stageRect.top;
-        const cursorInStage = catCursorX >= stageRect.left && catCursorX <= stageRect.right
-                           && catCursorY >= stageRect.top  && catCursorY <= stageRect.bottom;
+        const veTitleLightActive = !ve.liberated && (ve.active || ve.voltaHeld || ve.alphaP > 0.12 || ve.scaleP > 0.12);
         let titleGlow   = 0;
 
         for (const l of titleLetters) {
@@ -949,12 +973,13 @@
           const lx = wordRect.left - stageRect.left + l.baseX;
           const ly = letterY;
 
-          // Passive cursor proximity: title lights up without clicking/holding.
-          if (cursorInStage) {
-            const cdx = lx - cursorX;
-            const cdy = ly - cursorY;
-            const cd  = Math.hypot(cdx, cdy) || 1;
-            localLight = Math.max(localLight, Math.max(0, 1 - cd / 260) * 0.72);
+          // VE presence now illuminates the title instead of raw cursor proximity.
+          if (veTitleLightActive) {
+            const vdx = lx - ve.x;
+            const vdy = ly - ve.y;
+            const vd  = Math.hypot(vdx, vdy) || 1;
+            const veGlow = Math.max(0, 1 - vd / 280) * (0.42 + clamp(ve.scaleP, 0, 1) * 0.30 + clamp(ve.alphaP, 0, 1) * 0.18);
+            localLight = Math.max(localLight, veGlow);
           }
 
           // Actual click/tap pulse lights, sampled at the rendered letter position.
@@ -2454,9 +2479,13 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
-        const pressedOrb = !!appParticleAtClient(e.clientX, e.clientY);
+        const touch = e.pointerType === 'touch';
+        const pressHitScale = touch ? TOUCH_ORB_POINTER_CAPTURE_SCALE : ORB_POINTER_CAPTURE_SCALE;
+        const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY, pressHitScale);
+        const pressedOrb = !!pressedAppOrb;
         orbPressStartedAt = performance.now();
         orbPressStartedOnOrb = pressedOrb;
+        orbPressedTarget = pressedAppOrb;
         orbReleaseClickAllowed = false;
         orbInteractionActive = pressedOrb;
         const tNow = orbPressStartedAt;
@@ -2467,7 +2496,6 @@
         if (volta.tapTimes.length >= 12 && !volta.active) {
           spawnVolta(tNow); volta.tapTimes.length = 0;
         }
-        const touch = e.pointerType === 'touch';
         if (!orbInteractionActive) {
           emitPointerPulse(e, touch ? 0.9 : 1.0);
           beginPointerPressure(e);
@@ -2491,14 +2519,23 @@
         catCursorY = -9999;
       });
       stage.addEventListener('pointerup', e => {
+        const pressedTarget = orbPressedTarget;
         if (orbPressStartedOnOrb) {
           orbReleaseClickAllowed = (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS;
         }
+        const quickOrbRelease = !!pressedTarget && orbReleaseClickAllowed;
         endPointerPressure();
         releasePointerLight();
+        orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
+        if (quickOrbRelease) {
+          suppressClickUntil = performance.now() + 400;
+          activateAppParticle(pressedTarget, e);
+        }
       });
       stage.addEventListener('pointercancel', e => {
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         orbReleaseClickAllowed = false;
         endPointerPressure();
         releasePointerLight();
@@ -2511,12 +2548,14 @@
 
       // Navigate/play only on a quick tap/click-release of an app particle.
       stage.addEventListener('click', e => {
+        if (performance.now() < suppressClickUntil) return;
         const ap = appParticleAtClient(e.clientX, e.clientY);
         const pressStartedOnOrb = orbPressStartedOnOrb;
         const quickOrbRelease = orbReleaseClickAllowed
           || (orbPressStartedOnOrb && (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS);
         orbReleaseClickAllowed = false;
         orbPressStartedOnOrb = false;
+        orbPressedTarget = null;
         if (!quickOrbRelease) {
           if (pressStartedOnOrb && ap && (ap.orbImg || ap.visualImg)) {
             playCatMeow(0.70);
@@ -2524,18 +2563,7 @@
           return;
         }
 
-        if (!ap) return;
-        if (ap.isCatOrb) playCatMeow(ap.audioEl ? 0.62 : 0.70);
-        if (ap.resetOrb) {
-          softResetScene(e);
-          return;
-        }
-        if (ap.audioEl) {
-          if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
-          else ap.audioEl.pause();
-          return;
-        }
-        if (ap.path) { playCatMeow(0.72); setTimeout(() => { window.location.href = '/' + ap.path; }, 90); }
+        activateAppParticle(ap, e);
       });
 
       const syncAudioOrb = (audioKey) => {
@@ -2557,7 +2585,9 @@
         audio.addEventListener('ended', () => syncAudioOrb(audioKey));
       }
 
-      versionStamp.textContent = VERSION;
+      versionStamp.textContent = COMMIT && COMMIT !== 'pending'
+        ? `${VERSION} · ${COMMIT}`
+        : VERSION;
       const versionParts = (value) => {
         const match = /^(\d{8})\.(\d+)$/.exec(value || '');
         return match ? [Number(match[1]), Number(match[2])] : null;
