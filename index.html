@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.37';
+      const VERSION = '20260629.38';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -163,6 +163,15 @@
       let orbReleaseClickAllowed = false;
       let lastStageW      = 0;
       let lastStageH      = 0;
+      const pointerPressure = {
+        active: false,
+        x: 0, y: 0,
+        lastX: 0, lastY: 0,
+        vx: 0, vy: 0,
+        dirX: 0, dirY: 0,
+        amp: 0,
+        lastT: 0,
+      };
 
       function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
       function rand(lo, hi)     { return lo + Math.random() * (hi - lo); }
@@ -451,6 +460,22 @@
             }
           }
 
+          // User substrate pressure: click/tap initiation is the radial pulse
+          // above. Sustained pressure exists only while the pointer is moving,
+          // and pushes substrate in the movement direction.
+          if (pointerPressure.amp > 0.001 && p.mass > 0.01) {
+            const dx = p.x - pointerPressure.x, dy = p.y - pointerPressure.y;
+            const d  = Math.hypot(dx, dy) || 1;
+            const reach = 165;
+            if (d < reach) {
+              const prox = Math.max(0, 1 - d / reach);
+              const force = Math.pow(prox, 1.75) * pointerPressure.amp;
+              p.vx += pointerPressure.dirX * force * 0.046 / p.mass;
+              p.vy += pointerPressure.dirY * force * 0.046 / p.mass;
+              thermalInput = Math.max(thermalInput, force * 0.62);
+            }
+          }
+
           // Orbs do not heat the substrate; they simply shove nearby particles aside.
           for (const ap of appParticles) {
             if (p.mass <= 0.01) continue;
@@ -607,6 +632,11 @@
           l.ttl -= dt;
           if (l.ttl <= 0) lights.splice(i, 1);
         }
+
+        // No static hold pressure: movement pressure fades quickly unless
+        // pointermove keeps replenishing it.
+        pointerPressure.amp *= Math.exp(-dt * 0.020);
+        if (!pointerPressure.active && pointerPressure.amp < 0.001) pointerPressure.amp = 0;
       }
 
       function updateVEPointerTarget(event, activate = true) {
@@ -620,6 +650,65 @@
           ve.active = true;
         }
         ve.targetX = tx; ve.targetY = ty;
+      }
+
+      function pointerStagePoint(event) {
+        const rect = stage.getBoundingClientRect();
+        const p = event.touches ? event.touches[0] : event;
+        return { x: p.clientX - rect.left, y: p.clientY - rect.top };
+      }
+
+      function beginPointerPressure(event) {
+        if (orbInteractionActive) return;
+        const pt = pointerStagePoint(event);
+        const now = performance.now();
+        pointerPressure.active = true;
+        pointerPressure.x = pointerPressure.lastX = pt.x;
+        pointerPressure.y = pointerPressure.lastY = pt.y;
+        pointerPressure.vx = pointerPressure.vy = 0;
+        pointerPressure.dirX = pointerPressure.dirY = 0;
+        pointerPressure.amp = 0; // tap/click gets a pulse only, no static sustain
+        pointerPressure.lastT = now;
+      }
+
+      function updatePointerPressure(event) {
+        if (!pointerPressure.active || orbInteractionActive) return;
+        const pt = pointerStagePoint(event);
+        const now = performance.now();
+        const elapsed = Math.max(8, now - pointerPressure.lastT);
+        const dx = pt.x - pointerPressure.lastX;
+        const dy = pt.y - pointerPressure.lastY;
+        const distance = Math.hypot(dx, dy);
+        if (distance < 0.4) return;
+
+        const vx = dx / elapsed;
+        const vy = dy / elapsed;
+        const speed = Math.hypot(vx, vy);
+        const accel = Math.hypot(vx - pointerPressure.vx, vy - pointerPressure.vy);
+        const directionBlend = clamp(distance / 22, 0.18, 1);
+
+        pointerPressure.x = pt.x;
+        pointerPressure.y = pt.y;
+        pointerPressure.dirX = pointerPressure.dirX * (1 - directionBlend) + (dx / distance) * directionBlend;
+        pointerPressure.dirY = pointerPressure.dirY * (1 - directionBlend) + (dy / distance) * directionBlend;
+        const dirMag = Math.hypot(pointerPressure.dirX, pointerPressure.dirY) || 1;
+        pointerPressure.dirX /= dirMag;
+        pointerPressure.dirY /= dirMag;
+
+        // Reduced sustained level. Speed gives the baseline; acceleration adds
+        // pressure when movement sharpens, changes direction, or speeds up.
+        const targetAmp = clamp(speed * 0.82 + accel * 7.5, 0, 0.42);
+        pointerPressure.amp += (targetAmp - pointerPressure.amp) * 0.42;
+
+        pointerPressure.vx = vx;
+        pointerPressure.vy = vy;
+        pointerPressure.lastX = pt.x;
+        pointerPressure.lastY = pt.y;
+        pointerPressure.lastT = now;
+      }
+
+      function endPointerPressure() {
+        pointerPressure.active = false;
       }
 
       function emitPointerPulse(event, strength = 1.0) {
@@ -2075,6 +2164,7 @@
         const touch = e.pointerType === 'touch';
         if (!orbInteractionActive) {
           emitPointerPulse(e, touch ? 0.9 : 1.0);
+          beginPointerPressure(e);
           if (e.button === 0 || touch) updateVEPointerTarget(e, true);
         }
         if (!orbInteractionActive && (e.button === 0 || touch)) {
@@ -2085,20 +2175,28 @@
       });
       stage.addEventListener('pointermove', e => {
         catCursorX = e.clientX; catCursorY = e.clientY;
-        if ((e.buttons || holdActive) && !orbInteractionActive) updateVEPointerTarget(e, false);
+        if ((e.buttons || holdActive) && !orbInteractionActive) {
+          updatePointerPressure(e);
+          updateVEPointerTarget(e, false);
+        }
       });
       stage.addEventListener('pointerup', e => {
         if (orbPressStartedOnOrb) {
           orbReleaseClickAllowed = (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS;
         }
+        endPointerPressure();
         releasePointerLight();
       });
       stage.addEventListener('pointercancel', e => {
         orbPressStartedOnOrb = false;
         orbReleaseClickAllowed = false;
+        endPointerPressure();
         releasePointerLight();
       });
-      stage.addEventListener('touchend',      releasePointerLight, { passive: true });
+      stage.addEventListener('touchend', e => {
+        endPointerPressure();
+        releasePointerLight();
+      }, { passive: true });
       window.addEventListener('resize', resize);
 
       // Navigate/play only on a quick tap/click-release of an app particle.
