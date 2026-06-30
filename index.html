@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.30';
+      const VERSION = '20260629.31';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -735,14 +735,15 @@
         const w = stage.clientWidth, h = stage.clientHeight;
         const now = performance.now();
         for (const ap of appParticles) {
-          if (ap.audioEl && ap.playing) {
-            // Sound-producing orb holds position; rendering supplies the violent jitter.
+          if (ap.orbImg) continue; // cat has its own behavioral update
+          const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
+          const soundOrbPinned = ap.audioEl && ap.playing && !veInteractive;
+          if (soundOrbPinned) {
+            // Sound-producing orb holds position unless the VE is actively pulling it.
             ap.vx = 0;
             ap.vy = 0;
             continue;
           }
-          if (ap.orbImg) continue; // cat has its own behavioral update
-          const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
           // Slow wander — more active after VE is destroyed (no pull to mask the drift)
           const wanderStr = ve.liberated ? 0.0042 : 0.001;
           ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
@@ -1531,18 +1532,18 @@
         volta.idleSince = now;
         volta.interactionPressure = 0;
         volta.activeTimeMs = 0;
-        volta.nextSpawnCheck = now + 8000; // brief quiet period so Volta does not photobomb immediately
+        volta.nextSpawnCheck = now + 14000; // longer quiet period so Volta does not photobomb immediately
       }
 
       function maybeSpawnVolta(now) {
         if (volta.active || now < volta.nextSpawnCheck) return false;
-        volta.nextSpawnCheck = now + 240;
+        volta.nextSpawnCheck = now + 420;
         const activeTimeMs = volta.activeTimeMs;
         const idleCurve = clamp(activeTimeMs / 120000, 0, 1.8);
         const interactionCurve = clamp(volta.interactionPressure / 18, 0, 1.6);
-        const mean = -2.6 + idleCurve * 3.2 + interactionCurve * 2.4;
-        const stddev = 0.38 + idleCurve * 0.95 + interactionCurve * 0.72;
-        if (gaussianRandom(mean, stddev) < 2.85) return false;
+        const mean = -3.4 + idleCurve * 2.4 + interactionCurve * 1.8;
+        const stddev = 0.28 + idleCurve * 0.70 + interactionCurve * 0.52;
+        if (gaussianRandom(mean, stddev) < 3.15) return false;
         spawnVolta(now);
         return true;
       }
