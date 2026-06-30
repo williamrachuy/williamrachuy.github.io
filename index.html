@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.44';
+      const VERSION = '20260629.45';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -187,6 +187,60 @@
         const gray = (r + g + b) / 3;
         const mix = (c) => Math.round(c + (gray - c) * amount).toString(16).padStart(2,'0');
         return `#${mix(r)}${mix(g)}${mix(b)}`;
+      }
+
+      function smoothstep(edge0, edge1, x) {
+        const t = clamp((x - edge0) / Math.max(edge1 - edge0, 1e-6), 0, 1);
+        return t * t * (3 - 2 * t);
+      }
+
+      function turnWanderToward(ap, targetAngle, amount) {
+        const delta = Math.atan2(Math.sin(targetAngle - ap.wAngle), Math.cos(targetAngle - ap.wAngle));
+        ap.wAngle += delta * clamp(amount, 0, 1);
+      }
+
+      function applyOrbHomeField(ap, homeX, homeY, innerR, outerR, featherR, outerStrength, innerStrength, tangentStrength = 0) {
+        let dx = ap.x - homeX;
+        let dy = ap.y - homeY;
+        let d = Math.hypot(dx, dy);
+
+        if (d < 0.001) {
+          dx = Math.cos(ap.wAngle || 0);
+          dy = Math.sin(ap.wAngle || 0);
+          d = 1;
+        }
+
+        const ux = dx / d;
+        const uy = dy / d;
+
+        // Inner exclusion: "subtract" the reset orb's smaller home circle from
+        // the larger sound/site home field. Orbs inside it bias outward.
+        if (innerR > 0 && d < innerR) {
+          const innerT = Math.pow(clamp(1 - d / innerR, 0, 1), 1.7);
+          const push = innerStrength * innerT * Math.max(0.85, ap.speed || 1);
+          ap.vx += ux * push;
+          ap.vy += uy * push;
+          turnWanderToward(ap, Math.atan2(uy, ux), innerT * 0.045);
+        }
+
+        // Outer feather: inside outerR is mostly free; beyond it, the farther out
+        // the orb drifts, the more its wander direction bends back home.
+        if (d > outerR) {
+          const outerT = smoothstep(outerR, outerR + featherR, d);
+          const pull = outerStrength * outerT * outerT * Math.max(0.85, ap.speed || 1);
+          ap.vx -= ux * pull;
+          ap.vy -= uy * pull;
+          turnWanderToward(ap, Math.atan2(-uy, -ux), outerT * 0.030);
+        }
+
+        // Very weak annular drift gives the Goldilocks zone an orbital feel
+        // without forcing literal circular motion.
+        if (tangentStrength > 0 && d > innerR && d < outerR + featherR) {
+          const mid = innerR + (outerR - innerR) * 0.55;
+          const zoneT = 1 - clamp(Math.abs(d - mid) / Math.max(outerR - innerR, 1), 0, 1);
+          ap.vx += -uy * tangentStrength * zoneT;
+          ap.vy +=  ux * tangentStrength * zoneT;
+        }
       }
 
       // ─── Vector Equilibrium geometry ────────────────────────────────────────
@@ -357,11 +411,22 @@
         const margin = 40;
         for (const page of pages) {
           const r0 = page.r0 || (7 + Math.random() * 3);
+          const minDim = Math.min(w, h);
+          const seedAngle = Math.random() * Math.PI * 2;
+          const ringInner = clamp(minDim * 0.20, 105, 240);
+          const ringOuter = clamp(minDim * 0.40, 220, 480);
+          const seedR = ringInner + Math.random() * Math.max(1, ringOuter - ringInner);
+          const seedX = page.resetOrb
+            ? clamp(w * 0.5 + rand(-minDim * 0.035, minDim * 0.035), margin, w - margin)
+            : clamp(w * 0.5 + Math.cos(seedAngle) * seedR, margin, w - margin);
+          const seedY = page.resetOrb
+            ? clamp(h * 0.5 + rand(-minDim * 0.035, minDim * 0.035), margin, h - margin)
+            : clamp(h * 0.5 + Math.sin(seedAngle) * seedR, margin, h - margin);
           appParticles.push({
             ...page,
             brightColor: brightenColor(page.color),
-            x: margin + Math.random() * (w - margin * 2),
-            y: margin + Math.random() * (h - margin * 2),
+            x: seedX,
+            y: seedY,
             vx: 0, vy: 0,
             r0,
             wAngle:      Math.random() * Math.PI * 2,
@@ -923,8 +988,18 @@
         const now = performance.now();
         const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
         const veVisible = !ve.liberated && (veInteractive || ve.alphaP > 0.16 || ve.scaleP > 0.16);
+        const resetOrb = appParticles.find(p => p.resetOrb);
+        const minDim = Math.min(w, h);
+        const resetHomeX = w * 0.5;
+        const resetHomeY = h * 0.5;
+        const resetHomeR = clamp(minDim * 0.14, 72, 155);
+        const resetHomeFeatherR = clamp(minDim * 0.20, 120, 270);
+        const goldInnerR = clamp(resetHomeR * 1.12, 88, 190);
+        const goldOuterR = clamp(minDim * 0.39, 215, 455);
+        const goldFeatherR = clamp(minDim * 0.24, 150, 360);
+
         for (const ap of appParticles) {
-          if (ap.orbImg) continue; // cat has its own behavioral update
+          if (ap.orbImg) continue; // cat has its own behavioral update and remains freer than the other orbs
           ap.voltaStrain += ((ap.voltaStrainTarget || 0) - (ap.voltaStrain || 0)) * clamp(dt * 0.01, 0, 1);
           const soundOrbPinned = ap.audioEl && ap.playing && !veVisible;
           if (soundOrbPinned) {
@@ -933,22 +1008,40 @@
             ap.vy = 0;
           }
           if (!soundOrbPinned) {
-            // Slow wander — more active after VE is destroyed (no pull to mask the drift)
-            const wanderStr = ve.liberated ? 0.0042 : 0.001;
-            ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
-            ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed;
-            ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed;
-          }
-          // Soft center bias: keeps the long-run population off the walls without forcing a center clump.
-          const cx = w * 0.5, cy = h * 0.5;
-          const cdx = cx - ap.x, cdy = cy - ap.y;
-          const centerDist = Math.hypot(cdx, cdy) || 1;
-          const preferredR = Math.min(w, h) * 0.24;
-          if (centerDist > preferredR) {
-            const centerBias = Math.min(1, (centerDist - preferredR) / Math.max(preferredR * 2.2, 1));
-            const centerPull = 0.0024 * centerBias * centerBias * ap.speed;
-            ap.vx += (cdx / centerDist) * centerPull;
-            ap.vy += (cdy / centerDist) * centerPull;
+            const isReset = !!ap.resetOrb;
+            const isSound = !!ap.audioEl;
+            const liberatedBoost = ve.liberated ? 1.25 : 1.0;
+
+            // Reset orb: slow, graceful wander around page-center home.
+            // Sound orbs: faster and a little more erratic.
+            // Site orbs: slower, steadier wander.
+            const wanderStr = isReset ? 0.00034 : isSound ? 0.00138 : 0.00076;
+            const angleJitter = isReset ? 0.00032 : isSound ? 0.00155 : 0.00078;
+            ap.wAngle += (Math.random() - 0.5) * angleJitter * dt * ap.speed * liberatedBoost;
+            ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed * liberatedBoost;
+            ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed * liberatedBoost;
+
+            if (isReset) {
+              // Reset orb's smaller home is always page-center.
+              applyOrbHomeField(ap, resetHomeX, resetHomeY, 0, resetHomeR, resetHomeFeatherR, 0.0048, 0, 0.00006);
+            } else if (resetOrb) {
+              // Other orbs live in a larger field centered on the reset orb, with
+              // the reset orb's inner zone subtracted to create a Goldilocks annulus.
+              applyOrbHomeField(
+                ap,
+                resetOrb.x,
+                resetOrb.y,
+                goldInnerR,
+                goldOuterR,
+                goldFeatherR,
+                isSound ? 0.0034 : 0.0023,
+                isSound ? 0.0068 : 0.0048,
+                isSound ? 0.00016 : 0.00009
+              );
+            } else {
+              // Fallback if reset orb is absent.
+              applyOrbHomeField(ap, resetHomeX, resetHomeY, 0, goldOuterR, goldFeatherR, 0.0020, 0, 0.00006);
+            }
           }
           // Sound orbs are attracted to the VE while it lives; link orbs are not.
           const mass = ap.r0 * ap.r0 * ap.r0;
