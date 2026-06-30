@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.31';
+      const VERSION = '20260629.32';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -749,13 +749,13 @@
           ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
           ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed;
           ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed;
-          // Attracted to VE center while it lives; nothing once VE is destroyed
+          // Sound orbs are attracted to the VE while it lives; link orbs are not.
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
           if (ap.audioEl && veInteractive && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const pull = 60 * accelBoost / (d * 0.04 + 1);
+            const pull = 110 * accelBoost / (d * 0.035 + 1);
             ap.vx -= (dx / d) * pull / mass;
             ap.vy -= (dy / d) * pull / mass;
             // Inside VE: orb momentum converts to VE axial torque; orb slows proportionally
@@ -1532,18 +1532,18 @@
         volta.idleSince = now;
         volta.interactionPressure = 0;
         volta.activeTimeMs = 0;
-        volta.nextSpawnCheck = now + 14000; // longer quiet period so Volta does not photobomb immediately
+        volta.nextSpawnCheck = now + 22000; // longer quiet period so Volta does not photobomb immediately
       }
 
       function maybeSpawnVolta(now) {
         if (volta.active || now < volta.nextSpawnCheck) return false;
-        volta.nextSpawnCheck = now + 420;
+        volta.nextSpawnCheck = now + 700;
         const activeTimeMs = volta.activeTimeMs;
         const idleCurve = clamp(activeTimeMs / 120000, 0, 1.8);
         const interactionCurve = clamp(volta.interactionPressure / 18, 0, 1.6);
-        const mean = -3.4 + idleCurve * 2.4 + interactionCurve * 1.8;
-        const stddev = 0.28 + idleCurve * 0.70 + interactionCurve * 0.52;
-        if (gaussianRandom(mean, stddev) < 3.15) return false;
+        const mean = -4.2 + idleCurve * 1.9 + interactionCurve * 1.35;
+        const stddev = 0.22 + idleCurve * 0.56 + interactionCurve * 0.40;
+        if (gaussianRandom(mean, stddev) < 3.55) return false;
         spawnVolta(now);
         return true;
       }
