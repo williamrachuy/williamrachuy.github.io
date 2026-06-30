@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.17';
+      const VERSION = '20260630.18';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -1816,20 +1816,65 @@
             pctx.shadowBlur  = 0;
             pctx.restore();
           } else if (ap.cardImg && ap.cardImg.complete && ap.cardImg.naturalWidth > 0) {
-            // Cube Cobra cardback link: high-quality smoothing, no outer glow.
-            // Draw as an orb-sized image object, but avoid the fuzzy halo and
-            // force the canvas scaler to use image smoothing for the small render.
+            // Cube Cobra cardback link: manual mip texture, no outer glow.
+            // The original PNG is too detailed to resample directly to orb size
+            // every frame; breathing would make source pixels pop/crawl. Build a
+            // stable prefiltered texture near the orb's base size, then transform
+            // that cached texture continuously with the orb pulse.
+            const baseR = Math.max(1, ap.r0 || rDraw || 1);
             const aspect = ap.cardImg.naturalWidth / Math.max(1, ap.cardImg.naturalHeight);
-            const cardH = rDraw * 2.75;
-            const cardW = cardH * aspect;
+            const baseCardH = baseR * 2.75;
+            const baseCardW = baseCardH * aspect;
+            const texDpr = Math.min(window.devicePixelRatio || 1, 2);
+            const texScale = 4;
+            const texW = Math.max(2, Math.round(baseCardW * texScale * texDpr));
+            const texH = Math.max(2, Math.round(baseCardH * texScale * texDpr));
+
+            if (!ap._cardTexture || ap._cardTexture.w !== texW || ap._cardTexture.h !== texH) {
+              let srcCanvas = document.createElement('canvas');
+              srcCanvas.width = ap.cardImg.naturalWidth;
+              srcCanvas.height = ap.cardImg.naturalHeight;
+              let srcCtx = srcCanvas.getContext('2d');
+              srcCtx.imageSmoothingEnabled = true;
+              if ('imageSmoothingQuality' in srcCtx) srcCtx.imageSmoothingQuality = 'high';
+              srcCtx.drawImage(ap.cardImg, 0, 0);
+
+              // Progressive downsample reduces aliasing more reliably than one
+              // huge source->tiny destination draw.
+              while (srcCanvas.width * 0.5 > texW * 1.35 && srcCanvas.height * 0.5 > texH * 1.35) {
+                const half = document.createElement('canvas');
+                half.width = Math.max(texW, Math.round(srcCanvas.width * 0.5));
+                half.height = Math.max(texH, Math.round(srcCanvas.height * 0.5));
+                const halfCtx = half.getContext('2d');
+                halfCtx.imageSmoothingEnabled = true;
+                if ('imageSmoothingQuality' in halfCtx) halfCtx.imageSmoothingQuality = 'high';
+                halfCtx.drawImage(srcCanvas, 0, 0, half.width, half.height);
+                srcCanvas = half;
+                srcCtx = halfCtx;
+              }
+
+              const tex = document.createElement('canvas');
+              tex.width = texW;
+              tex.height = texH;
+              const texCtx = tex.getContext('2d');
+              texCtx.imageSmoothingEnabled = true;
+              if ('imageSmoothingQuality' in texCtx) texCtx.imageSmoothingQuality = 'high';
+              texCtx.drawImage(srcCanvas, 0, 0, texW, texH);
+
+              ap._cardTexture = { canvas: tex, w: texW, h: texH };
+            }
+
+            const orbScale = rDraw / baseR;
 
             pctx.save();
             pctx.translate(drawX, drawY);
-            pctx.globalAlpha = clamp(0.82 + t * 0.08 + local * 0.03, 0.60, 0.96);
+            pctx.scale(orbScale, orbScale);
+            pctx.globalAlpha = clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
             pctx.imageSmoothingEnabled = true;
             if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'high';
             pctx.filter = 'none';
-            pctx.drawImage(ap.cardImg, -cardW * 0.5, -cardH * 0.5, cardW, cardH);
+            pctx.shadowBlur = 0;
+            pctx.drawImage(ap._cardTexture.canvas, -baseCardW * 0.5, -baseCardH * 0.5, baseCardW, baseCardH);
             pctx.restore();
           } else if (ap.emoji) {
             const strain = ap.voltaStrain || 0;
