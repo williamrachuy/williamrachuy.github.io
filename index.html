@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.42';
+      const VERSION = '20260629.43';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -809,18 +809,19 @@
         const tx   = p.clientX - rect.left;
         const ty   = p.clientY - rect.top;
         const now  = performance.now();
-        const fadeInMs = 90;
+        const fadeInMs = 45;
+        const pulseStrength = strength * 0.42;
         lights.push({
           x: tx, y: ty,
-          strength,
+          strength: pulseStrength,
           sustainStrength: 0,
-          ttl: 1400, maxTtl: 1400, kind: 'pointer',
+          ttl: 620, maxTtl: 620, kind: 'pointer',
           born: now - fadeInMs,
           released: true,
           releaseTime: now,
           ageAtRelease: fadeInMs,
           fadeInMs,
-          fadeOutMs: 1400,
+          fadeOutMs: 620,
         });
       }
 
@@ -860,9 +861,14 @@
       // Lighting is sampled at each rendered letter's actual screen position.
 
       function updateTitle(dt) {
+        const now = performance.now();
         const stageRect = stage.getBoundingClientRect();
         const wordRect  = word.getBoundingClientRect();
         const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
+        const cursorX   = catCursorX - stageRect.left;
+        const cursorY   = catCursorY - stageRect.top;
+        const cursorInStage = catCursorX >= stageRect.left && catCursorX <= stageRect.right
+                           && catCursorY >= stageRect.top  && catCursorY <= stageRect.bottom;
         let titleGlow   = 0;
 
         for (const l of titleLetters) {
@@ -870,11 +876,20 @@
           const lx = wordRect.left - stageRect.left + l.baseX;
           const ly = letterY;
 
+          // Passive cursor proximity: title lights up without clicking/holding.
+          if (cursorInStage) {
+            const cdx = lx - cursorX;
+            const cdy = ly - cursorY;
+            const cd  = Math.hypot(cdx, cdy) || 1;
+            localLight = Math.max(localLight, Math.max(0, 1 - cd / 260) * 0.72);
+          }
+
+          // Actual click/tap pulse lights, sampled at the rendered letter position.
           for (const light of lights) {
             const dx = lx - light.x;
             const dy = ly - light.y;
             const d  = Math.hypot(dx, dy) || 1;
-            const inf = Math.max(0, 1 - d / 240) * light.strength * lightIntensity(light, performance.now());
+            const inf = Math.max(0, 1 - d / 220) * light.strength * lightIntensity(light, now);
             localLight = Math.max(localLight, inf);
           }
           titleGlow = Math.max(titleGlow, localLight);
@@ -2322,6 +2337,10 @@
           updatePointerPressure(e);
           updateVEPointerTarget(e, false);
         }
+      });
+      stage.addEventListener('pointerleave', () => {
+        catCursorX = -9999;
+        catCursorY = -9999;
       });
       stage.addEventListener('pointerup', e => {
         if (orbPressStartedOnOrb) {
