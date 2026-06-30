@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.3';
+      const VERSION = '20260630.4';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -479,7 +479,7 @@
           { path: 'calculator',       color: '#6a5410' }, // dark ochre
           { path: 'clock',            color: '#263d4a' }, // dark slate
           { path: 'cellularautomata', color: '#47301e' }, // dark umber
-          { path: 'blog',             color: '#5c3333' }, // dark dusty rose
+          { path: 'about',            color: '#4a4258', glyph: '?', glyphFont: 'Times New Roman', speed: 0.96 }, // about orb
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
@@ -1859,6 +1859,19 @@
                      strainedY - strainedR * (0.30 - (unstable ? vibration * 0.10 : 0)),
                      strainedR * (0.38 + (unstable ? vibration * 0.12 : 0)), 0, Math.PI * 2);
             pctx.fill();
+
+            // Optional faint glyph for symbolic site orbs.
+            if (ap.glyph) {
+              pctx.globalAlpha = clamp(0.10 + t * 0.035 + local * 0.08, 0.08, 0.22) * orbBrightnessScale;
+              pctx.shadowBlur  = Math.max(0, 1 + local * 5);
+              pctx.shadowColor = brightColor;
+              pctx.fillStyle   = brightColor;
+              pctx.font = `${Math.max(14, strainedR * 1.42)}px "${ap.glyphFont || 'Times New Roman'}", "Times New Roman", serif`;
+              pctx.textAlign = 'center';
+              pctx.textBaseline = 'middle';
+              pctx.fillText(ap.glyph, strainedX, strainedY + strainedR * 0.035);
+              pctx.shadowBlur = 0;
+            }
 
           }
         }
