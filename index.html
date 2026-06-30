@@ -86,54 +86,38 @@
     <div id="veil"></div>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
-  <audio id="nautilus-audio" src="audio/Nautilus.mp3" preload="metadata"></audio>
-  <audio id="endless-audio" src="audio/endless.mp3" preload="metadata"></audio>
-  <audio id="chripper-audio" src="audio/Chripper.mp3" preload="metadata"></audio>
-  <audio id="following-a-deviatioin-audio" src="audio/Following a Deviatioin.mp3" preload="metadata"></audio>
-  <audio id="hypersthene-audio" src="audio/Hypersthene.mp3" preload="metadata"></audio>
-  <audio id="lsd-1-audio" src="audio/LSD 1.mp3" preload="metadata"></audio>
-  <audio id="lsd-2-audio" src="audio/LSD 2.mp3" preload="metadata"></audio>
-  <audio id="lux-audio" src="audio/Lux.mp3" preload="metadata"></audio>
-  <audio id="portal-open-audio" src="audio/Portal Open.mp3" preload="metadata"></audio>
-  <audio id="quadruple-audio" src="audio/Quadruple.mp3" preload="metadata"></audio>
-  <audio id="singest-audio" src="audio/Singest.mp3" preload="metadata"></audio>
-  <audio id="sovereign-audio" src="audio/Sovereign.mp3" preload="metadata"></audio>
-  <audio id="spiral-observations-audio" src="audio/Spiral Observations 2.mp3" preload="metadata"></audio>
-  <audio id="traversion-approach-audio" src="audio/Traversion Approach.mp3" preload="metadata"></audio>
-  <audio id="camerons-art-audio" src="audio/Camerons Art.mp3" preload="metadata"></audio>
-  <audio id="documents-audio" src="audio/Documents.mp3" preload="metadata"></audio>
-  <audio id="elevator-audio" src="audio/Elevator.mp3" preload="metadata"></audio>
-  <audio id="msr-trimmed-audio" src="audio/MSR Trimmed.mp3" preload="metadata"></audio>
-
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.51';
+      const VERSION = '20260629.52';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
       const particlesCanvas = document.getElementById('particles');
       const pctx           = particlesCanvas.getContext('2d');
       const word           = document.getElementById('wordmark');
-      const nautilusAudio   = document.getElementById('nautilus-audio');
-      const endlessAudio    = document.getElementById('endless-audio');
-      const chripperAudio   = document.getElementById('chripper-audio');
-      const followingADeviatioinAudio = document.getElementById('following-a-deviatioin-audio');
-      const hyperstheneAudio = document.getElementById('hypersthene-audio');
-      const lsd1Audio        = document.getElementById('lsd-1-audio');
-      const lsd2Audio        = document.getElementById('lsd-2-audio');
-      const luxAudio         = document.getElementById('lux-audio');
-      const portalOpenAudio  = document.getElementById('portal-open-audio');
-      const quadrupleAudio   = document.getElementById('quadruple-audio');
-      const singestAudio     = document.getElementById('singest-audio');
-      const sovereignAudio   = document.getElementById('sovereign-audio');
-      const spiralObservationsAudio = document.getElementById('spiral-observations-audio');
-      const traversionApproachAudio = document.getElementById('traversion-approach-audio');
-      const cameronsArtAudio = document.getElementById('camerons-art-audio');
-      const documentsAudio = document.getElementById('documents-audio');
-      const elevatorAudio = document.getElementById('elevator-audio');
-      const msrTrimmedAudio = document.getElementById('msr-trimmed-audio');
-      const audioElements   = { nautilus: nautilusAudio, endless: endlessAudio, chripper: chripperAudio, following_a_deviatioin: followingADeviatioinAudio, hypersthene: hyperstheneAudio, lsd_1: lsd1Audio, lsd_2: lsd2Audio, lux: luxAudio, portal_open: portalOpenAudio, quadruple: quadrupleAudio, singest: singestAudio, sovereign: sovereignAudio, spiral_observations: spiralObservationsAudio, traversion_approach: traversionApproachAudio, camerons_art: cameronsArtAudio, documents: documentsAudio, elevator: elevatorAudio, msr_trimmed: msrTrimmedAudio };
+      const audioSources = {
+        nautilus: 'audio/Nautilus.mp3',
+        endless: 'audio/endless.mp3',
+        chripper: 'audio/Chripper.mp3',
+        following_a_deviatioin: 'audio/Following a Deviatioin.mp3',
+        hypersthene: 'audio/Hypersthene.mp3',
+        lsd_1: 'audio/LSD 1.mp3',
+        lsd_2: 'audio/LSD 2.mp3',
+        lux: 'audio/Lux.mp3',
+        portal_open: 'audio/Portal Open.mp3',
+        quadruple: 'audio/Quadruple.mp3',
+        singest: 'audio/Singest.mp3',
+        sovereign: 'audio/Sovereign.mp3',
+        spiral_observations: 'audio/Spiral Observations 2.mp3',
+        traversion_approach: 'audio/Traversion Approach.mp3',
+        camerons_art: 'audio/Camerons Art.mp3',
+        documents: 'audio/Documents.mp3',
+        elevator: 'audio/Elevator.mp3',
+        msr_trimmed: 'audio/MSR Trimmed.mp3',
+      };
+      const audioElements = {}; // lazy-created on first click; no page-load audio GETs
+      let currentAudioKey = null;
       if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
@@ -369,6 +353,62 @@
         }
       }
 
+      // ─── Lazy audio ────────────────────────────────────────────────────────
+
+      function syncAudioOrb(audioKey) {
+        const orb = appParticles.find(ap => ap.audioKey === audioKey);
+        const audio = audioElements[audioKey];
+        if (orb) {
+          orb.audioEl = audio || null;
+          orb.playing = !!(audio && !audio.paused && !audio.ended);
+        }
+      }
+
+      function unloadAudioElement(audioKey) {
+        const audio = audioElements[audioKey];
+        if (!audio) {
+          syncAudioOrb(audioKey);
+          return;
+        }
+        try {
+          audio.pause();
+          audio.removeAttribute('src');
+          audio.load();
+        } catch (_) {}
+        delete audioElements[audioKey];
+        if (currentAudioKey === audioKey) currentAudioKey = null;
+        syncAudioOrb(audioKey);
+      }
+
+      function unloadOtherAudio(exceptKey = null) {
+        for (const key of Object.keys(audioElements)) {
+          if (key !== exceptKey) unloadAudioElement(key);
+        }
+      }
+
+      function getAudioElement(audioKey) {
+        if (!audioKey || !audioSources[audioKey]) return null;
+        if (audioElements[audioKey]) return audioElements[audioKey];
+
+        const audio = new Audio();
+        audio.preload = 'none';
+        audio.src = audioSources[audioKey];
+
+        audio.addEventListener('play', () => {
+          currentAudioKey = audioKey;
+          unloadOtherAudio(audioKey);
+          syncAudioOrb(audioKey);
+        });
+        audio.addEventListener('pause', () => syncAudioOrb(audioKey));
+        audio.addEventListener('ended', () => {
+          unloadAudioElement(audioKey);
+        });
+
+        audioElements[audioKey] = audio;
+        syncAudioOrb(audioKey);
+        return audio;
+      }
+
       // ─── App particles (living — sub-pages) ────────────────────────────────
 
       function seedAppParticles() {
@@ -439,7 +479,8 @@
             breathRate:  0.0006 + Math.random() * 0.0004,
             speed: page.speed || (page.audioKey ? 2.2 : 1),
             playing: false,
-            audioEl: page.audioKey ? audioElements[page.audioKey] : null,
+            audioEl: null,
+            audioSrc: page.audioKey ? audioSources[page.audioKey] : null,
             emoji: page.emoji || null,
             voltaStrain: 0,
             voltaStrainTarget: 0,
@@ -479,13 +520,8 @@
       function softResetScene(event = null) {
         const now = performance.now();
 
-        // Stop all active audio and clear sound-orb playback state.
-        for (const audio of Object.values(audioElements)) {
-          try {
-            audio.pause();
-            audio.currentTime = 0;
-          } catch (_) {}
-        }
+        // Stop and unload any lazy-created audio so reset does not keep media loaded.
+        unloadOtherAudio(null);
         try {
           catMeowAudio.pause();
           catMeowAudio.currentTime = 0;
@@ -688,7 +724,7 @@
 
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
-        const activeAudioOrbs = appParticles.filter(ap => ap.audioEl && ap.playing);
+        const activeAudioOrbs = appParticles.filter(ap => ap.audioKey && ap.playing);
         const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.09246 : 0;
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
         for (const p of particles) {
@@ -1021,7 +1057,7 @@
         for (const ap of appParticles) {
           if (ap.orbImg) continue; // cat has its own behavioral update and remains freer than the other orbs
           ap.voltaStrain += ((ap.voltaStrainTarget || 0) - (ap.voltaStrain || 0)) * clamp(dt * 0.01, 0, 1);
-          const soundOrbPinned = ap.audioEl && ap.playing && !veVisible;
+          const soundOrbPinned = ap.audioKey && ap.playing && !veVisible;
           if (soundOrbPinned) {
             // Sound-producing orb holds position unless the VE is actively pulling it.
             ap.vx = 0;
@@ -1029,7 +1065,7 @@
           }
           if (!soundOrbPinned) {
             const isReset = !!ap.resetOrb;
-            const isSound = !!ap.audioEl;
+            const isSound = !!ap.audioKey;
             const liberatedBoost = ve.liberated ? 1.25 : 1.0;
 
             // Reset orb: slow, graceful wander around page-center home.
@@ -1084,7 +1120,7 @@
           // Sound orbs are attracted to the VE while it lives; link orbs are not.
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (ap.audioEl && veVisible && ve.scaleCurrent > 5) {
+          if (ap.audioKey && veVisible && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 110 * accelBoost / (d * 0.035 + 1);
@@ -1518,7 +1554,7 @@
       function drawAppParticles(now) {
         for (const ap of appParticles) {
           const local  = lightAt(ap.x, ap.y, now);
-          const unstable = ap.audioEl && ap.playing;
+          const unstable = ap.audioKey && ap.playing;
           const vibration = unstable
             ? Math.sin(now * 0.105) * 0.52 + Math.sin(now * 0.173 + 1.7) * 0.31 + Math.sin(now * 0.247) * 0.17
             : 0;
@@ -2666,32 +2702,22 @@
           softResetScene(e);
           return;
         }
-        if (ap.audioEl) {
-          if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
-          else ap.audioEl.pause();
+        if (ap.audioKey) {
+          const audio = getAudioElement(ap.audioKey);
+          if (!audio) return;
+          if (audio.paused) {
+            unloadOtherAudio(ap.audioKey);
+            audio.play().catch(() => {
+              ap.playing = false;
+              unloadAudioElement(ap.audioKey);
+            });
+          } else {
+            unloadAudioElement(ap.audioKey);
+          }
           return;
         }
         if (ap.path) window.location.href = '/' + ap.path;
       });
-
-      const syncAudioOrb = (audioKey) => {
-        const orb = appParticles.find(ap => ap.audioKey === audioKey);
-        const audio = audioElements[audioKey];
-        if (orb && audio) orb.playing = !audio.paused && !audio.ended;
-      };
-      for (const audioKey of Object.keys(audioElements)) {
-        const audio = audioElements[audioKey];
-        audio.addEventListener('play', () => {
-          for (const [otherKey, otherAudio] of Object.entries(audioElements)) {
-            if (otherKey === audioKey) continue;
-            if (!otherAudio.paused) otherAudio.pause();
-            syncAudioOrb(otherKey);
-          }
-          syncAudioOrb(audioKey);
-        });
-        audio.addEventListener('pause', () => syncAudioOrb(audioKey));
-        audio.addEventListener('ended', () => syncAudioOrb(audioKey));
-      }
 
       versionStamp.textContent = VERSION;
       const versionParts = (value) => {
