@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.28';
+      const VERSION = '20260629.29';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -430,6 +430,28 @@
             }
           }
 
+          // Moving orbs emit a directional substrate-pressure wavefront.
+          // This is intentionally half-strength relative to the former isotropic orb pressure.
+          for (const ap of appParticles) {
+            const orbSpeed = Math.hypot(ap.vx, ap.vy);
+            if (orbSpeed < 0.003 || p.mass <= 0.01) continue;
+            const dirX = ap.vx / orbSpeed, dirY = ap.vy / orbSpeed;
+            const relX = p.x - ap.x, relY = p.y - ap.y;
+            const forward = relX * dirX + relY * dirY;
+            if (forward <= 0) continue;
+            const lateral = Math.abs(relX * dirY - relY * dirX);
+            const reach = ap.r0 * 16 + orbSpeed * 520;
+            const width = ap.r0 * 6 + orbSpeed * 180;
+            if (forward >= reach || lateral >= width) continue;
+            const forwardGain = 1 - forward / reach;
+            const lateralGain = 1 - lateral / width;
+            const wave = forwardGain * forwardGain * lateralGain * lateralGain * Math.min(1.8, orbSpeed * 42) * 0.5;
+            if (wave <= 0.0005) continue;
+            const waveForce = wave * 0.0006 / p.mass;
+            p.vx += dirX * waveForce;
+            p.vy += dirY * waveForce;
+            thermalInput = Math.max(thermalInput, wave * 0.5);
+          }
 
           // Shared thermal response: force and arc energy heat identically;
           // absence of either cools the material back toward ambient.
