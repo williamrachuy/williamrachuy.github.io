@@ -107,11 +107,12 @@
   <audio id="camerons-art-audio" src="audio/Camerons Art.mp3" preload="metadata"></audio>
   <audio id="documents-audio" src="audio/Documents.mp3" preload="metadata"></audio>
   <audio id="elevator-audio" src="audio/Elevator.mp3" preload="metadata"></audio>
+  <audio id="msr-trimmed-audio" src="audio/MSR Trimmed.mp3" preload="metadata"></audio>
 
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.27';
+      const VERSION = '20260629.28';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -135,7 +136,8 @@
       const cameronsArtAudio = document.getElementById('camerons-art-audio');
       const documentsAudio = document.getElementById('documents-audio');
       const elevatorAudio = document.getElementById('elevator-audio');
-      const audioElements   = { nautilus: nautilusAudio, endless: endlessAudio, chripper: chripperAudio, following_a_deviatioin: followingADeviatioinAudio, hypersthene: hyperstheneAudio, lsd_1: lsd1Audio, lsd_2: lsd2Audio, lux: luxAudio, portal_open: portalOpenAudio, quadruple: quadrupleAudio, singest: singestAudio, sovereign: sovereignAudio, spiral_observations: spiralObservationsAudio, traversion_approach: traversionApproachAudio, camerons_art: cameronsArtAudio, documents: documentsAudio, elevator: elevatorAudio };
+      const msrTrimmedAudio = document.getElementById('msr-trimmed-audio');
+      const audioElements   = { nautilus: nautilusAudio, endless: endlessAudio, chripper: chripperAudio, following_a_deviatioin: followingADeviatioinAudio, hypersthene: hyperstheneAudio, lsd_1: lsd1Audio, lsd_2: lsd2Audio, lux: luxAudio, portal_open: portalOpenAudio, quadruple: quadrupleAudio, singest: singestAudio, sovereign: sovereignAudio, spiral_observations: spiralObservationsAudio, traversion_approach: traversionApproachAudio, camerons_art: cameronsArtAudio, documents: documentsAudio, elevator: elevatorAudio, msr_trimmed: msrTrimmedAudio };
       if (!pctx) return;
 
       const measureCanvas = document.createElement('canvas');
@@ -321,6 +323,7 @@
           { audioKey: 'camerons_art',           color: '#7a5f44' }, // Camerons Art — sepia sketch
           { audioKey: 'documents',              color: '#6a6f4c' }, // Documents — filing green
           { audioKey: 'elevator',               color: '#5c5c66' }, // Elevator — steel gray
+          { audioKey: 'msr_trimmed',            color: '#6f3f52' }, // MSR Trimmed — muted magenta
         ];
         const w = stage.clientWidth, h = stage.clientHeight;
         const margin = 40;
