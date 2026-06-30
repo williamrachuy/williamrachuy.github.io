@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>QR · Adividiardi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #040507;
+      --bg2: #090b10;
+      --panel: rgba(255,255,255,0.022);
+      --panel-strong: rgba(255,255,255,0.036);
+      --ink: rgba(232,224,209,0.82);
+      --muted: rgba(232,224,209,0.58);
+      --rule: rgba(232,224,209,0.10);
+      --accent-strong: rgba(232,224,209,0.24);
+      --shadow: 0 24px 80px rgba(0,0,0,0.30);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(232,224,209,0.04), transparent 26%),
+        linear-gradient(180deg, var(--bg2), var(--bg));
+      color: var(--ink);
+      font-family: Cambria, Georgia, "Times New Roman", serif;
+    }
+    body {
+      min-height: 100dvh;
+      padding: 32px 18px 64px;
+    }
+    main {
+      width: min(1040px, 100%);
+      margin: 0 auto;
+      border: 1px solid var(--rule);
+      border-radius: 28px;
+      padding: clamp(26px, 5vw, 54px);
+      background: rgba(255,255,255,0.018);
+      box-shadow: var(--shadow);
+    }
+    a {
+      color: rgba(232,224,209,0.58);
+      text-decoration: none;
+    }
+    a:hover { color: rgba(232,224,209,0.88); }
+    .back {
+      display: inline-block;
+      margin-bottom: 34px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0 0 30px;
+      font-weight: 400;
+      font-size: clamp(42px, 8vw, 76px);
+      line-height: 0.95;
+      color: rgba(232,224,209,0.88);
+    }
+    .entry {
+      display: grid;
+      grid-template-columns: minmax(220px, 360px) minmax(0, 1fr);
+      gap: clamp(22px, 3vw, 36px);
+      align-items: center;
+      padding: clamp(18px, 3vw, 28px);
+      border: 1px solid var(--rule);
+      border-radius: 24px;
+      background: linear-gradient(180deg, var(--panel-strong), var(--panel));
+    }
+    .art {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(232,224,209,0.08);
+      background: rgba(255,255,255,0.02);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: clamp(12px, 1.8vw, 18px);
+    }
+    .art img {
+      width: 100%;
+      height: auto;
+      display: block;
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
+    }
+    .meta {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      min-width: 0;
+    }
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: rgba(232,224,209,0.42);
+    }
+    h2 {
+      margin: 0;
+      font-weight: 400;
+      font-size: clamp(28px, 4vw, 44px);
+      line-height: 1.04;
+      color: rgba(232,224,209,0.9);
+    }
+    p {
+      margin: 0;
+      font-size: clamp(17px, 2vw, 20px);
+      line-height: 1.62;
+      color: var(--ink);
+      max-width: 54ch;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(232,224,209,0.14);
+      background: rgba(255,255,255,0.03);
+      color: rgba(232,224,209,0.82);
+      font-size: 14px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+    }
+    .button:hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(232,224,209,0.24);
+      transform: translateY(-1px);
+    }
+    .button.secondary {
+      color: rgba(232,224,209,0.60);
+    }
+    @media (max-width: 760px) {
+      body { padding-inline: 12px; }
+      main { border-radius: 24px; }
+      .entry { grid-template-columns: 1fr; }
+      .art { max-width: min(420px, 100%); }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="/">Adividiardi</a>
+    <h1>QR</h1>
+
+    <section class="entry" aria-label="QR code for Adividiardi">
+      <div class="art">
+        <img src="/assets/adividiardi-qr.png" alt="QR code for www.adividiardi.com">
+      </div>
+      <div class="meta">
+        <div class="eyebrow">Site Object</div>
+        <h2>www.adividiardi.com</h2>
+        <p>
+          Full-resolution QR code for the site. Scan it, save it, or open the destination directly.
+        </p>
+        <div class="actions">
+          <a class="button" href="https://www.adividiardi.com" target="_blank" rel="noreferrer">Open Website</a>
+          <a class="button secondary" href="/assets/adividiardi-qr.png" target="_blank" rel="noreferrer">Open Full Resolution</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
