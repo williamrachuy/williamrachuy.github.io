@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>Adividiardi</title>
+  <title>Meowdividiardi</title>
   <style>
     * { box-sizing: border-box; }
     :root {
@@ -81,34 +81,35 @@
 </head>
 <body>
   <div id="ver-stamp"></div>
-  <main id="stage" aria-label="Interactive Adividiardi landing page">
+  <main id="stage" aria-label="Interactive Meowdividiardi landing page">
     <canvas id="particles"></canvas>
     <div id="veil"></div>
-    <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
+    <div id="wordmark-wrap"><div id="wordmark" aria-label="MEOWDIVIDIARDI"></div></div>
   </main>
-  <audio id="nautilus-audio" src="audio/Nautilus.mp3" preload="metadata"></audio>
-  <audio id="endless-audio" src="audio/endless.mp3" preload="metadata"></audio>
-  <audio id="chripper-audio" src="audio/Chripper.mp3" preload="metadata"></audio>
-  <audio id="following-a-deviatioin-audio" src="audio/Following a Deviatioin.mp3" preload="metadata"></audio>
-  <audio id="hypersthene-audio" src="audio/Hypersthene.mp3" preload="metadata"></audio>
-  <audio id="lsd-1-audio" src="audio/LSD 1.mp3" preload="metadata"></audio>
-  <audio id="lsd-2-audio" src="audio/LSD 2.mp3" preload="metadata"></audio>
-  <audio id="lux-audio" src="audio/Lux.mp3" preload="metadata"></audio>
-  <audio id="portal-open-audio" src="audio/Portal Open.mp3" preload="metadata"></audio>
-  <audio id="quadruple-audio" src="audio/Quadruple.mp3" preload="metadata"></audio>
-  <audio id="singest-audio" src="audio/Singest.mp3" preload="metadata"></audio>
-  <audio id="sovereign-audio" src="audio/Sovereign.mp3" preload="metadata"></audio>
-  <audio id="spiral-observations-audio" src="audio/Spiral Observations 2.mp3" preload="metadata"></audio>
-  <audio id="traversion-approach-audio" src="audio/Traversion Approach.mp3" preload="metadata"></audio>
-  <audio id="camerons-art-audio" src="audio/Camerons Art.mp3" preload="metadata"></audio>
-  <audio id="documents-audio" src="audio/Documents.mp3" preload="metadata"></audio>
-  <audio id="elevator-audio" src="audio/Elevator.mp3" preload="metadata"></audio>
-  <audio id="msr-trimmed-audio" src="audio/MSR Trimmed.mp3" preload="metadata"></audio>
+  <audio id="nautilus-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="endless-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="chripper-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="following-a-deviatioin-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="hypersthene-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="lsd-1-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="lsd-2-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="lux-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="portal-open-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="quadruple-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="singest-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="sovereign-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="spiral-observations-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="traversion-approach-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="camerons-art-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="documents-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="elevator-audio" src="/meow.mp3" preload="metadata"></audio>
+  <audio id="msr-trimmed-audio" src="/meow.mp3" preload="metadata"></audio>
 
   <script>
     (() => {
-      const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.46';
+      const TITLE   = 'MEOWDIVIDIARDI';
+      const VERSION = '20260629.45';
+      const MEOW_MODE = true;
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -145,8 +146,8 @@
       const appParticles     = []; // living particles — one per sub-page, immune to ablation
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
-      const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
-      const catMeowAudio = new Audio('meow.mp3');
+      const catOrbImg    = new Image(); catOrbImg.src = '/catorb.png';
+      const catMeowAudio = new Audio('/meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
       let catCursorY    = -9999;
@@ -378,7 +379,7 @@
           { path: 'blog',             color: '#5c3333' }, // dark dusty rose
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
-          { path: 'world-cup',        color: '#772277', orbImg: catOrbImg }, // cat orb
+          { path: 'world-cup',        color: '#772277', orbImg: catOrbImg, visualImg: catOrbImg, isCatOrb: true }, // cat orb
           { resetOrb: true,        color: '#dfe6ec', r0: 9.6, speed: 1.18 }, // soft reset orb
         ];
         const audioPages = [
@@ -406,7 +407,7 @@
         const pickedAudioPages = [...audioPages]
           .sort(() => Math.random() - 0.5)
           .slice(0, soundOrbCount);
-        const pages = [...linkPages, ...pickedAudioPages];
+        const pages = [...linkPages.map(page => ({ ...page, visualImg: page.visualImg || catOrbImg })), ...pickedAudioPages.map(page => ({ ...page, visualImg: page.visualImg || catOrbImg }))];
         const w = stage.clientWidth, h = stage.clientHeight;
         const margin = 40;
         for (const page of pages) {
@@ -435,6 +436,8 @@
             speed: page.speed || (page.audioKey ? 2.2 : 1),
             playing: false,
             audioEl: page.audioKey ? audioElements[page.audioKey] : null,
+            visualImg: page.visualImg || null,
+            isCatOrb: !!page.isCatOrb,
             voltaStrain: 0,
             voltaStrainTarget: 0,
           });
@@ -999,7 +1002,7 @@
         const goldFeatherR = clamp(minDim * 0.24, 150, 360);
 
         for (const ap of appParticles) {
-          if (ap.orbImg) continue; // cat has its own behavioral update and remains freer than the other orbs
+          if (ap.isCatOrb) continue; // actual cat orb has its own behavioral update
           ap.voltaStrain += ((ap.voltaStrainTarget || 0) - (ap.voltaStrain || 0)) * clamp(dt * 0.01, 0, 1);
           const soundOrbPinned = ap.audioEl && ap.playing && !veVisible;
           if (soundOrbPinned) {
@@ -1110,7 +1113,7 @@
       // ─── Cat behavioral AI ───────────────────────────────────────────────────
 
       function initCat() {
-        cat = appParticles.find(p => p.orbImg) || null;
+        cat = appParticles.find(p => p.isCatOrb) || null;
         if (!cat) return;
         cat._c = {
           mood: 'idle',
@@ -1123,65 +1126,7 @@
           leanSign: 1,                     // which way to tilt when curious
           attackCooldown: 0,               // ms before cat may attack again
           meowIn: 20000 + Math.random() * 40000, // first meow delay: 20–60s
-          clickInterestX: null,
-          clickInterestY: null,
-          clickInterestUntil: 0,
-          clickInterestCooldownUntil: 0,
-          clickGraceUntil: 0,                    // stay easy to click when pointer is near/on cat
         };
-      }
-
-      function noteCatTapInterest(event, pressedOrb = null) {
-        if (!cat) return;
-        if (!cat._c) initCat();
-        if (!cat || !cat._c) return;
-
-        const c = cat._c;
-        const rect = stage.getBoundingClientRect();
-        const p = event.touches ? event.touches[0] : event;
-        const tx = p.clientX - rect.left;
-        const ty = p.clientY - rect.top;
-        const now = performance.now();
-        const pressedCat = !!(pressedOrb && pressedOrb.orbImg);
-        const tapDist = Math.hypot(tx - cat.x, ty - cat.y);
-
-        // If the user is trying to click the cat, make the cat hold still
-        // instead of reacting and slipping out from under the click.
-        if (pressedCat || tapDist < Math.max(42, cat.r0 * 3.6)) {
-          c.clickGraceUntil = now + 950;
-          if (c.mood !== 'scared' && c.mood !== 'attack') {
-            c.mood = 'idle';
-            c.moodTimer = Math.max(c.moodTimer, 650);
-          }
-          return;
-        }
-
-        // Do not treat clicks on other orbs as cat targets.
-        if (pressedOrb) return;
-        if (c.mood === 'scared' || c.mood === 'attack') return;
-        if (now < c.clickInterestCooldownUntil) return;
-
-        // Sometimes investigate a click/tap, but not every time.
-        if (Math.random() > 0.34) return;
-
-        const dx = tx - cat.x, dy = ty - cat.y;
-        const d = Math.hypot(dx, dy) || 1;
-        if (d < 120) return;
-
-        // Approach near the tap, but stop short and offset sideways so the cat
-        // does not cover the intended click/tap point.
-        const ux = dx / d, uy = dy / d;
-        const stopShort = clamp(cat.r0 * 4.4 + rand(48, 82), 70, 128);
-        const sideOffset = rand(-58, 58);
-        const targetX = tx - ux * stopShort + (-uy) * sideOffset;
-        const targetY = ty - uy * stopShort + ux * sideOffset;
-
-        c.clickInterestX = clamp(targetX, w * 0.06, stage.clientWidth  * 0.94);
-        c.clickInterestY = clamp(targetY, h * 0.06, stage.clientHeight * 0.94);
-        c.clickInterestUntil = now + rand(1800, 3600);
-        c.clickInterestCooldownUntil = now + rand(2600, 5200);
-        c.mood = 'tap_interest';
-        c.moodTimer = rand(900, 1800);
       }
 
       function updateCat(dt, now) {
@@ -1198,7 +1143,7 @@
         // Nearest non-cat orb
         let nearOrb = null, nearDist = 9999;
         for (const ap of appParticles) {
-          if (ap === cat || ap.orbImg) continue;
+          if (ap === cat || ap.isCatOrb) continue;
           const d = Math.hypot(ap.x - cat.x, ap.y - cat.y);
           if (d < nearDist) { nearDist = d; nearOrb = ap; }
         }
@@ -1206,12 +1151,9 @@
         // ── Timers ────────────────────────────────────────────────────────────
         c.moodTimer      -= dt;
         c.attackCooldown  = Math.max(0, c.attackCooldown - dt);
-        if (pointerNearCat && c.mood !== 'scared' && c.mood !== 'attack') {
-          c.clickGraceUntil = Math.max(c.clickGraceUntil || 0, now + 420);
-        }
 
         const voltaScary = voltaDist < 290;
-        const pointerNearCat = cursorDist < Math.max(38, cat.r0 * 3.4);
+        const cursorNear = cursorDist < 185;
         const orbNear    = nearOrb && nearDist < 340;
 
         // ── State machine ─────────────────────────────────────────────────────
@@ -1240,25 +1182,17 @@
           c.mood = 'idle'; c.moodTimer = 500 + Math.random() * 1200;
         }
 
-        // Tap interest is explicit and occasional; passive cursor proximity
-        // never pulls the cat toward the mouse.
+        // Pet seeking (lower priority than scared/attack)
         if (c.mood !== 'scared' && c.mood !== 'attack') {
-          if (c.mood === 'tap_interest') {
-            const hasTarget = c.clickInterestX !== null && c.clickInterestY !== null;
-            const done = !hasTarget
-              || now > c.clickInterestUntil
-              || c.moodTimer <= 0
-              || Math.hypot(c.clickInterestX - cat.x, c.clickInterestY - cat.y) < 24;
-            if (done) {
-              c.clickInterestX = null;
-              c.clickInterestY = null;
-              c.mood = 'idle';
-              c.moodTimer = 700 + Math.random() * 1500;
-            }
+          if (cursorNear && c.mood !== 'pet_seek') {
+            c.mood = 'pet_seek'; c.moodTimer = 2800 + Math.random() * 2200;
+          }
+          if (c.mood === 'pet_seek' && !cursorNear && c.moodTimer <= 0) {
+            c.mood = 'idle'; c.moodTimer = 600 + Math.random() * 1200;
           }
 
-          // Curiosity toward other orbs, but not while investigating a tap.
-          if (orbNear && c.mood !== 'tap_interest' && c.mood !== 'curious') {
+          // Curiosity (lower priority than pet_seek)
+          if (orbNear && c.mood !== 'pet_seek' && c.mood !== 'curious') {
             c.mood = 'curious'; c.moodTimer = 3000 + Math.random() * 3000;
             c.leanSign = Math.random() < 0.5 ? 1 : -1;
           }
@@ -1352,24 +1286,18 @@
             c.scaTarget = 1.10;
             break;
           }
-          case 'tap_interest': {
-            if (c.clickInterestX === null || c.clickInterestY === null) {
-              cat.vx *= DAMP; cat.vy *= DAMP;
-              c.rotTarget = Math.sin(now * 0.0011) * D20 * 0.22;
-              c.scaTarget = 1.0;
-              break;
-            }
-            const dx = c.clickInterestX - cat.x, dy = c.clickInterestY - cat.y;
+          case 'pet_seek': {
+            const dx = catCursorX - cat.x, dy = catCursorY - cat.y;
             const d  = Math.hypot(dx, dy) || 1;
-            if (d > 24) {
-              const spd = 1.35 * clamp(d / 95, 0.18, 1.0);
-              cat.vx = cat.vx * DAMP + (dx / d) * spd * 0.026 * dt;
-              cat.vy = cat.vy * DAMP + (dy / d) * spd * 0.026 * dt;
+            if (d > 18) {
+              cat.vx = cat.vx * DAMP + (dx / d) * 2.4 * 0.040 * dt;
+              cat.vy = cat.vy * DAMP + (dy / d) * 2.4 * 0.040 * dt;
             } else {
               cat.vx *= DAMP; cat.vy *= DAMP;
             }
-            c.rotTarget = Math.sin(now * 0.0024) * D20 * 0.32;
-            c.scaTarget = 1.04;
+            // Happy wiggles — faster oscillation, warm energy
+            c.rotTarget = Math.sin(now * 0.0058) * D20 * 0.88;
+            c.scaTarget = 1.13 + Math.sin(now * 0.0092) * 0.06;
             break;
           }
           case 'scared': {
@@ -1394,21 +1322,9 @@
           }
         }
 
-        // If the user is hovering/clicking near the cat, make it settle briefly
-        // so it remains easy to mouse over and click.
-        if (now < (c.clickGraceUntil || 0) && c.mood !== 'scared' && c.mood !== 'attack') {
-          cat.vx *= Math.pow(0.64, dt / 16);
-          cat.vy *= Math.pow(0.64, dt / 16);
-          if (c.mood === 'sprint') {
-            c.mood = 'idle';
-            c.moodTimer = Math.max(c.moodTimer, 550);
-          }
-          c.scaTarget = Math.min(c.scaTarget, 1.04);
-        }
-
         // Speed cap per mood
         const spd = Math.hypot(cat.vx, cat.vy);
-        const maxSpd = { idle: 3, wander: 4.5, sprint: 14, curious: 3, tap_interest: 3.4, scared: 10, attack: 11 }[c.mood] || 4;
+        const maxSpd = { idle: 3, wander: 4.5, sprint: 14, curious: 3, pet_seek: 5, scared: 10, attack: 11 }[c.mood] || 4;
         if (spd > maxSpd) { cat.vx *= maxSpd / spd; cat.vy *= maxSpd / spd; }
 
         // Edge repulsion
@@ -1430,12 +1346,13 @@
         c.sca += (c.scaTarget - c.sca) * clamp(dt * 0.008, 0, 0.45);
         c.sca  = clamp(c.sca, 0.82, 1.40);
 
-        // Meow — bell-curve interval, 30–120s.
+        // Meow — bell-curve interval, 30–120s, more likely near cursor (pet_seek)
         c.meowIn -= dt;
         if (c.meowIn <= 0) {
-          const meowVolume = c.mood === 'tap_interest' ? 0.74
-                           : c.mood === 'scared'       ? 0.35
-                           : c.mood === 'attack'       ? 0.70
+          // Volume: louder when seeking pets, quieter when scared
+          const meowVolume = c.mood === 'pet_seek' ? 0.90
+                           : c.mood === 'scared'   ? 0.35
+                           : c.mood === 'attack'   ? 0.70
                            : 0.60;
           playCatMeow(meowVolume);
           // Next interval: bell curve via average of 3 uniforms → ~Gaussian on [30s, 120s]
@@ -1459,24 +1376,27 @@
           const jitter = unstable ? ap.r0 * 0.24 : 0;
           const drawX  = ap.x + Math.sin(now * 0.39) * jitter;
           const drawY  = ap.y + Math.cos(now * 0.47 + 0.8) * jitter;
-          if (ap.orbImg && ap.orbImg.complete && ap.orbImg.naturalWidth > 0) {
-            // Cat orb — image with rotation, behavioral scale, mood glow
-            const cc = ap._c;
-            const rot = cc ? cc.rot : 0;
-            const sca = cc ? cc.sca : 1.0;
-            const r15 = rDraw * 1.5; // 150% base size
-            // Mood-tinted glow color
-            const mood = cc ? cc.mood : 'idle';
+          const drawImg = ap.visualImg || ap.orbImg;
+          if (drawImg && drawImg.complete && drawImg.naturalWidth > 0) {
+            const strain = ap.voltaStrain || 0;
+            const imgJitter = unstable ? ap.r0 * 0.24 : 0;
+            const strainJitter = strain > 0 ? ap.r0 * strain * 0.42 : 0;
+            const imgX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
+            const imgY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
+            const rot = ap.isCatOrb ? ((ap._c && ap._c.rot) || 0) : Math.sin(now * 0.00035 + ap.breathPhase) * 0.08 + vibration * 0.05;
+            const sca = ap.isCatOrb ? ((ap._c && ap._c.sca) || 1.0) : (1 - strain * 0.10);
+            const r15 = rDraw * (ap.isCatOrb ? 1.5 : 1.38);
+            const mood = ap.isCatOrb ? ((ap._c && ap._c.mood) || 'idle') : 'idle';
             const glowColor = (mood === 'scared' || mood === 'attack') ? '#ff5533' : '#ffffff';
-            const glow = Math.max(0, (1 + t * 3 + local * 5) * (mood === 'scared' || mood === 'attack' ? 1.6 : 1.0));
+            const glow = Math.max(0, (1 + t * 3 + local * 5 + strain * 4) * (mood === 'scared' || mood === 'attack' ? 1.6 : 1.0));
             pctx.save();
-            pctx.translate(drawX, drawY);
+            pctx.translate(imgX + Math.sin(now * 0.39) * imgJitter, imgY + Math.cos(now * 0.47 + 0.8) * imgJitter);
             pctx.rotate(rot);
             pctx.scale(sca, sca);
-            pctx.globalAlpha = clamp((0.68 + t * 0.14 + local * 0.04) * 0.80, 0.22, 0.82); // 80% brightness
+            pctx.globalAlpha = clamp((0.68 + t * 0.14 + local * 0.04) * 0.80, 0.22, 0.82);
             pctx.shadowBlur  = glow;
             pctx.shadowColor = glowColor;
-            pctx.drawImage(ap.orbImg, -r15, -r15, r15 * 2, r15 * 2);
+            pctx.drawImage(drawImg, -r15, -r15, r15 * 2, r15 * 2);
             pctx.shadowBlur  = 0;
             pctx.restore();
           } else {
@@ -2295,7 +2215,7 @@
           }
         }
         for (const ap of appParticles) {
-          if (ap.orbImg) continue;
+          if (ap.isCatOrb) continue;
           const dpx = ap.x - volta.cx, dpy = ap.y - volta.cy;
           const distFromVolta = Math.hypot(dpx, dpy) || 1;
           if (distFromVolta >= VOLTA_SEARCH_R * 1.2) continue;
@@ -2492,13 +2412,11 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
-        const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY);
-        const pressedOrb = !!pressedAppOrb;
+        const pressedOrb = !!appParticleAtClient(e.clientX, e.clientY);
         orbPressStartedAt = performance.now();
         orbPressStartedOnOrb = pressedOrb;
         orbReleaseClickAllowed = false;
         orbInteractionActive = pressedOrb;
-        noteCatTapInterest(e, pressedAppOrb);
         const tNow = orbPressStartedAt;
         if (!volta.active) volta.interactionPressure = Math.min(36, volta.interactionPressure + 1);
         // 12-tap summon: rapid taps within 2.5s summon the Volta creature
@@ -2558,7 +2476,7 @@
         orbReleaseClickAllowed = false;
         orbPressStartedOnOrb = false;
         if (!quickOrbRelease) {
-          if (pressStartedOnOrb && ap && ap.orbImg) {
+          if (pressStartedOnOrb && ap && (ap.orbImg || ap.visualImg)) {
             playCatMeow(0.70);
           }
           return;
@@ -2574,7 +2492,7 @@
           else ap.audioEl.pause();
           return;
         }
-        if (ap.path) window.location.href = '/' + ap.path;
+        if (ap.path) { playCatMeow(0.72); setTimeout(() => { window.location.href = '/' + ap.path; }, 90); }
       });
 
       const syncAudioOrb = (audioKey) => {
