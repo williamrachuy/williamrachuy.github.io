@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.21';
+      const VERSION = '20260630.22';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -135,6 +135,7 @@
       const cubeCobraCardbackImg = new Image(); cubeCobraCardbackImg.src = 'assets/cube-cobra-cardback.png';
       const gregEganCoverImg = new Image(); gregEganCoverImg.src = 'assets/greg-egan-cover.jpg';
       const gebCoverImg = new Image(); gebCoverImg.src = 'assets/geb-cover.jpg';
+      const paleBlueDotCoverImg = new Image(); paleBlueDotCoverImg.src = 'assets/pale-blue-dot-cover.jpg';
       const catMeowAudio = new Audio('meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
@@ -491,6 +492,7 @@
           { url: 'https://www.gregegan.net/SCHILD/SCHILD.html', color: '#39415f', cardImg: gregEganCoverImg, r0: 10.0, speed: 0.96 }, // Greg Egan site image orb
           { url: 'https://cubecobra.com/cube/list/553c1c94-5665-4aa5-a18a-30b15e684ddc?display=spoiler', color: '#665034', cardImg: cubeCobraCardbackImg, r0: 10.2, speed: 0.98 }, // Cube Cobra cardback orb
           { url: 'https://www.physixfan.com/wp-content/files/GEBen.pdf', color: '#5a4634', cardImg: gebCoverImg, r0: 10.0, speed: 0.95 }, // GEB PDF cover image orb
+          { url: 'https://cominsitu.wordpress.com/wp-content/uploads/2019/06/carl-sagan-pale-blue-dot_-a-vision-of-the-human-future-in-space-1997.pdf', color: '#4e5c6b', cardImg: paleBlueDotCoverImg, r0: 10.0, speed: 0.95 }, // Pale Blue Dot PDF image orb
           { resetOrb: true,        color: '#dfe6ec', r0: 9.6, speed: 1.18 }, // soft reset orb
         ];
         const audioPages = [
