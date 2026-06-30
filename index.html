@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.29';
+      const VERSION = '20260629.30';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -2080,11 +2080,23 @@
       }
 
       versionStamp.textContent = VERSION;
+      const versionParts = (value) => {
+        const match = /^(\d{8})\.(\d+)$/.exec(value || '');
+        return match ? [Number(match[1]), Number(match[2])] : null;
+      };
+      const versionAtLeast = (candidate, baseline) => {
+        const a = versionParts(candidate), b = versionParts(baseline);
+        if (!a || !b) return false;
+        return a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1]);
+      };
       fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' })
         .then((response) => response.ok ? response.json() : null)
         .then((info) => {
           if (!info || !info.version) return;
-          versionStamp.textContent = info.commit ? `${info.version} · ${info.commit}` : info.version;
+          if (!versionAtLeast(info.version, VERSION)) return;
+          versionStamp.textContent = info.commit && info.commit !== 'pending'
+            ? `${info.version} · ${info.commit}`
+            : info.version;
         })
         .catch(() => {});
       resize();
