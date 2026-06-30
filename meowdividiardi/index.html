@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'MEOWDIVIDIARDI';
-      const VERSION = '20260629.45';
+      const VERSION = '20260629.49';
       const MEOW_MODE = true;
 
       const stage          = document.getElementById('stage');
@@ -2524,7 +2524,7 @@
         if (!a || !b) return false;
         return a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1]);
       };
-      fetch(`version.json?ts=${Date.now()}`, { cache: 'no-store' })
+      fetch(`/version.json?ts=${Date.now()}`, { cache: 'no-store' })
         .then((response) => response.ok ? response.json() : null)
         .then((info) => {
           if (!info || !info.version) return;

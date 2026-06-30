@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.48';
+      const VERSION = '20260629.49';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -1208,13 +1208,12 @@
         // ── Timers ────────────────────────────────────────────────────────────
         c.moodTimer      -= dt;
         c.attackCooldown  = Math.max(0, c.attackCooldown - dt);
-        if (pointerNearCat && c.mood !== 'scared' && c.mood !== 'attack') {
-          c.clickGraceUntil = Math.max(c.clickGraceUntil || 0, now + 420);
-        }
-
         const voltaScary = voltaDist < 290;
         const pointerNearCat = cursorDist < Math.max(38, cat.r0 * 3.4);
         const orbNear    = nearOrb && nearDist < 340;
+        if (pointerNearCat && c.mood !== 'scared' && c.mood !== 'attack') {
+          c.clickGraceUntil = Math.max(c.clickGraceUntil || 0, now + 420);
+        }
 
         // ── State machine ─────────────────────────────────────────────────────
 
@@ -1483,19 +1482,15 @@
             pctx.restore();
           } else if (ap.emoji) {
             const strain = ap.voltaStrain || 0;
-            const strainedX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * (strain > 0 ? ap.r0 * strain * 0.42 : 0);
-            const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * (strain > 0 ? ap.r0 * strain * 0.42 : 0);
+            const strainJitter = strain > 0 ? ap.r0 * strain * 0.42 : 0;
+            const strainedX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
+            const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
             const strainedR = rDraw * (1 - strain * 0.12);
             pctx.save();
             pctx.globalAlpha = clamp(0.72 + t * 0.16 + local * 0.06, 0.24, 0.92);
-            pctx.shadowBlur  = Math.max(0, 2 + t * 6 + local * 10 + strain * 6);
+            pctx.shadowBlur = Math.max(0, 2 + t * 6 + local * 10 + strain * 6);
             pctx.shadowColor = '#ffffff';
-            pctx.fillStyle   = '#f1f3f5';
-            pctx.beginPath();
-            pctx.arc(strainedX, strainedY, strainedR * 1.02, 0, Math.PI * 2);
-            pctx.fill();
-            pctx.shadowBlur = 0;
-            pctx.font = `${Math.max(12, strainedR * 2.05)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+            pctx.font = `${Math.max(12, strainedR * 2.15)}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
             pctx.textAlign = 'center';
             pctx.textBaseline = 'middle';
             pctx.fillText(ap.emoji, strainedX, strainedY + strainedR * 0.04);
