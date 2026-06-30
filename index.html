@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.36';
+      const VERSION = '20260629.37';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -157,6 +157,10 @@
       let lastFrame       = 0;
       let holdActive      = false; // true while mouse/touch is held down
       let orbInteractionActive = false; // suppress VE activation while pressing an orb
+      const ORB_RELEASE_CLICK_WINDOW_MS = 500;
+      let orbPressStartedAt = 0;
+      let orbPressStartedOnOrb = false;
+      let orbReleaseClickAllowed = false;
       let lastStageW      = 0;
       let lastStageH      = 0;
 
@@ -659,6 +663,18 @@
         ve.vy = ve.cvy * 0.45;
       };
 
+      const playCatMeow = (volume = 0.60) => {
+        catMeowAudio.volume = volume;
+        // Disable pitch correction where supported so playbackRate actually changes pitch.
+        if ('preservesPitch' in catMeowAudio) catMeowAudio.preservesPitch = false;
+        if ('mozPreservesPitch' in catMeowAudio) catMeowAudio.mozPreservesPitch = false;
+        if ('webkitPreservesPitch' in catMeowAudio) catMeowAudio.webkitPreservesPitch = false;
+        // Slightly above default pitch for a more natural, less identical meow.
+        catMeowAudio.playbackRate = 1.02 + Math.random() * 0.10;
+        catMeowAudio.currentTime = 0;
+        catMeowAudio.play().catch(() => {});
+      };
+
       // ─── Title letters ──────────────────────────────────────────────────────
       // Springy but viscous: pushed away from tap, spring back to rest.
       // smoothGlow per-letter eliminates quantized scale steps.
@@ -1043,12 +1059,11 @@
         c.meowIn -= dt;
         if (c.meowIn <= 0) {
           // Volume: louder when seeking pets, quieter when scared
-          catMeowAudio.volume = c.mood === 'pet_seek' ? 0.90
-                              : c.mood === 'scared'   ? 0.35
-                              : c.mood === 'attack'   ? 0.70
-                              : 0.60;
-          catMeowAudio.currentTime = 0;
-          catMeowAudio.play().catch(() => {});
+          const meowVolume = c.mood === 'pet_seek' ? 0.90
+                           : c.mood === 'scared'   ? 0.35
+                           : c.mood === 'attack'   ? 0.70
+                           : 0.60;
+          playCatMeow(meowVolume);
           // Next interval: bell curve via average of 3 uniforms → ~Gaussian on [30s, 120s]
           const bell = (Math.random() + Math.random() + Math.random()) / 3;
           c.meowIn = 30000 + bell * 90000;
@@ -2044,8 +2059,12 @@
 
       stage.addEventListener('pointerdown', e => {
         holdActive = true;
-        orbInteractionActive = !!appParticleAtClient(e.clientX, e.clientY);
-        const tNow = performance.now();
+        const pressedOrb = !!appParticleAtClient(e.clientX, e.clientY);
+        orbPressStartedAt = performance.now();
+        orbPressStartedOnOrb = pressedOrb;
+        orbReleaseClickAllowed = false;
+        orbInteractionActive = pressedOrb;
+        const tNow = orbPressStartedAt;
         if (!volta.active) volta.interactionPressure = Math.min(36, volta.interactionPressure + 1);
         // 12-tap summon: rapid taps within 2.5s summon the Volta creature
         volta.tapTimes.push(tNow);
@@ -2068,14 +2087,35 @@
         catCursorX = e.clientX; catCursorY = e.clientY;
         if ((e.buttons || holdActive) && !orbInteractionActive) updateVEPointerTarget(e, false);
       });
-      stage.addEventListener('pointerup',     releasePointerLight);
-      stage.addEventListener('pointercancel', releasePointerLight);
+      stage.addEventListener('pointerup', e => {
+        if (orbPressStartedOnOrb) {
+          orbReleaseClickAllowed = (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS;
+        }
+        releasePointerLight();
+      });
+      stage.addEventListener('pointercancel', e => {
+        orbPressStartedOnOrb = false;
+        orbReleaseClickAllowed = false;
+        releasePointerLight();
+      });
       stage.addEventListener('touchend',      releasePointerLight, { passive: true });
       window.addEventListener('resize', resize);
 
-      // Navigate on tap/click of an app particle
+      // Navigate/play only on a quick tap/click-release of an app particle.
       stage.addEventListener('click', e => {
         const ap = appParticleAtClient(e.clientX, e.clientY);
+        const pressStartedOnOrb = orbPressStartedOnOrb;
+        const quickOrbRelease = orbReleaseClickAllowed
+          || (orbPressStartedOnOrb && (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS);
+        orbReleaseClickAllowed = false;
+        orbPressStartedOnOrb = false;
+        if (!quickOrbRelease) {
+          if (pressStartedOnOrb && ap && ap.orbImg) {
+            playCatMeow(0.70);
+          }
+          return;
+        }
+
         if (!ap) return;
         if (ap.audioEl) {
           if (ap.audioEl.paused) ap.audioEl.play().catch(() => { ap.playing = false; });
