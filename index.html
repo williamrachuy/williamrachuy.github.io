@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.32';
+      const VERSION = '20260629.33';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -749,6 +749,17 @@
           ap.wAngle += (Math.random() - 0.5) * (ve.liberated ? 0.0013 : 0.0008) * dt * ap.speed;
           ap.vx += Math.cos(ap.wAngle) * wanderStr * ap.speed;
           ap.vy += Math.sin(ap.wAngle) * wanderStr * ap.speed;
+          // Soft center bias: keeps the long-run population off the walls without forcing a center clump.
+          const cx = w * 0.5, cy = h * 0.5;
+          const cdx = cx - ap.x, cdy = cy - ap.y;
+          const centerDist = Math.hypot(cdx, cdy) || 1;
+          const preferredR = Math.min(w, h) * 0.24;
+          if (centerDist > preferredR) {
+            const centerBias = Math.min(1, (centerDist - preferredR) / Math.max(preferredR * 2.2, 1));
+            const centerPull = 0.0024 * centerBias * centerBias * ap.speed;
+            ap.vx += (cdx / centerDist) * centerPull;
+            ap.vy += (cdy / centerDist) * centerPull;
+          }
           // Sound orbs are attracted to the VE while it lives; link orbs are not.
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
@@ -1528,7 +1539,26 @@
       const VOLTA_SPEED    = 28;  // px/s toward target
       const VOLTA_MAX_ARCS = 24;  // constellation budget
 
+      function resetVectorEquilibriumAfterVolta() {
+        ve.liberated = false;
+        ve.voltaHeld = false;
+        ve.destroyedEdges.clear();
+        ve.edgeEnergies = null;
+        ve.edgeDrainRates = null;
+        ve.vertNodes = null;
+        ve.centerNode = null;
+        ve.projCache = null;
+        ve.orbsInside = 0;
+        ve.excitement *= 0.25;
+        ve.alphaP = Math.min(ve.alphaP, 0.18);
+        ve.scaleP = Math.min(ve.scaleP, 0.18);
+        ve.alpha = Math.min(ve.alpha, 0.14);
+        ve.scaleCurrent = Math.min(ve.scaleCurrent, ve.scale * 0.18);
+        liberatedNodes.length = 0;
+      }
+
       function resetVoltaSpawnPressure(now = performance.now()) {
+        resetVectorEquilibriumAfterVolta();
         volta.idleSince = now;
         volta.interactionPressure = 0;
         volta.activeTimeMs = 0;
