@@ -108,7 +108,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.46';
+      const VERSION = '20260629.47';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -146,8 +146,9 @@
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
+      const soccerBallImg = new Image(); soccerBallImg.src = 'soccerball.svg';
       const catMeowAudio = new Audio('meow.mp3');
-      let cat           = null;   // reference to world-cup AppParticle after seed
+      let cat           = null;   // reference to meowdividiardi AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
       let catCursorY    = -9999;
       let lastFrame       = 0;
@@ -378,7 +379,8 @@
           { path: 'blog',             color: '#5c3333' }, // dark dusty rose
           { path: 'nanaimo',          color: '#6a5840' }, // dark sand
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
-          { path: 'world-cup',        color: '#772277', orbImg: catOrbImg }, // cat orb
+          { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg, visualImg: catOrbImg, isCatOrb: true }, // cat orb
+          { path: 'world-cup',        color: '#d8dee2', visualImg: soccerBallImg, speed: 1.06 }, // soccer orb
           { resetOrb: true,        color: '#dfe6ec', r0: 9.6, speed: 1.18 }, // soft reset orb
         ];
         const audioPages = [
@@ -435,6 +437,8 @@
             speed: page.speed || (page.audioKey ? 2.2 : 1),
             playing: false,
             audioEl: page.audioKey ? audioElements[page.audioKey] : null,
+            visualImg: page.visualImg || null,
+            isCatOrb: !!page.isCatOrb,
             voltaStrain: 0,
             voltaStrainTarget: 0,
           });
@@ -999,7 +1003,7 @@
         const goldFeatherR = clamp(minDim * 0.24, 150, 360);
 
         for (const ap of appParticles) {
-          if (ap.orbImg) continue; // cat has its own behavioral update and remains freer than the other orbs
+          if (ap.isCatOrb) continue; // actual cat orb has its own behavioral update and remains freer than the other orbs
           ap.voltaStrain += ((ap.voltaStrainTarget || 0) - (ap.voltaStrain || 0)) * clamp(dt * 0.01, 0, 1);
           const soundOrbPinned = ap.audioEl && ap.playing && !veVisible;
           if (soundOrbPinned) {
@@ -1110,7 +1114,7 @@
       // ─── Cat behavioral AI ───────────────────────────────────────────────────
 
       function initCat() {
-        cat = appParticles.find(p => p.orbImg) || null;
+        cat = appParticles.find(p => p.isCatOrb) || null;
         if (!cat) return;
         cat._c = {
           mood: 'idle',
@@ -1142,7 +1146,7 @@
         const tx = p.clientX - rect.left;
         const ty = p.clientY - rect.top;
         const now = performance.now();
-        const pressedCat = !!(pressedOrb && pressedOrb.orbImg);
+        const pressedCat = !!(pressedOrb && pressedOrb.isCatOrb);
         const tapDist = Math.hypot(tx - cat.x, ty - cat.y);
 
         // If the user is trying to click the cat, make the cat hold still
@@ -1198,7 +1202,7 @@
         // Nearest non-cat orb
         let nearOrb = null, nearDist = 9999;
         for (const ap of appParticles) {
-          if (ap === cat || ap.orbImg) continue;
+          if (ap === cat || ap.isCatOrb) continue;
           const d = Math.hypot(ap.x - cat.x, ap.y - cat.y);
           if (d < nearDist) { nearDist = d; nearOrb = ap; }
         }
@@ -1459,24 +1463,28 @@
           const jitter = unstable ? ap.r0 * 0.24 : 0;
           const drawX  = ap.x + Math.sin(now * 0.39) * jitter;
           const drawY  = ap.y + Math.cos(now * 0.47 + 0.8) * jitter;
-          if (ap.orbImg && ap.orbImg.complete && ap.orbImg.naturalWidth > 0) {
-            // Cat orb — image with rotation, behavioral scale, mood glow
-            const cc = ap._c;
-            const rot = cc ? cc.rot : 0;
-            const sca = cc ? cc.sca : 1.0;
-            const r15 = rDraw * 1.5; // 150% base size
-            // Mood-tinted glow color
+          const drawImg = ap.visualImg || ap.orbImg;
+          if (drawImg && drawImg.complete && drawImg.naturalWidth > 0) {
+            const strain = ap.voltaStrain || 0;
+            const imgJitter = unstable ? ap.r0 * 0.24 : 0;
+            const strainJitter = strain > 0 ? ap.r0 * strain * 0.42 : 0;
+            const imgX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
+            const imgY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
+            const cc = ap.isCatOrb ? ap._c : null;
+            const rot = cc ? cc.rot : Math.sin(now * 0.00035 + ap.breathPhase) * 0.08 + (unstable ? vibration * 0.05 : 0);
+            const sca = cc ? cc.sca : (1 - strain * 0.10);
+            const r15 = rDraw * (cc ? 1.5 : 1.38);
             const mood = cc ? cc.mood : 'idle';
             const glowColor = (mood === 'scared' || mood === 'attack') ? '#ff5533' : '#ffffff';
-            const glow = Math.max(0, (1 + t * 3 + local * 5) * (mood === 'scared' || mood === 'attack' ? 1.6 : 1.0));
+            const glow = Math.max(0, (1 + t * 3 + local * 5 + strain * 4) * (mood === 'scared' || mood === 'attack' ? 1.6 : 1.0));
             pctx.save();
-            pctx.translate(drawX, drawY);
+            pctx.translate(imgX + Math.sin(now * 0.39) * imgJitter, imgY + Math.cos(now * 0.47 + 0.8) * imgJitter);
             pctx.rotate(rot);
             pctx.scale(sca, sca);
-            pctx.globalAlpha = clamp((0.68 + t * 0.14 + local * 0.04) * 0.80, 0.22, 0.82); // 80% brightness
+            pctx.globalAlpha = clamp((0.68 + t * 0.14 + local * 0.04) * 0.80, 0.22, 0.82);
             pctx.shadowBlur  = glow;
             pctx.shadowColor = glowColor;
-            pctx.drawImage(ap.orbImg, -r15, -r15, r15 * 2, r15 * 2);
+            pctx.drawImage(drawImg, -r15, -r15, r15 * 2, r15 * 2);
             pctx.shadowBlur  = 0;
             pctx.restore();
           } else {
@@ -2295,7 +2303,7 @@
           }
         }
         for (const ap of appParticles) {
-          if (ap.orbImg) continue;
+          if (ap.isCatOrb) continue;
           const dpx = ap.x - volta.cx, dpy = ap.y - volta.cy;
           const distFromVolta = Math.hypot(dpx, dpy) || 1;
           if (distFromVolta >= VOLTA_SEARCH_R * 1.2) continue;
@@ -2558,7 +2566,7 @@
         orbReleaseClickAllowed = false;
         orbPressStartedOnOrb = false;
         if (!quickOrbRelease) {
-          if (pressStartedOnOrb && ap && ap.orbImg) {
+          if (pressStartedOnOrb && ap && ap.isCatOrb) {
             playCatMeow(0.70);
           }
           return;
