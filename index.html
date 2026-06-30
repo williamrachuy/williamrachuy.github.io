@@ -112,7 +112,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.34';
+      const VERSION = '20260629.35';
 
       const stage          = document.getElementById('stage');
       const versionStamp    = document.getElementById('ver-stamp');
@@ -495,7 +495,7 @@
       function drawParticles(now) {
         pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
         const activeAudioOrbs = appParticles.filter(ap => ap.audioEl && ap.playing);
-        const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.46 : 0;
+        const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.3082 : 0;
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
@@ -711,10 +711,11 @@
         const w = stage.clientWidth, h = stage.clientHeight;
         const now = performance.now();
         const veInteractive = (ve.active || ve.voltaHeld) && !ve.liberated;
+        const veVisible = !ve.liberated && (veInteractive || ve.alphaP > 0.16 || ve.scaleP > 0.16);
         for (const ap of appParticles) {
           if (ap.orbImg) continue; // cat has its own behavioral update
           ap.voltaStrain += ((ap.voltaStrainTarget || 0) - (ap.voltaStrain || 0)) * clamp(dt * 0.01, 0, 1);
-          const soundOrbPinned = ap.audioEl && ap.playing && !veInteractive;
+          const soundOrbPinned = ap.audioEl && ap.playing && !veVisible;
           if (soundOrbPinned) {
             // Sound-producing orb holds position unless the VE is actively pulling it.
             ap.vx = 0;
@@ -741,7 +742,7 @@
           // Sound orbs are attracted to the VE while it lives; link orbs are not.
           const mass = ap.r0 * ap.r0 * ap.r0;
           const accelBoost = holdActive ? 1.6 : 1.0;
-          if (ap.audioEl && veInteractive && ve.scaleCurrent > 5) {
+          if (ap.audioEl && veVisible && ve.scaleCurrent > 5) {
             const dx = ap.x - ve.x, dy = ap.y - ve.y;
             const d  = Math.hypot(dx, dy) || 1;
             const pull = 110 * accelBoost / (d * 0.035 + 1);
