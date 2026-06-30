@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260629.68';
+      const VERSION = '20260630.1';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -149,6 +149,7 @@
       let suppressClickUntil = 0;
       let vePointerActiveUntil = 0;
       let veActivationPendingFrame = false; // every eligible pointerdown must reach updateVE at least once
+      let veInteractionSuppressedByObject = false; // foreground-object pointerdown blocks VE activation/release latch
       let lastStageW      = 0;
       let lastStageH      = 0;
       const pointerPressure = {
@@ -285,6 +286,10 @@
       const ve = {
         x: 0, y: 0, targetX: 0, targetY: 0, prevTX: 0, prevTY: 0,
         vx: 0, vy: 0,
+        pressurePrevX: 0, pressurePrevY: 0,
+        pressureVX: 0, pressureVY: 0,
+        pressureSpeed: 0,
+        pressureReady: false,
         cvx: 0, cvy: 0,
         θx: 0.4, θy: 1.1, θz: 0.2,
         ωx: 0.00025, ωy: 0.00041, ωz: 0.00016,
@@ -301,6 +306,45 @@
         nodeFadeStartedAt: 0,        // timestamp when final teardown fade begins
         projCache: null,             // last projected vertex screen positions (ideal)
       };
+
+      function pointSegmentDistance(x, y, ax, ay, bx, by) {
+        const abx = bx - ax;
+        const aby = by - ay;
+        const len2 = abx * abx + aby * aby || 1;
+        const t = clamp(((x - ax) * abx + (y - ay) * aby) / len2, 0, 1);
+        const px = ax + abx * t;
+        const py = ay + aby * t;
+        return Math.hypot(x - px, y - py);
+      }
+
+      function vectorEquilibriumSubstrateFieldAt(x, y) {
+        if (ve.liberated || ve.alpha <= 0.01 || ve.scaleCurrent <= 3) return 0;
+
+        const dx = x - ve.x;
+        const dy = y - ve.y;
+        const d = Math.hypot(dx, dy);
+
+        // Center-weighted feather: strongest at the VE center.
+        const centerR = Math.max(18, ve.scaleCurrent * 1.10);
+        const centerField = Math.pow(clamp(1 - d / centerR, 0, 1), 1.75);
+
+        // Shape-weighted feather: projected VE edges define the 2D footprint.
+        let edgeField = 0;
+        if (ve.projCache && ve.projCache.length >= 12) {
+          const edgeFeather = clamp(ve.scaleCurrent * 0.20, 12, 52);
+          for (const [i, j] of VE_E) {
+            const a = ve.projCache[i];
+            const b = ve.projCache[j];
+            if (!a || !b) continue;
+            const sd = pointSegmentDistance(x, y, a.px, a.py, b.px, b.py);
+            if (sd < edgeFeather) {
+              edgeField = Math.max(edgeField, Math.pow(1 - sd / edgeFeather, 2.1));
+            }
+          }
+        }
+
+        return clamp(centerField * 0.86 + edgeField * 0.24, 0, 1);
+      }
 
       // Volta — arc lightning creature that traverses particle fields toward the VE
       const volta = {
@@ -545,6 +589,7 @@
         suppressClickUntil = 0;
         vePointerActiveUntil = 0;
         veActivationPendingFrame = false;
+        veInteractionSuppressedByObject = false;
         catCursorX = -9999;
         catCursorY = -9999;
 
@@ -562,6 +607,12 @@
         ve.x = ve.targetX = ve.prevTX = stage.clientWidth * 0.5;
         ve.y = ve.targetY = ve.prevTY = stage.clientHeight * 0.5;
         ve.vx = 0; ve.vy = 0;
+        ve.pressurePrevX = ve.x;
+        ve.pressurePrevY = ve.y;
+        ve.pressureVX = 0;
+        ve.pressureVY = 0;
+        ve.pressureSpeed = 0;
+        ve.pressureReady = false;
         ve.cvx = 0; ve.cvy = 0;
         ve.θx = 0.4; ve.θy = 1.1; ve.θz = 0.2;
         ve.ωx = 0.00025; ve.ωy = 0.00041; ve.ωz = 0.00016;
@@ -681,6 +732,32 @@
               p.vx += pointerPressure.dirX * force * 0.046 / p.mass;
               p.vy += pointerPressure.dirY * force * 0.046 / p.mass;
               thermalInput = Math.max(thermalInput, force * 0.62);
+            }
+          }
+
+          // Moving VE pressure: the VE pushes substrate through its projected 2D
+          // footprint. Intensity is feathered and strongest near the center, with
+          // projected edges contributing the shape boundary.
+          const veMoveSpeed = Math.hypot(ve.pressureVX || 0, ve.pressureVY || 0);
+          if (veMoveSpeed > 0.0015 && ve.alpha > 0.01 && ve.scaleCurrent > 3 && p.mass > 0.01) {
+            const veField = vectorEquilibriumSubstrateFieldAt(p.x, p.y);
+            if (veField > 0.001) {
+              const mvx = (ve.pressureVX || 0) / veMoveSpeed;
+              const mvy = (ve.pressureVY || 0) / veMoveSpeed;
+              const dx = p.x - ve.x;
+              const dy = p.y - ve.y;
+              const d = Math.hypot(dx, dy) || 1;
+              const rx = dx / d;
+              const ry = dy / d;
+
+              const pressure = veField
+                * clamp(veMoveSpeed * 0.86, 0, 0.52)
+                * ve.alpha
+                * (0.42 + clamp(ve.scaleP, 0, 1) * 0.58);
+
+              p.vx += (mvx * 0.78 + rx * 0.22) * pressure * 0.060 / p.mass;
+              p.vy += (mvy * 0.78 + ry * 0.22) * pressure * 0.060 / p.mass;
+              thermalInput = Math.max(thermalInput, pressure * 0.46);
             }
           }
 
@@ -860,13 +937,21 @@
         // Liberation and its reinitialization delay are the only period in which
         // a rising edge is intentionally ignored. Orb and Volta state must not
         // swallow an otherwise valid VE activation.
-        if (ve.liberated) return false;
+        if (ve.liberated || veInteractionSuppressedByObject) return false;
         const rect  = stage.getBoundingClientRect();
         const p     = event.touches ? event.touches[0] : event;
         const tx    = p.clientX - rect.left;
         const ty    = p.clientY - rect.top;
         if (activate) {
-          if (!ve.active) { ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0; }
+          if (!ve.active) {
+            ve.x = tx; ve.y = ty; ve.prevTX = tx; ve.prevTY = ty; ve.vx = 0; ve.vy = 0;
+            ve.pressurePrevX = tx;
+            ve.pressurePrevY = ty;
+            ve.pressureVX = 0;
+            ve.pressureVY = 0;
+            ve.pressureSpeed = 0;
+            ve.pressureReady = true;
+          }
           ve.active = true;
           veActivationPendingFrame = true;
           vePointerActiveUntil = Math.max(vePointerActiveUntil, performance.now() + VE_POINTER_TAP_LATCH_MS);
@@ -957,18 +1042,77 @@
         });
       }
 
-      function appParticleAtClient(clientX, clientY, hitScale = 1.5) {
+      function appParticleHitRadius(ap, hitScale = 1.0) {
+        // Hit testing must match the visible foreground object, not the tiny seed
+        // radius. Substrate/background particles are intentionally excluded from
+        // this system; only deliberate app/orb foreground objects are interactive.
+        const baseR = ap.r0 || 8;
+
+        // drawAppParticles expands ordinary orbs by their breathing pulse, sound
+        // orbs by a stronger unstable pulse, and the cat image by another 1.5x
+        // plus behavioral scale. Use a max visual envelope so the whole visible
+        // circle counts, not only the center/core pixel.
+        const breathMax = ap.audioKey ? 1.34 : 1.22;
+        const catScale = ap.orbImg ? clamp((ap._c && ap._c.sca) || 1.0, 0.82, 1.40) : 1.0;
+        const kindScale = ap.orbImg ? 1.50
+                        : ap.emoji ? 1.42
+                        : ap.resetOrb ? 1.52
+                        : 1.34;
+
+        const visualR = baseR * breathMax * kindScale * catScale;
+
+        // Minimum makes small orbs humane on touch/mouse without making substrate
+        // particles interactive. This still only applies to appParticles.
+        return Math.max(visualR * hitScale, 18);
+      }
+
+      function appParticleAtClient(clientX, clientY, hitScale = 1.0) {
         const rect = stage.getBoundingClientRect();
         const cx = clientX - rect.left;
         const cy = clientY - rect.top;
+
+        // If several foreground objects overlap, choose the closest center whose
+        // visible circular hit radius contains the pointer.
+        let best = null;
+        let bestNorm = Infinity;
         for (const ap of appParticles) {
-          if (Math.hypot(cx - ap.x, cy - ap.y) <= ap.r0 * hitScale) return ap;
+          const hitR = appParticleHitRadius(ap, hitScale);
+          const d = Math.hypot(cx - ap.x, cy - ap.y);
+          if (d <= hitR) {
+            const norm = d / hitR;
+            if (norm < bestNorm) {
+              best = ap;
+              bestNorm = norm;
+            }
+          }
         }
+        return best;
+      }
+
+      function interactiveObjectAtClient(clientX, clientY, hitScale = 1.0) {
+        // General rising-edge interaction gate.
+        // IMPORTANT: substrate/background particles are intentionally NOT checked.
+        // Future foreground interactive objects should be added here.
+        const appParticle = appParticleAtClient(clientX, clientY, hitScale);
+        if (appParticle) return { kind: 'appParticle', target: appParticle };
         return null;
       }
 
       const releasePointerLight = () => {
         holdActive = false;
+
+        if (veInteractionSuppressedByObject) {
+          // Pointer began on a foreground interactive object. Do not let stale
+          // VE activation state survive into pointerup/touchend and resurrect a
+          // stationary VE.
+          vePointerActiveUntil = 0;
+          veActivationPendingFrame = false;
+          veInteractionSuppressedByObject = false;
+          orbInteractionActive = false;
+          if (!ve.voltaHeld) ve.active = false;
+          return;
+        }
+
         orbInteractionActive = false;
         const now = performance.now();
         ve.active = !!((veActivationPendingFrame || (vePointerActiveUntil && now < vePointerActiveUntil))
@@ -1026,24 +1170,46 @@
         const stageRect = stage.getBoundingClientRect();
         const wordRect  = word.getBoundingClientRect();
         const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
-        const veTitleLightActive = !ve.liberated && (ve.active || ve.voltaHeld || ve.alphaP > 0.12 || ve.scaleP > 0.12);
-        let titleGlow   = 0;
+
+        // Title illumination now follows the VE as a physical light source.
+        // Scale drives luminosity with a normalized exponential curve: small VE
+        // presence is dim, but brightness rises rapidly as the VE expands.
+        const veVisible = !ve.liberated && (ve.active || ve.voltaHeld || ve.alphaP > 0.01 || ve.scaleP > 0.01);
+        const veScaleP = clamp(ve.scaleP, 0, 1);
+        const veAlphaP = clamp(ve.alphaP, 0, 1);
+        // Fast-to-slow VE luminosity curve.
+        // This is not a slow-start exponential rise. It is an ease-out curve:
+        // early scale growth creates a large brightness jump, then the glow
+        // tapers smoothly as the VE approaches full size. When scale falls, the
+        // same curve runs in reverse: it holds brightness through medium scale,
+        // then drops off near the end.
+        const veScaleLuminosity = 1 - Math.pow(1 - veScaleP, 2.35);
+        const veExcitementBoost = 1 + clamp(ve.excitement || 0, 0, 1) * 1.35;
+        const veLightAmplitude = veVisible
+          ? clamp(ve.brightness * veAlphaP * veScaleLuminosity * veExcitementBoost, 0, 2.4)
+          : 0;
+        const veLightRadius = 96 + Math.max(0, ve.scaleCurrent) * (2.45 + clamp(ve.excitement || 0, 0, 1) * 0.55);
+
+        let titleGlow = 0;
 
         for (const l of titleLetters) {
           let localLight = 0;
           const lx = wordRect.left - stageRect.left + l.baseX;
           const ly = letterY;
 
-          // VE presence now illuminates the title instead of raw cursor proximity.
-          if (veTitleLightActive) {
+          if (veLightAmplitude > 0.001) {
             const vdx = lx - ve.x;
             const vdy = ly - ve.y;
             const vd  = Math.hypot(vdx, vdy) || 1;
-            const veGlow = Math.max(0, 1 - vd / 280) * (0.42 + clamp(ve.scaleP, 0, 1) * 0.30 + clamp(ve.alphaP, 0, 1) * 0.18);
-            localLight = Math.max(localLight, veGlow);
+            if (vd < veLightRadius) {
+              const falloff = Math.pow(1 - vd / veLightRadius, 1.72);
+              const coreBloom = Math.pow(falloff, 0.72);
+              localLight = Math.max(localLight, veLightAmplitude * coreBloom);
+            }
           }
 
-          // Actual click/tap pulse lights, sampled at the rendered letter position.
+          // Actual click/tap pulse lights remain visible, but they are additive
+          // accents. The sustained title brightness is now governed by VE light.
           for (const light of lights) {
             const dx = lx - light.x;
             const dy = ly - light.y;
@@ -1052,27 +1218,28 @@
             localLight = Math.max(localLight, inf);
           }
 
-          // Fast enough rise, but release/dim is linear over ~2s.
-          if (l.smoothGlow === undefined) l.smoothGlow = 0;
-          if (localLight > l.smoothGlow) {
-            l.smoothGlow += (localLight - l.smoothGlow) * 0.16;
-          } else {
-            l.smoothGlow = Math.max(localLight, l.smoothGlow - dt / 2000);
-          }
+          // No independent title fade envelope. The title follows the instantaneous
+          // light field, whose rise/fall comes from VE scale/alpha dynamics.
+          l.smoothGlow = clamp(localLight, 0, 2.2);
 
-          const glow = clamp(l.smoothGlow, 0, 1);
+          const glow = l.smoothGlow;
+          const glow01 = clamp(glow, 0, 1);
+          const overGlow = Math.max(0, glow - 1);
+
           titleGlow = Math.max(titleGlow, glow);
 
-          // Darker unlit baseline; lighting lifts it gently.
-          l.el.style.color      = `rgba(232,224,209,${(0.105 + glow * 0.62).toFixed(3)})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.006), 0 0 ${(glow * 13).toFixed(1)}px rgba(232,224,209,${(glow * 0.10).toFixed(3)})`;
+          // Darker unlit baseline; VE light lifts opacity, halo, and warmth.
+          l.el.style.color      = `rgba(232,224,209,${clamp(0.105 + glow01 * 0.64 + overGlow * 0.08, 0.105, 0.92).toFixed(3)})`;
+          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.006), 0 0 ${(glow01 * 18 + overGlow * 10).toFixed(1)}px rgba(232,224,209,${clamp(glow01 * 0.15 + overGlow * 0.08, 0, 0.28).toFixed(3)})`;
           l.el.style.transform  = 'translate(-50%, -50%)';
         }
 
+        const titleGlow01 = clamp(titleGlow, 0, 1);
+        const titleOverGlow = Math.max(0, titleGlow - 1);
         word.style.filter     = 'none';
-        word.style.opacity    = (0.46 + titleGlow * 0.26).toFixed(3);
-        word.style.textShadow = `0 0 ${(titleGlow * 9).toFixed(1)}px rgba(232,224,209,${(titleGlow * 0.05).toFixed(3)})`;
-        word.style.setProperty('--after-opacity', (0.006 + titleGlow * 0.040).toFixed(3));
+        word.style.opacity    = clamp(0.46 + titleGlow01 * 0.30 + titleOverGlow * 0.05, 0.46, 0.86).toFixed(3);
+        word.style.textShadow = `0 0 ${(titleGlow01 * 13 + titleOverGlow * 9).toFixed(1)}px rgba(232,224,209,${clamp(titleGlow01 * 0.08 + titleOverGlow * 0.05, 0, 0.16).toFixed(3)})`;
+        word.style.setProperty('--after-opacity', clamp(0.006 + titleGlow01 * 0.058 + titleOverGlow * 0.020, 0.006, 0.095).toFixed(3));
       }
 
       // ─── App particle update & draw ─────────────────────────────────────────
@@ -1644,7 +1811,7 @@
             const strainedX = drawX + Math.sin(now * 0.19 + ap.breathPhase) * strainJitter;
             const strainedY = drawY + Math.cos(now * 0.23 + ap.breathPhase * 0.7) * strainJitter;
             const strainedR = rDraw * (1 - strain * 0.26);
-            const orbBrightnessScale = ap.resetOrb ? 0.58 : 1;
+            const orbBrightnessScale = 1;
             const baseColor = strain > 0 ? desaturateColor(ap.color, Math.min(0.85, strain * 0.82)) : ap.color;
             const brightColor = strain > 0 ? desaturateColor(ap.brightColor, Math.min(0.90, strain * 0.88)) : ap.brightColor;
             // Dark base — always present
@@ -1671,20 +1838,6 @@
                      strainedR * (0.38 + (unstable ? vibration * 0.12 : 0)), 0, Math.PI * 2);
             pctx.fill();
 
-            if (ap.resetOrb) {
-              pctx.globalAlpha = clamp(0.25 + t * 0.18 + local * 0.20, 0.18, 0.72) * 0.72;
-              pctx.strokeStyle = '#ffffff';
-              pctx.lineWidth = 0.9;
-              pctx.beginPath();
-              pctx.arc(strainedX, strainedY, strainedR * 1.34, 0, Math.PI * 2);
-              pctx.stroke();
-
-              pctx.globalAlpha = clamp(0.36 + t * 0.24 + local * 0.20, 0.22, 0.86) * 0.72;
-              pctx.fillStyle = '#ffffff';
-              pctx.beginPath();
-              pctx.arc(strainedX, strainedY, Math.max(1.2, strainedR * 0.18), 0, Math.PI * 2);
-              pctx.fill();
-            }
           }
         }
         pctx.globalAlpha = 1;
@@ -1949,6 +2102,22 @@
           const cr = 2.3 * (c.drawScale || 1.0);
           liberatedNodes.push({ x: c.x, y: c.y, vx: c.vx, vy: c.vy, mass: 8, alpha: 1.0, r: cr, r0: cr });
         }
+        if (ve.pressureReady) {
+          const pvx = (ve.x - ve.pressurePrevX) / Math.max(dt, 1);
+          const pvy = (ve.y - ve.pressurePrevY) / Math.max(dt, 1);
+          const smooth = clamp(dt * 0.020, 0, 0.45);
+          ve.pressureVX += (pvx - ve.pressureVX) * smooth;
+          ve.pressureVY += (pvy - ve.pressureVY) * smooth;
+          ve.pressureSpeed = Math.hypot(ve.pressureVX, ve.pressureVY);
+        } else {
+          ve.pressureReady = true;
+          ve.pressureVX = 0;
+          ve.pressureVY = 0;
+          ve.pressureSpeed = 0;
+        }
+        ve.pressurePrevX = ve.x;
+        ve.pressurePrevY = ve.y;
+
         if (consumedActivationEdge) veActivationPendingFrame = false;
       }
 
@@ -2668,20 +2837,38 @@
       }
 
       stage.addEventListener('pointerdown', e => {
-        holdActive = true;
+        try { if (e.pointerId !== undefined) stage.setPointerCapture(e.pointerId); } catch (_) {}
         const touch = e.pointerType === 'touch';
         const primaryActivationEdge = e.isPrimary !== false && (e.button === 0 || touch);
-        const veActivatedByPointer = primaryActivationEdge
+        const pressHitScale = touch ? TOUCH_ORB_POINTER_CAPTURE_SCALE : ORB_POINTER_CAPTURE_SCALE;
+
+        // Foreground object hit-test happens before VE activation. The hit area is
+        // the visible orb/app-object circle, not a single point and not the tiny
+        // base physics radius.
+        const pressedInteractiveObject = interactiveObjectAtClient(e.clientX, e.clientY, pressHitScale);
+        const pressedAppOrb = pressedInteractiveObject && pressedInteractiveObject.kind === 'appParticle'
+          ? pressedInteractiveObject.target
+          : null;
+        const pressedObject = !!pressedInteractiveObject;
+        const pressedOrb = !!pressedAppOrb;
+
+        veInteractionSuppressedByObject = pressedObject;
+        if (veInteractionSuppressedByObject) {
+          vePointerActiveUntil = 0;
+          veActivationPendingFrame = false;
+          if (!ve.voltaHeld) ve.active = false;
+        }
+
+        holdActive = !pressedObject;
+        const veActivatedByPointer = primaryActivationEdge && !pressedObject
           ? updateVEPointerTarget(e, true)
           : false;
-        const pressHitScale = touch ? TOUCH_ORB_POINTER_CAPTURE_SCALE : ORB_POINTER_CAPTURE_SCALE;
-        const pressedAppOrb = appParticleAtClient(e.clientX, e.clientY, pressHitScale);
-        const pressedOrb = !!pressedAppOrb;
+
         orbPressStartedAt = performance.now();
         orbPressStartedOnOrb = pressedOrb;
         orbPressedTarget = pressedAppOrb;
         orbReleaseClickAllowed = false;
-        orbInteractionActive = pressedOrb;
+        orbInteractionActive = pressedObject;
         noteCatTapInterest(e, pressedAppOrb);
         const tNow = orbPressStartedAt;
         if (!volta.active) volta.interactionPressure = Math.min(36, volta.interactionPressure + 1);
@@ -2703,7 +2890,38 @@
       });
       stage.addEventListener('pointermove', e => {
         catCursorX = e.clientX; catCursorY = e.clientY;
-        if ((e.buttons || holdActive) && !orbInteractionActive) {
+
+        if (veInteractionSuppressedByObject && orbPressedTarget) {
+          const rect = stage.getBoundingClientRect();
+          const cx = e.clientX - rect.left;
+          const cy = e.clientY - rect.top;
+          const edgeR = appParticleHitRadius(orbPressedTarget, 1.0);
+          const outsidePressedOrb = Math.hypot(cx - orbPressedTarget.x, cy - orbPressedTarget.y) > edgeR;
+
+          if (outsidePressedOrb) {
+            // Not a complete orb click/tap anymore. Cancel orb activation and
+            // activate VE where the pointer exits the visible orb edge.
+            veInteractionSuppressedByObject = false;
+            orbInteractionActive = false;
+            orbPressStartedOnOrb = false;
+            orbPressedTarget = null;
+            orbReleaseClickAllowed = false;
+            holdActive = true;
+
+            emitPointerPulse(e, e.pointerType === 'touch' ? 0.9 : 1.0);
+            beginPointerPressure(e);
+            const veActivatedByPointer = updateVEPointerTarget(e, true);
+            if (veActivatedByPointer) {
+              ve.ωx += (Math.random() * 2 - 1) * 0.0035;
+              ve.ωy += (Math.random() * 2 - 1) * 0.0035;
+              ve.ωz += (Math.random() * 2 - 1) * 0.0018;
+            }
+          } else {
+            return;
+          }
+        }
+
+        if ((e.buttons || holdActive) && !orbInteractionActive && !veInteractionSuppressedByObject) {
           updatePointerPressure(e);
           updateVEPointerTarget(e, false);
         }
@@ -2714,15 +2932,29 @@
       });
       stage.addEventListener('pointerup', e => {
         const pressedTarget = orbPressedTarget;
-        if (orbPressStartedOnOrb) {
-          orbReleaseClickAllowed = (performance.now() - orbPressStartedAt) <= ORB_RELEASE_CLICK_WINDOW_MS;
+        let releaseInsidePressedTarget = false;
+
+        if (pressedTarget) {
+          const rect = stage.getBoundingClientRect();
+          const cx = e.clientX - rect.left;
+          const cy = e.clientY - rect.top;
+          releaseInsidePressedTarget = Math.hypot(cx - pressedTarget.x, cy - pressedTarget.y)
+            <= appParticleHitRadius(pressedTarget, 1.0);
         }
-        const quickOrbRelease = !!pressedTarget && orbReleaseClickAllowed;
+
+        if (orbPressStartedOnOrb) {
+          // Full orb activation requires rising edge and falling edge inside the
+          // same visible orb circle. Dragging out cancels the orb click.
+          orbReleaseClickAllowed = releaseInsidePressedTarget;
+        }
+
+        const fullOrbRelease = !!pressedTarget && orbReleaseClickAllowed;
         endPointerPressure();
         releasePointerLight();
         orbPressStartedOnOrb = false;
         orbPressedTarget = null;
-        if (quickOrbRelease) {
+
+        if (fullOrbRelease) {
           suppressClickUntil = performance.now() + 400;
           activateAppParticle(pressedTarget, e);
         }
