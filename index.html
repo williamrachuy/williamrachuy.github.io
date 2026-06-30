@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.16';
+      const VERSION = '20260630.17';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -1816,19 +1816,20 @@
             pctx.shadowBlur  = 0;
             pctx.restore();
           } else if (ap.cardImg && ap.cardImg.complete && ap.cardImg.naturalWidth > 0) {
-            // Orb-sized cardback link. It breathes with the same radius as other
-            // site orbs, but draws as the weathered Magic cardback instead of a circle.
+            // Cube Cobra cardback link: high-quality smoothing, no outer glow.
+            // Draw as an orb-sized image object, but avoid the fuzzy halo and
+            // force the canvas scaler to use image smoothing for the small render.
             const aspect = ap.cardImg.naturalWidth / Math.max(1, ap.cardImg.naturalHeight);
             const cardH = rDraw * 2.75;
             const cardW = cardH * aspect;
-            const glow = Math.max(2, 3 + t * 7 + local * 10);
+
             pctx.save();
             pctx.translate(drawX, drawY);
-            pctx.globalAlpha = clamp(0.72 + t * 0.12 + local * 0.08, 0.34, 0.92);
-            pctx.shadowBlur = glow;
-            pctx.shadowColor = ap.brightColor || '#d8c28d';
+            pctx.globalAlpha = clamp(0.82 + t * 0.08 + local * 0.03, 0.60, 0.96);
+            pctx.imageSmoothingEnabled = true;
+            if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'high';
+            pctx.filter = 'none';
             pctx.drawImage(ap.cardImg, -cardW * 0.5, -cardH * 0.5, cardW, cardH);
-            pctx.shadowBlur = 0;
             pctx.restore();
           } else if (ap.emoji) {
             const strain = ap.voltaStrain || 0;
