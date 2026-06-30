@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.8';
+      const VERSION = '20260630.9';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -131,7 +131,7 @@
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
-      const aboutQuestionImg = new Image(); aboutQuestionImg.src = 'about/question.svg';
+      const aboutQuestionImg = new Image(); aboutQuestionImg.src = 'about/question.svg?v=20260630.9';
       const catMeowAudio = new Audio('meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
@@ -1863,10 +1863,10 @@
               pctx.save();
               pctx.translate(strainedX, strainedY);
               pctx.scale(orbScale, orbScale);
-              pctx.globalAlpha = clamp(0.56 + t * 0.22 + local * 0.18, 0.48, 0.88) * orbBrightnessScale;
-              pctx.shadowBlur  = Math.max(3, 4 + t * 8 + local * 10);
+              pctx.globalAlpha = clamp(0.62 + t * 0.18 + local * 0.14, 0.52, 0.86) * orbBrightnessScale;
+              pctx.shadowBlur  = Math.max(1, 1.5 + t * 4 + local * 5);
               pctx.shadowColor = brightColor;
-              pctx.filter = 'brightness(2.15)';
+              pctx.filter = 'brightness(1.55)';
               pctx.drawImage(ap.overlayImg, -overlaySize * 0.5, -overlaySize * 0.5, overlaySize, overlaySize);
               pctx.filter = 'none';
               pctx.restore();
