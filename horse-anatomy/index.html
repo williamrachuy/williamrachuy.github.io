@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="An interactive, layered introduction to equine anatomy: skeleton, muscles, organs, movement, and study quizzes.">
+  <title>Equine Anatomy Lab · Adividiardi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg:#090b0d; --panel:#111419; --panel2:#171b20; --line:#2b3038;
+      --text:#edf0eb; --muted:#98a09b; --accent:#d3a66d; --accent2:#78b5a4;
+      --bone:#e7d8b6; --muscle:#b9564f; --organ:#a56ca9; --surface:#8d6b4d;
+      --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    *{box-sizing:border-box} html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
+    button,input{font:inherit} button{color:inherit}.app{min-height:100dvh;display:grid;grid-template-rows:auto auto 1fr}
+    .topbar{height:64px;padding:calc(10px + var(--safe-top)) 16px 10px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line);background:rgba(9,11,13,.94);backdrop-filter:blur(14px);position:sticky;top:0;z-index:20}
+    .back{text-decoration:none;color:var(--muted);font-size:22px;width:38px;height:38px;display:grid;place-items:center;border:1px solid var(--line);border-radius:12px}.brand{min-width:0}.brand strong{font-family:Georgia,serif;font-weight:400;font-size:20px;display:block}.brand span{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}
+    .top-actions{margin-left:auto;display:flex;gap:8px}.icon-btn,.quiz-btn{border:1px solid var(--line);background:var(--panel);border-radius:11px;min-height:38px;padding:0 12px;cursor:pointer}.quiz-btn{color:#17130e;background:var(--accent);border-color:var(--accent);font-weight:750}
+    .tabs{display:flex;gap:8px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--bg);scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}.tab{white-space:nowrap;border:1px solid var(--line);background:var(--panel);border-radius:999px;padding:9px 14px;cursor:pointer;color:var(--muted)}.tab[aria-selected="true"]{color:var(--text);border-color:color-mix(in srgb,var(--layer-color) 70%,white);background:color-mix(in srgb,var(--layer-color) 18%,var(--panel))}
+    .workspace{display:grid;grid-template-columns:minmax(0,1fr) 360px;min-height:0}.stage-panel{min-width:0;display:grid;grid-template-rows:auto minmax(460px,1fr);border-right:1px solid var(--line)}
+    .tools{padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);color:var(--muted);font-size:12px}.search{flex:1;position:relative}.search input{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);padding:9px 12px 9px 34px;outline:none}.search input:focus{border-color:var(--accent)}.search::before{content:'⌕';position:absolute;left:12px;top:6px;font-size:20px;color:var(--muted)}
+    .tool{border:1px solid var(--line);background:var(--panel);border-radius:9px;height:36px;min-width:36px;cursor:pointer}.tool.active{border-color:var(--accent);color:var(--accent)}
+    .stage{position:relative;overflow:hidden;background:radial-gradient(circle at 48% 45%,#1b2024 0,#0e1114 62%,#090b0d 100%);touch-action:none}.canvas{width:100%;height:100%;min-height:460px;display:block;transform-origin:center;transition:transform .18s ease}.layer{opacity:0;pointer-events:none;transition:opacity .3s ease}.layer.active{opacity:1;pointer-events:auto}.structure{cursor:pointer;transition:filter .15s,opacity .15s,stroke-width .15s}.structure:hover,.structure.selected{filter:brightness(1.35) drop-shadow(0 0 5px rgba(255,255,255,.35));stroke:#fff!important;stroke-width:3!important}.structure.dim{opacity:.13}.label{font-size:15px;fill:#f4eee3;paint-order:stroke;stroke:#11151a;stroke-width:4px;stroke-linejoin:round;pointer-events:none;opacity:0;transition:opacity .2s}.labels-on .label{opacity:1}.locator{position:absolute;left:12px;bottom:12px;padding:8px 10px;border-radius:9px;background:rgba(9,11,13,.78);border:1px solid var(--line);font-size:11px;color:var(--muted);pointer-events:none}.schematic{position:absolute;right:12px;bottom:12px;padding:6px 9px;border-radius:8px;background:rgba(9,11,13,.72);font-size:10px;color:#777f7a}
+    .side{min-height:0;background:var(--panel);display:flex;flex-direction:column}.side-scroll{overflow-y:auto;padding:22px 20px 34px}.empty{color:var(--muted);text-align:center;padding:55px 18px}.empty .big{font-size:44px;display:block;margin-bottom:12px}.eyebrow{font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);margin-bottom:8px}.detail h2{font:400 clamp(29px,3vw,39px)/1.05 Georgia,serif;margin:0 0 8px}.latin{font:italic 15px Georgia,serif;color:var(--muted);margin-bottom:22px}.fact{padding:15px 0;border-top:1px solid var(--line)}.fact h3{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin:0 0 7px}.fact p{font:16px/1.55 Georgia,serif;margin:0;color:#d6dbd6}.memory{margin:18px 0;padding:15px;border-left:3px solid var(--accent);background:#1d1914;border-radius:0 10px 10px 0}.memory strong{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin-bottom:6px}.memory p{margin:0;line-height:1.45}.source-links{display:flex;flex-wrap:wrap;gap:8px}.source-links a{color:var(--accent2);font-size:13px;text-decoration:none;border:1px solid #31554d;border-radius:999px;padding:7px 10px}.structure-list{margin-top:24px}.structure-list h3{font-size:12px;letter-spacing:.13em;text-transform:uppercase;color:var(--muted)}.chips{display:flex;flex-wrap:wrap;gap:7px}.chip{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:7px 10px;font-size:12px;cursor:pointer;color:#cbd0cc}.chip:hover{border-color:var(--accent)}
+    .quiz-overlay{position:fixed;inset:0;z-index:50;background:rgba(4,5,6,.88);backdrop-filter:blur(14px);display:none;place-items:center;padding:18px}.quiz-overlay.open{display:grid}.quiz-card{width:min(540px,100%);border:1px solid var(--line);border-radius:24px;background:#12161a;padding:26px;box-shadow:0 25px 100px #000}.quiz-head{display:flex;justify-content:space-between;align-items:center}.quiz-head span{font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}.close{border:0;background:transparent;font-size:26px;cursor:pointer}.quiz-card h2{font:400 32px/1.1 Georgia,serif;margin:24px 0}.answers{display:grid;gap:9px}.answer{border:1px solid var(--line);background:var(--panel2);border-radius:13px;padding:14px;text-align:left;cursor:pointer}.answer.correct{border-color:#5ba47f;background:#173426}.answer.wrong{border-color:#b85e5e;background:#3a1d1d}.quiz-note{min-height:46px;color:var(--muted);line-height:1.45;margin:14px 0}.next{width:100%;border:0;border-radius:12px;background:var(--accent);color:#17130e;padding:13px;font-weight:800;cursor:pointer}.progress{height:5px;background:#262b30;border-radius:5px;overflow:hidden;margin-top:18px}.progress i{display:block;height:100%;background:var(--accent);width:0;transition:width .25s}
+    .source-footer{padding:22px 20px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.5}.source-footer a{color:#b7cbbf}
+    @media(max-width:820px){.workspace{display:block}.stage-panel{border-right:0;grid-template-rows:auto 58vh}.stage{min-height:420px}.canvas{min-height:420px}.side{border-top:1px solid var(--line)}.side-scroll{padding-bottom:calc(34px + var(--safe-bottom))}.topbar{height:auto}.brand span{display:none}.quiz-btn{padding:0 10px}.locator{display:none}}
+    @media(max-width:470px){.top-actions .icon-btn{display:none}.tools{padding-inline:8px}.stage-panel{grid-template-rows:auto 52vh}.tab{padding:8px 12px}.side-scroll{padding:20px 16px}.topbar{padding-inline:10px}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="back" href="/" aria-label="Back to Adividiardi">‹</a>
+    <div class="brand"><strong>Equine Anatomy Lab</strong><span>Interactive lateral study atlas</span></div>
+    <div class="top-actions"><button class="icon-btn" id="randomBtn">Random structure</button><button class="quiz-btn" id="quizBtn">Study quiz</button></div>
+  </header>
+  <nav class="tabs" aria-label="Anatomical layers">
+    <button class="tab" style="--layer-color:var(--surface)" data-layer="surface" aria-selected="true">Exterior</button>
+    <button class="tab" style="--layer-color:var(--bone)" data-layer="skeleton" aria-selected="false">Skeleton</button>
+    <button class="tab" style="--layer-color:var(--muscle)" data-layer="muscles" aria-selected="false">Muscles</button>
+    <button class="tab" style="--layer-color:var(--organ)" data-layer="organs" aria-selected="false">Organs</button>
+  </nav>
+  <div class="workspace">
+    <section class="stage-panel" aria-label="Interactive anatomy viewer">
+      <div class="tools">
+        <label class="search"><input id="search" type="search" placeholder="Find a structure…" autocomplete="off"></label>
+        <button class="tool" id="labelsBtn" title="Toggle labels" aria-pressed="false">Aa</button>
+        <button class="tool" id="zoomOut" title="Zoom out">−</button><button class="tool" id="zoomIn" title="Zoom in">+</button><button class="tool" id="resetView" title="Reset view">↺</button>
+      </div>
+      <div class="stage" id="stage">
+        <svg class="canvas" id="atlas" viewBox="0 0 1000 650" role="img" aria-labelledby="atlasTitle atlasDesc">
+          <title id="atlasTitle">Interactive lateral anatomy of a horse</title><desc id="atlasDesc">Switch between exterior, skeletal, muscular, and organ layers, then select labeled structures to study them.</desc>
+          <defs>
+            <linearGradient id="coat" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#9c7350"/><stop offset="1" stop-color="#5b3a28"/></linearGradient>
+            <linearGradient id="muscle" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ce6b60"/><stop offset="1" stop-color="#7d302f"/></linearGradient>
+            <filter id="soft"><feGaussianBlur stdDeviation="1.4"/></filter>
+          </defs>
+          <!-- shared contextual silhouette -->
+          <path d="M164 190 Q110 164 86 114 L72 58 95 89 117 55 128 112 Q184 122 221 155 L300 190 Q404 164 565 176 Q668 178 747 224 L825 211 Q865 207 894 234 L923 269 893 280 861 266 Q850 303 846 358 L839 530 812 530 798 359 770 316 723 355 714 525 687 525 680 352 629 306 574 319 557 526 529 526 516 335 Q435 339 363 320 L329 520 301 520 303 301 Q257 269 220 247 L194 344 177 519 149 519 155 337 142 257 Q112 245 97 222 L117 197 Z" fill="#171b1d" stroke="#384047" stroke-width="3" opacity=".7"/>
+
+          <g class="layer active" data-layer-group="surface">
+            <path class="structure" data-id="poll" d="M78 61 L96 91 118 56 127 117 101 130 80 112Z" fill="#6f4b36" stroke="#b38a62" stroke-width="2"/>
+            <path class="structure" data-id="muzzle" d="M84 114 Q66 143 88 176 L139 172 157 145 127 116Z" fill="url(#coat)" stroke="#c09970" stroke-width="2"/>
+            <path class="structure" data-id="neck" d="M133 130 Q195 134 261 190 L226 261 141 236 113 183Z" fill="url(#coat)" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="withers" d="M226 179 Q276 158 334 177 L321 236 248 231Z" fill="#80573d" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="barrel" d="M318 178 Q507 153 663 191 L674 293 Q564 345 371 320 302 291 289 233Z" fill="url(#coat)" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="croup" d="M649 188 Q731 190 790 229 L760 309 666 292Z" fill="#774b33" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="forelimb" d="M202 240 Q244 250 251 302 L222 376 210 523 177 523 184 365 164 294Z" fill="#734a34" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="hindlimb" d="M690 285 Q765 274 804 322 L775 389 754 528 717 528 722 375 675 333Z" fill="#69412e" stroke="#b1835d" stroke-width="2"/>
+            <path class="structure" data-id="hoof" d="M172 520 L213 520 220 550 168 550Z M711 526 L757 526 765 555 706 555Z" fill="#292522" stroke="#80766e" stroke-width="2"/>
+            <text class="label" x="88" y="105">poll</text><text class="label" x="315" y="165">withers</text><text class="label" x="473" y="246">barrel</text><text class="label" x="688" y="190">croup</text><text class="label" x="168" y="572">hoof</text>
+          </g>
+
+          <g class="layer" data-layer-group="skeleton">
+            <g fill="none" stroke="#e7d8b6" stroke-linecap="round" stroke-linejoin="round">
+              <path class="structure" data-id="skull" d="M83 105 Q105 84 137 117 L160 143 137 172 91 174 76 149Z" fill="#d9c9a7" stroke-width="7"/>
+              <path class="structure" data-id="vertebral-column" d="M137 126 Q205 165 272 190 Q469 159 681 187 Q736 194 778 221" stroke-width="12"/>
+              <path class="structure" data-id="ribs" d="M325 185 Q303 252 359 308 M365 179 Q345 270 399 320 M407 174 Q390 274 442 326 M450 172 Q437 280 487 327 M493 172 Q486 275 529 322 M536 175 Q535 267 572 311 M578 180 Q582 255 614 294" stroke-width="7"/>
+              <path class="structure" data-id="scapula" d="M248 187 L219 294 285 263Z" fill="#d1bf9c" stroke-width="5"/>
+              <path class="structure" data-id="humerus" d="M255 270 L205 341" stroke-width="14"/>
+              <path class="structure" data-id="radius" d="M205 341 L194 447" stroke-width="12"/>
+              <path class="structure" data-id="carpus" d="M194 447 L190 463" stroke-width="20"/>
+              <path class="structure" data-id="metacarpal" d="M190 466 L187 525" stroke-width="11"/>
+              <path class="structure" data-id="pelvis" d="M645 188 Q713 171 766 225 L725 292 667 269Z" fill="#d1bf9c" stroke-width="6"/>
+              <path class="structure" data-id="femur" d="M716 274 L760 352" stroke-width="16"/>
+              <path class="structure" data-id="tibia" d="M760 352 L731 441" stroke-width="13"/>
+              <path class="structure" data-id="hock" d="M731 441 L722 462" stroke-width="22"/>
+              <path class="structure" data-id="metatarsal" d="M722 465 L728 526" stroke-width="11"/>
+              <path class="structure" data-id="coffin-bone" d="M177 526 L207 526 212 547 176 547Z M713 526 L744 526 751 550 713 550Z" fill="#d1bf9c" stroke-width="4"/>
+            </g>
+            <text class="label" x="81" y="94">skull</text><text class="label" x="402" y="150">vertebral column</text><text class="label" x="420" y="260">ribs</text><text class="label" x="215" y="181">scapula</text><text class="label" x="671" y="165">pelvis</text><text class="label" x="755" y="437">hock</text>
+          </g>
+
+          <g class="layer" data-layer-group="muscles">
+            <g fill="url(#muscle)" stroke="#e48978" stroke-width="2">
+              <path class="structure" data-id="masseter" d="M108 123 Q151 124 160 153 L139 179 105 169 94 145Z"/>
+              <path class="structure" data-id="brachiocephalicus" d="M137 130 Q203 150 256 212 L229 235 155 188Z"/>
+              <path class="structure" data-id="trapezius" d="M200 157 Q276 164 350 190 L281 225 224 209Z"/>
+              <path class="structure" data-id="latissimus-dorsi" d="M323 180 Q492 160 626 190 L543 240 367 234Z"/>
+              <path class="structure" data-id="pectorals" d="M196 220 Q265 216 331 272 L285 300 211 278Z"/>
+              <path class="structure" data-id="triceps" d="M228 245 Q285 253 290 314 L236 356 207 318Z"/>
+              <path class="structure" data-id="extensor-carpi" d="M199 329 Q225 327 225 440 L198 447 181 351Z"/>
+              <path class="structure" data-id="external-oblique" d="M339 232 Q513 220 639 207 L657 286 Q514 342 365 306Z"/>
+              <path class="structure" data-id="gluteals" d="M623 186 Q708 173 777 227 L745 289 655 274Z"/>
+              <path class="structure" data-id="biceps-femoris" d="M681 265 Q766 249 802 318 L761 373 704 335Z"/>
+              <path class="structure" data-id="gastrocnemius" d="M747 347 Q783 359 755 439 L726 438 718 376Z"/>
+              <path class="structure" data-id="digital-flexor" d="M718 430 L739 430 738 524 718 524Z"/>
+            </g>
+            <text class="label" x="104" y="115">masseter</text><text class="label" x="176" y="145">brachiocephalicus</text><text class="label" x="342" y="164">latissimus dorsi</text><text class="label" x="430" y="285">external oblique</text><text class="label" x="655" y="179">gluteals</text><text class="label" x="751" y="343">gastrocnemius</text>
+          </g>
+
+          <g class="layer" data-layer-group="organs">
+            <g stroke-width="3">
+              <path class="structure" data-id="nasal-passages" d="M83 124 Q108 101 139 126 L119 144 86 146Z" fill="#68a7b0" stroke="#9ed4d8"/>
+              <path class="structure" data-id="trachea" d="M134 145 Q187 169 232 227" fill="none" stroke="#71b9c1" stroke-width="12"/>
+              <path class="structure" data-id="lungs" d="M282 190 Q361 181 411 224 L397 290 Q332 315 278 272Z M419 191 Q503 178 548 222 L535 287 Q465 309 413 281Z" fill="#be7181" stroke="#ed9aaa"/>
+              <path class="structure" data-id="heart" d="M390 246 C362 214 324 251 349 287 L393 326 433 283 C460 244 418 216 390 246Z" fill="#c9464c" stroke="#ef8388"/>
+              <path class="structure" data-id="esophagus" d="M145 157 Q224 193 283 229 L340 243" fill="none" stroke="#d6b06c" stroke-width="8"/>
+              <path class="structure" data-id="stomach" d="M519 232 Q570 204 605 237 Q622 281 579 305 532 306 515 275Z" fill="#c98d53" stroke="#efbd81"/>
+              <path class="structure" data-id="liver" d="M499 202 Q591 180 647 216 L624 261 527 255Z" fill="#8d4b42" stroke="#ce7669"/>
+              <path class="structure" data-id="spleen" d="M606 224 Q657 229 665 289 L645 311 622 271Z" fill="#80517f" stroke="#bd83bb"/>
+              <path class="structure" data-id="small-intestine" d="M454 280 q45-42 89 0 t89 0 q-8 54-57 33 t-89 4 q-43-7-32-37Z" fill="#d5a16d" stroke="#f0c493"/>
+              <path class="structure" data-id="cecum" d="M612 269 Q672 274 687 321 L656 346 622 321Z" fill="#8aa861" stroke="#b6d18a"/>
+              <path class="structure" data-id="large-colon" d="M396 297 Q449 336 532 326 Q612 316 678 337" fill="none" stroke="#8fb46d" stroke-width="25"/>
+              <path class="structure" data-id="kidney" d="M555 194 Q578 180 593 198 594 223 568 228 548 217 555 194Z" fill="#866553" stroke="#bd937a"/>
+              <path class="structure" data-id="bladder" d="M655 331 Q681 330 691 361 680 385 653 372 642 349 655 331Z" fill="#d1c35d" stroke="#eee28b"/>
+            </g>
+            <text class="label" x="296" y="180">lungs</text><text class="label" x="361" y="345">heart</text><text class="label" x="518" y="181">liver</text><text class="label" x="536" y="317">small intestine</text><text class="label" x="603" y="260">cecum</text><text class="label" x="460" y="373">large colon</text>
+          </g>
+        </svg>
+        <div class="locator" id="locator">Exterior layer · select a highlighted region</div><div class="schematic">Schematic study view · not to scale</div>
+      </div>
+    </section>
+    <aside class="side" aria-live="polite">
+      <div class="side-scroll" id="detailPanel">
+        <div class="empty"><span class="big">↖</span><p>Select a structure in the diagram, use search, or choose one below.</p></div>
+      </div>
+      <div class="source-footer">Educational overview only—not veterinary advice. Core references: <a href="https://en.wikipedia.org/wiki/Equine_anatomy" target="_blank" rel="noreferrer">Wikipedia: Equine anatomy</a> and <a href="https://www.msdvetmanual.com/horse-owners" target="_blank" rel="noreferrer">MSD Veterinary Manual</a>.</div>
+    </aside>
+  </div>
+</div>
+<div class="quiz-overlay" id="quizOverlay" role="dialog" aria-modal="true" aria-labelledby="quizTitle">
+  <div class="quiz-card"><div class="quiz-head"><span id="quizCount">Question 1</span><button class="close" id="closeQuiz" aria-label="Close quiz">×</button></div><div class="progress"><i id="quizProgress"></i></div><h2 id="quizTitle"></h2><div class="answers" id="answers"></div><p class="quiz-note" id="quizNote"></p><button class="next" id="nextQuiz" hidden>Next question</button></div>
+</div>
+<script>
+(() => {
+  const WIKI='https://en.wikipedia.org/wiki/Equine_anatomy';
+  const MSD_DIG='https://www.msdvetmanual.com/horse-owners/digestive-disorders-of-horses/introduction-to-digestive-disorders-of-horses';
+  const MSD_RESP='https://www.msdvetmanual.com/horse-owners/lung-and-airway-disorders-of-horses/introduction-to-lung-and-airway-disorders-of-horses';
+  const MSD_HEART='https://www.msdvetmanual.com/horse-owners/heart-and-blood-vessel-disorders-of-horses/introduction-to-heart-and-blood-vessel-disorders-of-horses';
+  const SKELETON='https://en.wikipedia.org/wiki/Skeletal_system_of_the_horse';
+  const MUSCLES='https://en.wikipedia.org/wiki/Muscular_system_of_the_horse';
+  const sources=(...items)=>items.map(([label,url])=>({label,url}));
+  const data={
+    poll:{layer:'surface',name:'Poll',latin:'Regio occipitalis',location:'The top of the head, immediately behind and between the ears.',function:'A surface landmark over the occipital region and first cervical joint; flexion here helps create the nodding motion of the head.',memory:'Poll = the “pole” at the top of the horse.',sources:sources(['Wikipedia',WIKI])},
+    muzzle:{layer:'surface',name:'Muzzle',latin:'Rostrum',location:'The lips, nostrils, chin, and front of the nose.',function:'The sensitive, mobile lips select forage; the nostrils are the only normal route for breathing because horses are obligate nasal breathers.',memory:'Touch, taste, grasp, breathe: the muzzle is a busy sensory gateway.',sources:sources(['Wikipedia',WIKI],['MSD respiratory',MSD_RESP])},
+    neck:{layer:'surface',name:'Neck',latin:'Regio cervicalis',location:'From poll to withers, shoulder, and chest.',function:'Seven cervical vertebrae support and position the head. Long muscles and the nuchal ligament balance the head while allowing grazing and athletic movement.',memory:'Like most mammals, horses have seven neck vertebrae—length comes from vertebral size, not count.',sources:sources(['Wikipedia',WIKI])},
+    withers:{layer:'surface',name:'Withers',latin:'Regio interscapularis',location:'The ridge between the shoulder blades at the base of the neck.',function:'Formed mainly by tall thoracic vertebral spines and surrounding tissue; it anchors muscles and is the standard point for measuring height.',memory:'Height is measured from ground to the highest fixed point: the withers.',sources:sources(['Wikipedia',WIKI])},
+    barrel:{layer:'surface',name:'Barrel',latin:'Thorax and abdomen',location:'The large trunk between shoulder and flank.',function:'Encloses the rib cage, lungs, heart, and much of the digestive tract. Its expansion is visible during breathing.',memory:'Barrel is a surface region, not one anatomical organ.',sources:sources(['Wikipedia',WIKI])},
+    croup:{layer:'surface',name:'Croup',latin:'Regio sacralis',location:'From the highest point of the hindquarters to the tail head.',function:'Overlies the sacrum, pelvis, and powerful gluteal muscles that contribute to propulsion.',memory:'Croup carries the engine room of forward thrust.',sources:sources(['Wikipedia',WIKI])},
+    forelimb:{layer:'surface',name:'Forelimb',latin:'Membrum thoracicum',location:'Shoulder through hoof.',function:'Receives roughly the greater share of body weight and absorbs impact. It has no bony collarbone connection to the trunk; a muscular sling suspends the chest between the limbs.',memory:'The forelimb is attached to the trunk by muscle, not a clavicle.',sources:sources(['Horse anatomy',WIKI],['Horse', 'https://en.wikipedia.org/wiki/Horse#Anatomy'])},
+    hindlimb:{layer:'surface',name:'Hindlimb',latin:'Membrum pelvicum',location:'Hip through hoof.',function:'The pelvis connects the hindlimb directly to the spine. Large hip and thigh muscles generate much of the horse’s forward propulsion.',memory:'Forelimbs receive; hindlimbs propel.',sources:sources(['Skeletal system',SKELETON])},
+    hoof:{layer:'surface',name:'Hoof',latin:'Ungula',location:'The distal end of each limb, surrounding the third phalanx.',function:'A keratinized capsule protects internal structures, bears weight, absorbs impact, and deforms slightly under load.',memory:'The visible hoof is a capsule around living, sensitive structures.',sources:sources(['Wikipedia',WIKI])},
+    skull:{layer:'skeleton',name:'Skull',latin:'Cranium',location:'Bony framework of the head.',function:'Protects the brain and sensory organs, supports the teeth and sinuses, and provides extensive muscle attachment.',memory:'Large jaws and long tooth roots occupy far more of the equine skull than the braincase.',sources:sources(['Skeletal system',SKELETON])},
+    'vertebral-column':{layer:'skeleton',name:'Vertebral column',latin:'Columna vertebralis',location:'From skull through neck, back, loin, sacrum, and tail.',function:'Supports the axial body, protects the spinal cord, transfers force, and provides attachment for ribs and muscles.',memory:'Think C–T–L–S–Cd: cervical, thoracic, lumbar, sacral, caudal.',sources:sources(['Skeletal system',SKELETON])},
+    ribs:{layer:'skeleton',name:'Rib cage',latin:'Costae',location:'Thorax, attached to thoracic vertebrae.',function:'Protects the heart and lungs while moving with respiration. Horses typically have 18 pairs of ribs.',memory:'18 thoracic vertebrae, 18 rib pairs.',sources:sources(['Equine anatomy',WIKI])},
+    scapula:{layer:'skeleton',name:'Scapula',latin:'Scapula',location:'Flat bone beneath the shoulder region.',function:'Part of the shoulder joint and a broad platform for muscle attachment. It connects to the trunk through muscle rather than a clavicle.',memory:'The shoulder blade floats in a muscular sling.',sources:sources(['Skeletal system',SKELETON])},
+    humerus:{layer:'skeleton',name:'Humerus',latin:'Humerus',location:'Between shoulder and elbow.',function:'Acts as a short, strong lever carrying forces from the shoulder muscles toward the forearm.',memory:'Scapula → humerus → radius: shoulder to elbow to knee.',sources:sources(['Skeletal system',SKELETON])},
+    radius:{layer:'skeleton',name:'Radius',latin:'Radius',location:'Main bone from elbow to carpus.',function:'The principal weight-bearing forearm bone; the ulna is reduced and partly fused in the adult horse.',memory:'The horse’s radius dominates; the ulna is reduced.',sources:sources(['Skeletal system',SKELETON])},
+    carpus:{layer:'skeleton',name:'Carpus (“knee”)',latin:'Carpus',location:'Between radius and cannon bone in the forelimb.',function:'A complex of small bones arranged in rows that flexes the lower limb and helps distribute impact.',memory:'The horse’s “knee” is anatomically a wrist.',sources:sources(['Equine anatomy',WIKI])},
+    metacarpal:{layer:'skeleton',name:'Cannon bone',latin:'Metacarpal III',location:'Between carpus and fetlock.',function:'The enlarged third metacarpal is the main load-bearing bone; reduced second and fourth metacarpals form the splint bones.',memory:'One main digit remains: the cannon is metacarpal III.',sources:sources(['Skeletal system',SKELETON])},
+    pelvis:{layer:'skeleton',name:'Pelvis',latin:'Pelvis',location:'Bony ring of the hindquarters attached to the sacrum.',function:'Transfers propulsive force from hindlimbs into the spine and protects pelvic organs.',memory:'Unlike the shoulder, the pelvis has a direct bony link to the spine.',sources:sources(['Skeletal system',SKELETON])},
+    femur:{layer:'skeleton',name:'Femur',latin:'Femur',location:'Hip to stifle, mostly hidden inside the upper hindlimb.',function:'A powerful lever for hip and stifle muscles; the longest proximal bone of the hindlimb.',memory:'Hip → femur → stifle.',sources:sources(['Skeletal system',SKELETON])},
+    tibia:{layer:'skeleton',name:'Tibia',latin:'Tibia',location:'Stifle to hock.',function:'The main weight-bearing bone of the crus; transmits force from the stifle toward the hock.',memory:'The tibia is the hindlimb counterpart of the radius.',sources:sources(['Skeletal system',SKELETON])},
+    hock:{layer:'skeleton',name:'Hock',latin:'Tarsus',location:'Angular joint between tibia and cannon bone.',function:'A multi-joint complex analogous to the human ankle; it transmits powerful extension generated higher in the limb.',memory:'Hock = ankle, not heel.',sources:sources(['Equine anatomy',WIKI])},
+    metatarsal:{layer:'skeleton',name:'Hind cannon bone',latin:'Metatarsal III',location:'Hock to fetlock.',function:'Main long bone of the lower hindlimb, with splint bones along its sides.',memory:'Metatarsal III mirrors metacarpal III.',sources:sources(['Skeletal system',SKELETON])},
+    'coffin-bone':{layer:'skeleton',name:'Coffin bone',latin:'Distal phalanx / P3',location:'Inside the hoof capsule.',function:'The final phalanx supports the hoof and anchors sensitive and insensitive laminae within the hoof wall.',memory:'P1 long pastern, P2 short pastern, P3 coffin bone.',sources:sources(['Equine anatomy',WIKI])},
+    masseter:{layer:'muscles',name:'Masseter',latin:'Musculus masseter',location:'Large cheek muscle over the rear of the lower jaw.',function:'Elevates the mandible and powers chewing, especially the side-to-side grinding of fibrous forage.',memory:'Masseter = mastication.',sources:sources(['Muscular system',MUSCLES])},
+    brachiocephalicus:{layer:'muscles',name:'Brachiocephalicus',latin:'Musculus brachiocephalicus',location:'Long strap from head/neck toward the humerus.',function:'Draws the forelimb forward when the head is fixed; can bend the neck and head when the limb is fixed.',memory:'Brachio = arm, cephalicus = head: it links them.',sources:sources(['Muscular system',MUSCLES])},
+    trapezius:{layer:'muscles',name:'Trapezius',latin:'Musculus trapezius',location:'Superficial sheet over neck, withers, and scapula.',function:'Elevates and moves the scapula, helping position the forelimb relative to the trunk.',memory:'A thin kite-shaped mover of the shoulder blade.',sources:sources(['Muscular system',MUSCLES])},
+    'latissimus-dorsi':{layer:'muscles',name:'Latissimus dorsi',latin:'Musculus latissimus dorsi',location:'Broad superficial muscle over the back and caudal shoulder.',function:'Draws the forelimb backward and helps flex the shoulder; important during propulsion and braking.',memory:'The broad “swimmer’s muscle” retracts the limb.',sources:sources(['Muscular system',MUSCLES])},
+    pectorals:{layer:'muscles',name:'Pectoral muscles',latin:'Musculi pectorales',location:'Chest between and behind the forelimbs.',function:'Adduct and stabilize the forelimbs and contribute to the muscular sling supporting the trunk.',memory:'Pectorals help keep the chest suspended between the legs.',sources:sources(['Muscular system',MUSCLES])},
+    triceps:{layer:'muscles',name:'Triceps brachii',latin:'Musculus triceps brachii',location:'Behind the upper forelimb between scapula and elbow.',function:'The major extensor of the elbow; stabilizes the limb during weight bearing.',memory:'Triceps straighten the elbow.',sources:sources(['Muscular system',MUSCLES])},
+    'extensor-carpi':{layer:'muscles',name:'Carpal extensors',latin:'Extensor carpi radialis group',location:'Front of the forearm.',function:'Extend and stabilize the carpus during limb advancement and weight bearing.',memory:'Front of forearm = mostly extensors; back = flexor tendons.',sources:sources(['Muscular system',MUSCLES])},
+    'external-oblique':{layer:'muscles',name:'External abdominal oblique',latin:'Musculus obliquus externus abdominis',location:'Broad sheet over the lateral abdomen.',function:'Compresses abdominal contents, supports the viscera, assists forced expiration, and helps flex the trunk.',memory:'A muscular corset around the abdomen.',sources:sources(['Muscular system',MUSCLES])},
+    gluteals:{layer:'muscles',name:'Gluteal muscles',latin:'Musculi glutei',location:'Over the pelvis and croup.',function:'Powerful hip extensors and abductors that contribute strongly to forward propulsion.',memory:'Gluteals power the hip—the start of the hindlimb drive chain.',sources:sources(['Muscular system',MUSCLES])},
+    'biceps-femoris':{layer:'muscles',name:'Biceps femoris',latin:'Musculus biceps femoris',location:'Large superficial muscle of the caudal thigh.',function:'Extends the hip and hock, can extend or flex the stifle depending on phase, and is central to propulsion.',memory:'One muscle spans multiple joints, so its action changes with limb position.',sources:sources(['Muscular system',MUSCLES])},
+    gastrocnemius:{layer:'muscles',name:'Gastrocnemius',latin:'Musculus gastrocnemius',location:'Caudal lower thigh, ending in the common calcaneal tendon.',function:'Extends the hock and contributes to the stay apparatus and push-off.',memory:'The equine calf muscle lifts the heel point of the hock.',sources:sources(['Muscular system',MUSCLES])},
+    'digital-flexor':{layer:'muscles',name:'Digital flexor tendons',latin:'Tendines flexores digitales',location:'Back of the lower limb into the hoof.',function:'Flex the digit and store/return elastic energy; also support the limb during stance.',memory:'Long tendons behave partly like springs.',sources:sources(['Equine anatomy',WIKI])},
+    'nasal-passages':{layer:'organs',name:'Nasal passages',latin:'Cavum nasi',location:'From nostrils through the skull toward the pharynx.',function:'Warm, humidify, and filter air. Horses are obligate nasal breathers and cannot normally breathe through the mouth.',memory:'No mouth breathing: every breath enters through the nose.',sources:sources(['Wikipedia',WIKI],['MSD respiratory',MSD_RESP])},
+    trachea:{layer:'organs',name:'Trachea',latin:'Trachea',location:'Airway from larynx down the neck into the chest.',function:'Conducts air to the bronchi; cartilage rings help keep its lumen open.',memory:'Trachea → bronchi → bronchioles → alveoli.',sources:sources(['MSD respiratory',MSD_RESP])},
+    lungs:{layer:'organs',name:'Lungs',latin:'Pulmones',location:'Paired organs filling much of the thoracic cavity.',function:'Exchange oxygen and carbon dioxide at microscopic alveoli. Ventilation is driven chiefly by the diaphragm and chest wall.',memory:'Air moves; blood flows; gases diffuse at the alveoli.',sources:sources(['Wikipedia',WIKI],['MSD respiratory',MSD_RESP])},
+    heart:{layer:'organs',name:'Heart',latin:'Cor',location:'Between the lungs, slightly left of midline in the thorax.',function:'A four-chambered muscular pump. The right side sends blood to the lungs; the left sends oxygenated blood through the body.',memory:'Right to lungs, left to life.',sources:sources(['Wikipedia',WIKI],['MSD cardiovascular',MSD_HEART])},
+    esophagus:{layer:'organs',name:'Esophagus',latin:'Oesophagus',location:'Muscular tube from pharynx through neck and chest to stomach.',function:'Moves swallowed feed by coordinated muscular contractions. Obstruction here is called choke.',memory:'Choke is esophageal obstruction—not an airway blockage.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    stomach:{layer:'organs',name:'Stomach',latin:'Gaster',location:'Left-front abdomen beneath the ribs.',function:'A relatively small, single stomach begins chemical digestion. Its strong cardia makes vomiting extremely difficult for horses.',memory:'Small stomach + continuous grazer = frequent small meals suit the design.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    liver:{layer:'organs',name:'Liver',latin:'Hepar',location:'Mostly right-front abdomen, just behind the diaphragm.',function:'Processes nutrients, detoxifies blood, stores energy, and produces bile. Horses have no gallbladder, so bile flows continuously.',memory:'Horse liver: bile yes, gallbladder no.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    spleen:{layer:'organs',name:'Spleen',latin:'Lien',location:'Left abdomen, associated with stomach and left kidney.',function:'Filters blood and stores red blood cells; contraction during exercise can add red cells to circulation.',memory:'The spleen acts as a reserve tank for red blood cells.',sources:sources(['MSD respiratory',MSD_RESP])},
+    'small-intestine':{layer:'organs',name:'Small intestine',latin:'Intestinum tenue',location:'Long mobile loops in the abdomen: duodenum, jejunum, ileum.',function:'Primary site for enzymatic digestion and absorption of proteins, fats, starches, vitamins, and minerals.',memory:'Small in diameter, long in length, major in absorption.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    cecum:{layer:'organs',name:'Cecum',latin:'Caecum',location:'Large blind-ended fermentation chamber, mainly on the right.',function:'Microbes ferment plant fiber into volatile fatty acids that the horse can use for energy.',memory:'The cecum is the first great fermentation vat of the hindgut.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    'large-colon':{layer:'organs',name:'Large colon',latin:'Colon ascendens',location:'Large folded portions of the ventral and dorsal abdomen.',function:'Continues microbial fermentation and absorbs water and electrolytes. Its bends and diameter changes are clinically important sites for impaction.',memory:'Big folds, sharp turns: know why colic localization matters.',sources:sources(['Wikipedia',WIKI],['MSD digestive',MSD_DIG])},
+    kidney:{layer:'organs',name:'Kidney',latin:'Ren',location:'High against the dorsal abdominal wall; right kidney lies farther forward.',function:'Filters blood, regulates fluid and electrolyte balance, and forms urine.',memory:'The kidneys are dorsal—higher than the intestines in a standing horse.',sources:sources(['Wikipedia',WIKI])},
+    bladder:{layer:'organs',name:'Urinary bladder',latin:'Vesica urinaria',location:'Pelvic floor when empty, extending into the abdomen as it fills.',function:'Stores urine before elimination through the urethra.',memory:'Position changes with fullness.',sources:sources(['Wikipedia',WIKI])}
+  };
+
+  const atlas=document.getElementById('atlas'), panel=document.getElementById('detailPanel'), locator=document.getElementById('locator');
+  let currentLayer='surface', selected=null, zoom=1, quizIndex=0, quizScore=0, quizAnswered=false;
+  const layerNames={surface:'Exterior',skeleton:'Skeleton',muscles:'Muscles',organs:'Organs'};
+  const esc=s=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  function switchLayer(layer){currentLayer=layer;document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.layer===layer));document.querySelectorAll('[data-layer-group]').forEach(g=>g.classList.toggle('active',g.dataset.layerGroup===layer));locator.textContent=`${layerNames[layer]} layer · select a highlighted structure`;selected=null;clearSelection();renderList();}
+  function clearSelection(){document.querySelectorAll('.structure').forEach(s=>s.classList.remove('selected','dim'));}
+  function renderList(){const items=Object.entries(data).filter(([,v])=>v.layer===currentLayer);panel.innerHTML=`<div class="empty"><span class="big">${currentLayer==='skeleton'?'🦴':currentLayer==='muscles'?'◒':currentLayer==='organs'?'♡':'↖'}</span><p>Select a structure in the diagram or choose one below.</p></div><div class="structure-list"><h3>${layerNames[currentLayer]} structures</h3><div class="chips">${items.map(([id,v])=>`<button class="chip" data-select="${id}">${esc(v.name)}</button>`).join('')}</div></div>`;}
+  function select(id,scroll=true){const item=data[id];if(!item)return;if(item.layer!==currentLayer)switchLayer(item.layer);selected=id;clearSelection();document.querySelectorAll(`.structure[data-id="${CSS.escape(id)}"]`).forEach(s=>s.classList.add('selected'));document.querySelectorAll(`[data-layer-group="${item.layer}"] .structure:not([data-id="${CSS.escape(id)}"])`).forEach(s=>s.classList.add('dim'));locator.textContent=item.name;panel.innerHTML=`<article class="detail"><div class="eyebrow">${layerNames[item.layer]} · selected structure</div><h2>${esc(item.name)}</h2><div class="latin">${esc(item.latin)}</div><div class="fact"><h3>Where it is</h3><p>${esc(item.location)}</p></div><div class="fact"><h3>What it does</h3><p>${esc(item.function)}</p></div><div class="memory"><strong>Study hook</strong><p>${esc(item.memory)}</p></div><div class="fact"><h3>Read the sources</h3><div class="source-links">${item.sources.map(s=>`<a href="${s.url}" target="_blank" rel="noreferrer">${esc(s.label)} ↗</a>`).join('')}</div></div></article>`;if(scroll&&matchMedia('(max-width:820px)').matches)panel.scrollIntoView({behavior:'smooth',block:'start'});}
+  document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchLayer(b.dataset.layer)));
+  atlas.addEventListener('click',e=>{const el=e.target.closest('.structure');if(el)select(el.dataset.id);});
+  panel.addEventListener('click',e=>{const b=e.target.closest('[data-select]');if(b)select(b.dataset.select,false);});
+  const search=document.getElementById('search');search.addEventListener('input',()=>{const q=search.value.trim().toLowerCase();clearSelection();if(!q){renderList();return;}const hits=Object.entries(data).filter(([,v])=>`${v.name} ${v.latin} ${v.location} ${v.function}`.toLowerCase().includes(q));panel.innerHTML=`<div class="structure-list"><h3>${hits.length} search result${hits.length===1?'':'s'}</h3><div class="chips">${hits.map(([id,v])=>`<button class="chip" data-select="${id}">${esc(v.name)} · ${layerNames[v.layer]}</button>`).join('')||'<p class="empty">No structure found.</p>'}</div></div>`;});
+  document.getElementById('labelsBtn').addEventListener('click',e=>{atlas.classList.toggle('labels-on');const on=atlas.classList.contains('labels-on');e.currentTarget.classList.toggle('active',on);e.currentTarget.setAttribute('aria-pressed',on);});
+  function applyZoom(){atlas.style.transform=`scale(${zoom})`;}document.getElementById('zoomIn').onclick=()=>{zoom=Math.min(1.8,zoom+.15);applyZoom()};document.getElementById('zoomOut').onclick=()=>{zoom=Math.max(.7,zoom-.15);applyZoom()};document.getElementById('resetView').onclick=()=>{zoom=1;applyZoom();clearSelection();selected=null;renderList()};
+  document.getElementById('randomBtn').onclick=()=>{const keys=Object.keys(data);select(keys[Math.floor(Math.random()*keys.length)]);};
+
+  const questions=[
+    {q:'Which joint is anatomically equivalent to the human wrist?',a:'Carpus (“knee”)',choices:['Hock','Carpus (“knee”)','Fetlock','Stifle'],note:'The equine carpus is a multi-bone wrist complex in the forelimb.'},
+    {q:'Where does most microbial fiber fermentation occur?',a:'Cecum and large colon',choices:['Stomach only','Small intestine','Cecum and large colon','Liver'],note:'Horses are hindgut fermenters; microbes in the cecum and colon convert fiber into usable volatile fatty acids.'},
+    {q:'What links a horse’s forelimb to its trunk?',a:'A muscular sling',choices:['A clavicle','A muscular sling','The sternum directly','The first rib'],note:'Horses lack a clavicle; muscles and connective tissues suspend the thorax between the forelimbs.'},
+    {q:'Which organ is absent in the horse?',a:'Gallbladder',choices:['Spleen','Pancreas','Gallbladder','Cecum'],note:'The liver still produces bile, but horses have no gallbladder; bile drains continuously.'},
+    {q:'Why must a horse breathe through its nostrils?',a:'It is an obligate nasal breather',choices:['Its lungs are too small','It is an obligate nasal breather','Its tongue blocks the nose','Its trachea closes at rest'],note:'The equine upper airway anatomy normally prevents mouth breathing.'},
+    {q:'Which region supplies much of the propulsive power?',a:'Hindquarters',choices:['Muzzle','Forearm','Hindquarters','Withers'],note:'The pelvis and large hip/thigh muscles transfer force into forward motion.'},
+    {q:'The cannon bone is primarily which digit?',a:'Third metacarpal/metatarsal',choices:['First','Second','Third metacarpal/metatarsal','Fifth'],note:'The third metacarpal or metatarsal is enlarged; the second and fourth survive as reduced splint bones.'},
+    {q:'What is the main gas-exchange site in the lungs?',a:'Alveoli',choices:['Bronchi','Trachea','Alveoli','Pleura'],note:'Thin alveolar membranes allow oxygen and carbon dioxide to diffuse between air and blood.'}
+  ];
+  const overlay=document.getElementById('quizOverlay'), qTitle=document.getElementById('quizTitle'), answers=document.getElementById('answers'), note=document.getElementById('quizNote'), next=document.getElementById('nextQuiz');
+  function openQuiz(){quizIndex=0;quizScore=0;overlay.classList.add('open');renderQuestion();}
+  function renderQuestion(){quizAnswered=false;next.hidden=true;note.textContent='';const item=questions[quizIndex];document.getElementById('quizCount').textContent=`Question ${quizIndex+1} of ${questions.length}`;document.getElementById('quizProgress').style.width=`${quizIndex/questions.length*100}%`;qTitle.textContent=item.q;answers.innerHTML=item.choices.map(c=>`<button class="answer">${esc(c)}</button>`).join('');}
+  answers.addEventListener('click',e=>{const b=e.target.closest('.answer');if(!b||quizAnswered)return;quizAnswered=true;const item=questions[quizIndex];answers.querySelectorAll('.answer').forEach(x=>{if(x.textContent===item.a)x.classList.add('correct')});if(b.textContent===item.a){quizScore++;note.textContent=`Correct. ${item.note}`}else{b.classList.add('wrong');note.textContent=`Not quite. ${item.note}`}next.hidden=false;next.textContent=quizIndex===questions.length-1?'See results':'Next question';});
+  next.onclick=()=>{quizIndex++;if(quizIndex>=questions.length){qTitle.textContent=`${quizScore} / ${questions.length}`;answers.innerHTML='';note.textContent=quizScore===questions.length?'Perfect score. The horse has no more secrets today.':quizScore>=6?'Strong work. Review one or two missed systems, then run it again.':'Use the layer explorer to review the missed systems, then try again.';next.textContent='Restart quiz';next.hidden=false;next.onclick=openQuiz;document.getElementById('quizProgress').style.width='100%';}else renderQuestion();};
+  document.getElementById('quizBtn').onclick=openQuiz;document.getElementById('closeQuiz').onclick=()=>overlay.classList.remove('open');overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.classList.remove('open')});document.addEventListener('keydown',e=>{if(e.key==='Escape')overlay.classList.remove('open');if(e.key==='/'&&!overlay.classList.contains('open')){e.preventDefault();search.focus();}});
+  renderList();
+})();
+</script>
+</body>
+</html>
