@@ -89,7 +89,7 @@
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
-      const VERSION = '20260630.28';
+      const VERSION = '20260630.29';
       const COMMIT  = 'pending';
 
       const stage          = document.getElementById('stage');
@@ -137,6 +137,7 @@
       const gebCoverImg = new Image(); gebCoverImg.src = 'assets/geb-cover.jpg';
       const paleBlueDotCoverImg = new Image(); paleBlueDotCoverImg.src = 'assets/pale-blue-dot-cover.jpg';
       const qrCodeImg = new Image(); qrCodeImg.src = 'assets/adividiardi-qr.png';
+      const eveningHorseImg = new Image(); eveningHorseImg.src = 'assets/evening-horse-head.png';
       const catMeowAudio = new Audio('meow.mp3');
       let cat           = null;   // reference to world-cup AppParticle after seed
       let catCursorX    = -9999;  // cursor position for pet-seeking
@@ -492,6 +493,7 @@
           { path: 'pretext-demo',     color: '#354027' }, // dark sage
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
           { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 10.0, speed: 0.97 }, // QR code orb
+          { path: 'evening',          color: '#6b3525', orbImg: eveningHorseImg, r0: 10.4, speed: 0.94 }, // October Evening memorial orb
           { path: 'world-cup',        color: '#d8dee2', emoji: '⚽', speed: 1.06 }, // soccer orb
           { path: 'library/#schilds-ladder', color: '#39415f', cardImg: gregEganCoverImg, r0: 10.0, speed: 0.96 }, // Schild's Ladder library orb
           { url: 'https://cubecobra.com/cube/list/553c1c94-5665-4aa5-a18a-30b15e684ddc?display=spoiler', color: '#665034', cardImg: cubeCobraCardbackImg, r0: 10.2, speed: 0.98 }, // Cube Cobra cardback orb

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A memorial for October Evening, a beloved mahogany bay mare, 1964–1993.">
+  <title>October Evening · Adividiardi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --night: #080706;
+      --ink: rgba(244, 229, 207, 0.88);
+      --muted: rgba(244, 229, 207, 0.58);
+      --rule: rgba(231, 185, 126, 0.16);
+      --panel: rgba(255, 240, 218, 0.035);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 76% 6%, rgba(150, 76, 35, 0.15), transparent 31%),
+        linear-gradient(180deg, #17100b 0, var(--night) 52%, #050504 100%);
+      font-family: Cambria, Georgia, "Times New Roman", serif;
+    }
+    a { color: inherit; }
+    main {
+      width: min(1100px, calc(100% - 28px));
+      margin: 22px auto 54px;
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      border-radius: 28px;
+      background: rgba(5, 5, 4, 0.68);
+      box-shadow: 0 28px 100px rgba(0,0,0,0.42);
+    }
+    .top {
+      position: relative;
+      min-height: min(76vh, 760px);
+      display: grid;
+      align-items: end;
+      isolation: isolate;
+    }
+    .top::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      background:
+        linear-gradient(90deg, rgba(5,5,4,0.48), transparent 58%),
+        linear-gradient(0deg, rgba(5,5,4,0.95), transparent 58%);
+    }
+    .hero {
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+    .back {
+      position: absolute;
+      top: 26px;
+      left: clamp(24px, 5vw, 52px);
+      font: 12px/1.2 system-ui, sans-serif;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: rgba(255,245,229,.74);
+    }
+    .title {
+      padding: clamp(30px, 6vw, 66px);
+      max-width: 720px;
+    }
+    .kicker {
+      margin: 0 0 14px;
+      color: rgba(244,229,207,.66);
+      font: 12px/1.3 system-ui, sans-serif;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0;
+      color: rgba(255,242,222,.94);
+      font-weight: 400;
+      font-size: clamp(52px, 9vw, 102px);
+      line-height: .88;
+      letter-spacing: -.03em;
+    }
+    .dates {
+      margin: 20px 0 0;
+      color: rgba(244,229,207,.68);
+      font-size: clamp(17px, 2vw, 21px);
+      letter-spacing: .08em;
+    }
+    .content {
+      padding: clamp(34px, 7vw, 74px);
+      display: grid;
+      gap: clamp(52px, 8vw, 90px);
+    }
+    .lead {
+      max-width: 760px;
+      margin: 0 auto;
+      text-align: center;
+      font-size: clamp(22px, 3vw, 31px);
+      line-height: 1.55;
+      color: rgba(244,229,207,.82);
+    }
+    .memories {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+    .memory {
+      padding: clamp(24px, 4vw, 38px);
+      border: 1px solid var(--rule);
+      border-radius: 22px;
+      background: linear-gradient(160deg, var(--panel), transparent);
+    }
+    .memory h2 {
+      margin: 0 0 14px;
+      color: rgba(244,229,207,.88);
+      font-weight: 400;
+      font-size: clamp(25px, 3vw, 36px);
+    }
+    .memory p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.68;
+    }
+    .poem {
+      max-width: 650px;
+      margin: 0 auto;
+      padding: clamp(30px, 6vw, 58px);
+      border-block: 1px solid var(--rule);
+      text-align: center;
+    }
+    .poem h2 {
+      margin: 0 0 30px;
+      font-weight: 400;
+      font-size: clamp(30px, 5vw, 48px);
+    }
+    .poem p {
+      margin: 0;
+      color: rgba(244,229,207,.75);
+      font-size: clamp(18px, 2.4vw, 23px);
+      line-height: 1.85;
+      font-style: italic;
+    }
+    .dedication {
+      text-align: center;
+      color: var(--muted);
+      font-size: 15px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    @media (max-width: 700px) {
+      main { width: calc(100% - 16px); margin-top: 8px; border-radius: 22px; }
+      .top { min-height: 72vh; }
+      .top::after {
+        background:
+          linear-gradient(0deg, rgba(5,5,4,.97), rgba(5,5,4,.05) 68%),
+          linear-gradient(90deg, rgba(5,5,4,.2), transparent);
+      }
+      .hero { object-position: 64% center; }
+      .memories { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header class="top">
+      <img class="hero" src="/assets/evening-memorial.png" alt="Painted portrait of October Evening, a mahogany bay mare at sunset">
+      <a class="back" href="/">Adividiardi</a>
+      <div class="title">
+        <p class="kicker">In loving memory</p>
+        <h1>October<br>Evening</h1>
+        <p class="dates">1964 — September 15, 1993</p>
+      </div>
+    </header>
+
+    <div class="content">
+      <p class="lead">A mahogany bay mare with a white diamond and its small falling trail, Evening was strong, singular, and deeply loved. Christina called her companion. William, as a baby, called her “Eegy.”</p>
+
+      <section class="memories" aria-label="Memories of Evening">
+        <article class="memory">
+          <h2>On your mark</h2>
+          <p>Christina rode her bareback. “On your mark, get set”—a wiggle of the reins—and Evening would rear, gather herself, and fly. Christina could vault over her hindquarters and land on her back as though horse and rider had rehearsed it forever.</p>
+        </article>
+        <article class="memory">
+          <h2>Her own mind</h2>
+          <p>Evening was a good jumper and a good horse. She did not care for other horses, and made no apology for it. She knew what she liked: apples, carrots, hay, open ground, and the people she had chosen.</p>
+        </article>
+        <article class="memory">
+          <h2>Her mark</h2>
+          <p>Her coat was a deep reddish bay, her mane dark. A diamond-shaped star brightened her forehead, with a short white trail beneath it; one white sock marked her left hind leg.</p>
+        </article>
+        <article class="memory">
+          <h2>At rest</h2>
+          <p>Her affection was quiet and unmistakable. She would place her head on a shoulder and leave it there—her great weight made gentle, her trust given without reserve.</p>
+        </article>
+      </section>
+
+      <section class="poem" aria-labelledby="poem-title">
+        <h2 id="poem-title">For Evening</h2>
+        <p>
+          You carried no need to be tame,<br>
+          only the kindness of choosing us.<br><br>
+          At a whisper and a loosened rein<br>
+          you gathered the field beneath you—<br>
+          red as the last light,<br>
+          quick as a promise kept.<br><br>
+          Now evening comes by your old name:<br>
+          a diamond in the deepening sky,<br>
+          one bright trail beneath it,<br>
+          and the remembered weight of your head<br>
+          resting softly on a shoulder.
+        </p>
+      </section>
+
+      <p class="dedication">For Evening — from Christina and William</p>
+    </div>
+  </main>
+</body>
+</html>
