@@ -1,0 +1,17 @@
+---
+title: Handmade Web
+subtitle: On building pages without a pipeline
+date: 2026-07-03
+tags: [web, making]
+excerpt: There is a quiet pleasure in writing HTML directly into a text file and watching a browser render it. No framework. No bundler. Just an editor, a few keystrokes, and the immediate feedback loop of refresh-and-see.
+---
+
+There is a quiet pleasure in writing HTML directly into a text file and watching a browser render it. No framework. No bundler. No `node_modules` directory heavier than a neutron star. Just an editor, a few keystrokes, and the immediate feedback loop of refresh-and-see.
+
+This is not a principled stance against tooling. The right tool at the right scale is a genuine force multiplier. But something is lost when every page must survive the assembly line before it can exist. The friction of setup becomes a filter, and thoughts that would have become pages simply evaporate somewhere between `create-next-app` and the first component tree.
+
+This site is an attempt to lower that threshold to zero. Each page is a self-contained HTML file, dropped into a directory, served directly from a public repository. No build step means no latency between wanting a page and having one. That immediacy changes the relationship between thought and artifact. When the cost of publishing is near-zero, writing becomes as casual as thinking out loud.
+
+There are tradeoffs, naturally. No templating means repetition. No preprocessing means no variables or includes. Every improvement to the visual language of the site must be propagated by hand across every page that shares it. But this constraint turns out to be generative: it forces you to decide what matters enough to replicate, and what can be allowed to vary. The result is a site that feels alive at the edges, each page a sibling rather than a clone.
+
+The web was designed for this. A plain text file, a URL, and a browser — that is the entire stack. Everything else is an optimization we've mistaken for a requirement.

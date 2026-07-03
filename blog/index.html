@@ -9,9 +9,14 @@
       color-scheme: dark;
       --bg: #040507;
       --bg2: #090b10;
+      --panel: rgba(255,255,255,0.022);
+      --panel-hover: rgba(255,255,255,0.045);
       --ink: rgba(232,224,209,0.82);
       --muted: rgba(232,224,209,0.58);
+      --faint: rgba(232,224,209,0.36);
       --rule: rgba(232,224,209,0.10);
+      --accent: rgba(232,224,209,0.16);
+      --accent-strong: rgba(232,224,209,0.28);
       --shadow: 0 24px 80px rgba(0,0,0,0.30);
     }
     * { box-sizing: border-box; }
@@ -26,108 +31,699 @@
     }
     body {
       min-height: 100dvh;
-      display: grid;
-      place-items: center;
-      padding: 32px 18px;
+      padding: 32px 18px 64px;
     }
     main {
-      width: min(720px, 100%);
+      width: min(860px, 100%);
+      margin: 0 auto;
       border: 1px solid var(--rule);
       border-radius: 28px;
-      padding: clamp(26px, 5vw, 54px);
+      padding: clamp(26px, 5vw, 48px);
       background: rgba(255,255,255,0.018);
       box-shadow: var(--shadow);
     }
-    a {
-      color: rgba(232,224,209,0.58);
-      text-decoration: none;
-    }
+    a { color: rgba(232,224,209,0.58); text-decoration: none; transition: color 160ms ease; }
     a:hover { color: rgba(232,224,209,0.88); }
     .back {
       display: inline-block;
-      margin-bottom: 34px;
+      margin-bottom: 28px;
       font-size: 13px;
       letter-spacing: 0.12em;
       text-transform: uppercase;
     }
     h1 {
-      margin: 0 0 8px;
+      margin: 0 0 28px;
       font-weight: 400;
       font-size: clamp(42px, 8vw, 76px);
       line-height: 0.95;
       color: rgba(232,224,209,0.88);
     }
-    .subtitle {
-      margin: 0 0 40px;
-      font-size: clamp(18px, 2.4vw, 22px);
-      line-height: 1.45;
+
+    /* ── toolbar ─────────────────────────── */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .search-wrap {
+      flex: 1;
+      min-width: 180px;
+      position: relative;
+    }
+    .search-wrap::before {
+      content: "⌕";
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-55%);
+      font-size: 16px;
+      color: var(--faint);
+      pointer-events: none;
+    }
+    .search-input {
+      width: 100%;
+      padding: 10px 38px 10px 38px;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 180ms ease, background 180ms ease;
+    }
+    .search-input::placeholder { color: var(--faint); }
+    .search-input:focus {
+      border-color: var(--accent-strong);
+      background: var(--panel-hover);
+    }
+    .search-clear {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--faint);
+      cursor: pointer;
+      font-size: 18px;
+      line-height: 1;
+      padding: 0 6px;
+      display: none;
+    }
+    .search-clear.visible { display: block; }
+    .search-clear:hover { color: var(--ink); }
+    .post-count {
+      font-size: 13px;
+      color: var(--faint);
+      white-space: nowrap;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── tags ────────────────────────────── */
+    .tag-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 28px;
+      align-items: center;
+    }
+    .tag-chip {
+      all: unset;
+      padding: 5px 14px;
+      border: 1px solid var(--rule);
+      border-radius: 999px;
+      font-size: 13px;
+      cursor: pointer;
       color: var(--muted);
+      background: transparent;
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+      letter-spacing: 0.03em;
+    }
+    .tag-chip:hover { border-color: var(--accent); color: var(--ink); }
+    .tag-chip.active {
+      background: rgba(232,224,209,0.08);
+      border-color: var(--accent-strong);
+      color: var(--ink);
+    }
+    .tag-chip .count {
+      margin-left: 4px;
+      opacity: 0.5;
+      font-size: 11px;
+    }
+    .tag-chip.active .count { opacity: 0.8; }
+
+    /* ── layout ──────────────────────────── */
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 180px;
+      gap: clamp(24px, 4vw, 44px);
+      align-items: start;
+    }
+
+    /* ── posts ───────────────────────────── */
+    .posts { display: grid; gap: 14px; }
+    .post-card {
+      display: block;
+      padding: clamp(16px, 3vw, 24px);
+      border: 1px solid var(--rule);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.028), var(--panel));
+      color: inherit;
+      text-decoration: none;
+      transition: border-color 200ms ease, background 200ms ease;
+    }
+    .post-card:hover {
+      border-color: var(--accent-strong);
+      background: var(--panel-hover);
+      color: inherit;
+    }
+    .post-card .date {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 8px;
+    }
+    .post-card h2 {
+      margin: 0 0 6px;
       font-weight: 400;
+      font-size: clamp(22px, 3.4vw, 30px);
+      line-height: 1.1;
+      color: rgba(232,224,209,0.90);
+    }
+    .post-card .subtitle {
+      margin: 0 0 10px;
+      font-size: clamp(14px, 1.9vw, 17px);
+      line-height: 1.4;
+      color: var(--muted);
       font-style: italic;
     }
-    .body {
+    .post-card .excerpt {
+      font-size: clamp(14px, 1.8vw, 16px);
+      line-height: 1.58;
+      color: var(--ink);
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* ── empty / loading ─────────────────── */
+    .empty, .loading {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--muted);
+    }
+    .empty .icon { font-size: 40px; margin-bottom: 12px; opacity: 0.4; }
+    .empty p { margin: 0; font-size: 16px; font-style: italic; }
+    .loading p { margin: 0; font-size: 15px; }
+
+    /* ── archive sidebar ─────────────────── */
+    .archive { border-left: 1px solid var(--rule); padding-left: 20px; }
+    .archive h3 {
+      margin: 0 0 14px;
+      font-weight: 400;
+      font-size: 13px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+    .archive-year { margin-bottom: 8px; }
+    .archive-year-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+      letter-spacing: 0.04em;
+    }
+    .archive-month {
+      display: block;
+      width: 100%;
+      padding: 3px 8px 3px 12px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--faint);
+      font-family: inherit;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      transition: background 140ms ease, color 140ms ease;
+      letter-spacing: 0.03em;
+    }
+    .archive-month:hover { background: var(--panel); color: var(--ink); }
+    .archive-month.active {
+      background: rgba(232,224,209,0.06);
+      color: var(--ink);
+    }
+    .archive-month .month-count {
+      float: right;
+      opacity: 0.45;
+      font-size: 11px;
+    }
+
+    /* ── post view ───────────────────────── */
+    .back-post {
+      display: inline-block;
+      margin-bottom: 24px;
+      font-size: 13px;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+    }
+    .post-date {
+      margin: 0 0 14px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+    .post-h1 {
+      margin: 0 0 8px;
+      font-weight: 400;
+      font-size: clamp(38px, 7vw, 56px);
+      line-height: 1.0;
+      color: rgba(232,224,209,0.88);
+    }
+    .post-subtitle {
+      margin: 0 0 36px;
+      font-size: clamp(17px, 2.2vw, 20px);
+      line-height: 1.45;
+      color: var(--muted);
+      font-style: italic;
+    }
+    .post-body {
       max-width: 62ch;
     }
-    .body p {
+    .post-body p {
       margin: 0;
       font-size: clamp(17px, 2.2vw, 20px);
       line-height: 1.65;
     }
-    .body p + p {
-      margin-top: 20px;
+    .post-body p + p { margin-top: 20px; }
+    .post-body strong { color: rgba(232,224,209,0.90); font-weight: 600; }
+    .post-body em { color: var(--ink); }
+    .post-body code {
+      background: rgba(255,255,255,0.06);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: monospace;
     }
-    .body strong {
-      color: rgba(232,224,209,0.90);
-      font-weight: 600;
-    }
-    .rule {
-      margin: 44px 0;
-      border: none;
+    .post-body a { color: rgba(232,224,209,0.72); text-decoration: underline; }
+    .post-nav {
+      margin-top: 48px;
+      padding-top: 24px;
       border-top: 1px solid var(--rule);
+      display: flex;
+      justify-content: space-between;
+    }
+    .post-nav a {
+      display: flex;
+      flex-direction: column;
+      max-width: 48%;
+    }
+    .post-nav .dir {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-bottom: 4px;
+    }
+    .post-nav .label {
+      font-size: clamp(14px, 1.8vw, 16px);
+      line-height: 1.25;
+    }
+    .post-nav .prev { text-align: left; }
+    .post-nav .next { text-align: right; margin-left: auto; }
+
+    /* ── mobile ──────────────────────────── */
+    @media (max-width: 680px) {
+      body { padding-inline: 12px; }
+      main { border-radius: 24px; }
+      .layout {
+        grid-template-columns: 1fr;
+        gap: 28px;
+      }
+      .archive {
+        border-left: none;
+        border-top: 1px solid var(--rule);
+        padding-left: 0;
+        padding-top: 18px;
+      }
     }
   </style>
 </head>
 <body>
-  <main>
-    <a class="back" href="/">Adividiardi</a>
-    <h1>The Geometry<br>of Adaptive Belief</h1>
-    <p class="subtitle">Permeability, Coherence, and the Evolution of Internal Models</p>
+  <main id="main"></main>
 
-    <div class="body">
-      <p>One of the recurring themes in science is that the universe does not appear to build complexity by violating its own laws, but by exploiting them. Every major increase in complexity seems to arise not from escaping physical constraints, but from discovering new ways of operating within them.</p>
+  <script>
+    (() => {
+      const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      const $main = document.getElementById('main');
 
-      <p>A star does not violate gravity. It exists because gravity and nuclear fusion reach a dynamic equilibrium. Likewise, life does not violate the second law of thermodynamics. Every organism is an open system that maintains local order only by exporting entropy into its surroundings. The remarkable feature of living systems is therefore not that they escape physical law, but that they exploit the freedom permitted by physical law to sustain highly organized states over time.</p>
+      /* ── config ─────────────────────────────── */
+      function repoInfo() {
+        const host = window.location.hostname;
+        if (host === 'www.adividiardi.com') return { owner: 'williamrachuy', repo: 'williamrachuy.github.io' };
+        const parts = host.split('.');
+        if (parts[1] === 'github' && parts[2] === 'io') {
+          return { owner: parts[0], repo: parts[0] + '.github.io' };
+        }
+        return { owner: 'williamrachuy', repo: 'williamrachuy.github.io' };
+      }
 
-      <p>This observation suggests a broader question. If biological evolution represents a transition in the way matter organizes itself, might cognition represent another transition altogether?</p>
+      /* ── state ─────────────────────────────── */
+      let posts      = [];
+      let searchQ    = '';
+      let activeTags = new Set();
+      let dateYM     = null;
+      let activePost = null;    /* slug of viewed post, or null = listing */
+      let loading    = true;
 
-      <p>A rock requires no model of the universe. Its future is determined entirely by its present state and the forces acting upon it. Living organisms are different. They survive precisely because they possess internal states that are <em>not identical</em> to the external world. Those internal states encode expectations, predictions, and strategies that guide future action. Evolution can therefore be viewed as the gradual refinement of internal models that improve an organism's ability to persist.</p>
+      /* ── utilities ─────────────────────────── */
+      function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+      function fmtDate(iso) {
+        const d = new Date(iso + 'T12:00:00');
+        return MONTHS[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+      }
 
-      <p>Human cognition extends this process further. We no longer operate merely through instinct or immediate perception. We construct elaborate internal representations of reality: scientific theories, religions, moral systems, political ideologies, cultural traditions, personal identities, and narratives about both ourselves and the world. These structures are not reality itself. They are models through which reality is interpreted.</p>
+      /* ── filtering ─────────────────────────── */
+      function searchText(p) {
+        return [p.title, p.subtitle, p.excerpt, ...(p.tags||[]), p.raw||'']
+          .filter(Boolean).join(' ').toLowerCase();
+      }
 
-      <p>The existence of such models immediately creates an interesting tension.</p>
+      function filteredPosts() {
+        const tokens = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        return posts.filter(p => {
+          if (dateYM) {
+            const d = new Date(p.date + 'T12:00:00');
+            if (d.getFullYear() !== dateYM.year || d.getMonth() + 1 !== dateYM.month) return false;
+          }
+          if (activeTags.size > 0) {
+            if (!(p.tags||[]).some(t => activeTags.has(t))) return false;
+          }
+          if (tokens.length > 0) {
+            const hay = searchText(p);
+            if (!tokens.every(t => hay.includes(t))) return false;
+          }
+          return true;
+        });
+      }
 
-      <p>A model that perfectly reproduced reality would be indistinguishable from reality itself and would therefore provide little computational advantage. The purpose of a model is compression. It sacrifices detail in exchange for tractability. Every useful model is therefore, in some sense, wrong. The relevant question is not whether a model is perfectly true, but whether it preserves the information necessary for successful interaction with the world.</p>
+      function allTags() {
+        const map = new Map();
+        posts.forEach(p => (p.tags||[]).forEach(t => map.set(t, (map.get(t)||0) + 1)));
+        return [...map.entries()].sort((a,b) => a[0].localeCompare(b[0]));
+      }
 
-      <p>This is hardly a new observation. Science itself proceeds through successive approximations. Newtonian mechanics is not fundamentally correct, yet it remains extraordinarily useful because, within an appropriate domain, it preserves precisely those features of reality needed to make reliable predictions. The usefulness of a model depends not upon its perfection but upon the relationship between its simplifications and the environment in which it is applied.</p>
+      function archiveTree() {
+        const map = new Map();
+        posts.forEach(p => {
+          const d = new Date(p.date + 'T12:00:00');
+          const y = d.getFullYear(), m = d.getMonth() + 1;
+          if (!map.has(y)) map.set(y, new Map());
+          map.get(y).set(m, (map.get(y).get(m)||0) + 1);
+        });
+        return [...map.keys()].sort((a,b) => b - a).map(y => ({
+          year: y, months: [...map.get(y).entries()].sort((a,b) => b[0] - a[0])
+        }));
+      }
 
-      <p>It is tempting, at this point, to imagine an axis running between truth and falsehood. The more I have thought about it, however, the less satisfactory that picture has become.</p>
+      /* ── markdown parser ───────────────────── */
+      function inlineMd(s) {
+        return esc(s)
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>')
+          .replace(/_([^_]+)_/g, '<em>$1</em>')
+          .replace(/`([^`]+)`/g, '<code>$1</code>')
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      }
 
-      <p>A better distinction may be between <strong>rigidity</strong> and <strong>permeability</strong>.</p>
+      function parseMd(raw) {
+        const m = raw.match(/^---\s*\n([\s\S]*?)\n---\s*\n/);
+        const fm = {};
+        let body = raw;
+        if (m) {
+          const lines = m[1].split('\n');
+          for (const line of lines) {
+            const kv = line.match(/^(\w+):\s*(.+)$/);
+            if (!kv) continue;
+            let val = kv[2].trim();
+            if (val.startsWith('[') && val.endsWith(']'))
+              val = val.slice(1,-1).split(',').map(s => s.trim().replace(/^"|"$/g,'')).filter(Boolean);
+            fm[kv[1]] = val;
+          }
+          body = raw.slice(m[0].length).trim();
+        }
+        let html = '';
+        const lines = body.split('\n');
+        let inP = false;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const h1 = line.match(/^#\s+(.+)/);
+          const h2 = line.match(/^##\s+(.+)/);
+          const h3 = line.match(/^###\s+(.+)/);
+          if (h1 || h2 || h3) {
+            if (inP) { html += '</p>'; inP = false; }
+            const tag = h1 ? 'h1' : h2 ? 'h2' : 'h3';
+            html += '<' + tag + '>' + inlineMd((h1||h2||h3)[1]) + '</' + tag + '>';
+            continue;
+          }
+          if (line.trim() === '') {
+            if (inP) { html += '</p>'; inP = false; }
+            continue;
+          }
+          if (!inP) { html += '<p>'; inP = true; }
+          else { html += ' '; }
+          html += inlineMd(line);
+        }
+        if (inP) html += '</p>';
+        return { fm, html };
+      }
 
-      <p>Every sufficiently complex adaptive system requires internal coherence. Without coherence there can be no persistence, no identity, no long-term planning, and no cumulative learning. Yet coherence carries its own danger. A sufficiently coherent model may eventually become self-preserving. Contradictory evidence is no longer permitted to modify the structure itself; instead it is reinterpreted until it becomes compatible with the existing framework. The model ceases to describe reality and instead begins to defend itself against reality.</p>
+      /* ── data fetching ─────────────────────── */
+      async function fetchPostsGitHub() {
+        const { owner, repo } = repoInfo();
+        const dirUrl = 'https://api.github.com/repos/' + owner + '/' + repo + '/contents/blog/posts';
+        const dirResp = await fetch(dirUrl);
+        if (!dirResp.ok) throw new Error('dir listing failed: ' + dirResp.status);
+        const files = await dirResp.json();
+        if (!Array.isArray(files)) throw new Error('unexpected API response');
+        const mdFiles = files.filter(f => f.name.endsWith('.md'));
+        const results = await Promise.all(mdFiles.map(async f => {
+          try {
+            const resp = await fetch(f.download_url);
+            if (!resp.ok) return null;
+            const raw = await resp.text();
+            const { fm, html } = parseMd(raw);
+            const slug = f.name.replace(/\.md$/, '');
+            return { slug, ...fm, html, raw };
+          } catch(e) { return null; }
+        }));
+        return results.filter(Boolean).sort((a,b) => b.date.localeCompare(a.date));
+      }
 
-      <p>Complete permeability is no better. A system that reconstructs itself from first principles in response to every new observation never develops the stability required for sustained action. Prediction becomes impossible because every belief remains perpetually provisional. Such a system approaches epistemic paralysis.</p>
+      async function fetchPostsLocal() {
+        const resp = await fetch('posts/');
+        if (!resp.ok) throw new Error('cannot list posts directory');
+        const html = await resp.text();
+        const slugs = [];
+        const re = /<a href="([^"]+\.md)">/g;
+        let m;
+        while ((m = re.exec(html)) !== null) {
+          slugs.push(m[1].replace(/\.md$/, ''));
+        }
+        if (slugs.length === 0) throw new Error('no posts found');
+        const results = await Promise.all(slugs.map(async slug => {
+          try {
+            const r = await fetch('posts/' + slug + '.md');
+            if (!r.ok) return null;
+            const raw = await r.text();
+            const { fm, html } = parseMd(raw);
+            return { slug, ...fm, html, raw };
+          } catch(e) { return null; }
+        }));
+        return results.filter(Boolean).sort((a,b) => b.date.localeCompare(a.date));
+      }
 
-      <p>Adaptive intelligence therefore appears to require something intermediate. Internal models must remain coherent enough to organize action while remaining permeable enough to permit revision. They must possess sufficient stability to accumulate knowledge, yet sufficient flexibility to abandon knowledge when reality persistently refuses to cooperate.</p>
+      async function loadPosts() {
+        try {
+          return await fetchPostsGitHub();
+        } catch(e) {
+          return await fetchPostsLocal();
+        }
+      }
 
-      <p>This perspective suggests that the central property of an intelligent system is not the content of its beliefs but the dynamics by which those beliefs change. The update rule may be more fundamental than the model itself.</p>
+      /* ── hash sync ─────────────────────────── */
+      function readHash() {
+        const raw = window.location.hash.replace(/^#/, '');
+        const params = new URLSearchParams(raw);
+        activePost = params.get('post') || null;
+        if (activePost) { searchQ = ''; activeTags.clear(); dateYM = null; return; }
+        searchQ = params.get('search') || '';
+        activeTags.clear();
+        const tags = params.get('tags');
+        if (tags) tags.split(',').forEach(t => { if (t) activeTags.add(t); });
+        const ym = params.get('ym');
+        if (ym) {
+          const [y, m] = ym.split('-').map(Number);
+          if (y && m) dateYM = { year: y, month: m }; else dateYM = null;
+        } else dateYM = null;
+      }
 
-      <p>Viewed in this way, scientific inquiry, biological evolution, and individual psychological development begin to resemble different manifestations of the same underlying process. Each maintains a structured internal state that is continually exposed to external correction. Survival depends neither upon perfect stability nor upon unrestricted flexibility, but upon the capacity to preserve organization while remaining corrigible.</p>
+      function writeHash() {
+        const p = new URLSearchParams();
+        if (activePost) { p.set('post', activePost); }
+        else {
+          if (searchQ) p.set('search', searchQ);
+          if (activeTags.size > 0) p.set('tags', [...activeTags].join(','));
+          if (dateYM) p.set('ym', dateYM.year + '-' + String(dateYM.month).padStart(2,'0'));
+        }
+        const s = p.toString();
+        window.location.hash = s ? '#' + s : '';
+      }
 
-      <p>If this framework is correct, then wisdom may not consist in approaching certainty. Nor does it consist in maximizing skepticism. Both extremes sacrifice adaptation for a single virtue. Wisdom instead lies in maintaining models that remain sufficiently coherent to support action while remaining sufficiently permeable that reality can continue to reshape them.</p>
+      /* ── render: listing ───────────────────── */
+      function renderListing() {
+        const filtered = filteredPosts();
+        const total = posts.length;
+        const countText = (searchQ || activeTags.size > 0 || dateYM)
+          ? filtered.length + ' of ' + total + ' post' + (total !== 1 ? 's' : '')
+          : total + ' post' + (total !== 1 ? 's' : '');
 
-      <p>Perhaps this is a general principle of complex systems. As matter organized into life without abandoning physics, perhaps minds organize themselves through models that never become identical to reality, but never lose contact with it either. The measure of an intelligence may therefore be found less in the correctness of its present beliefs than in the quality of the process by which those beliefs yield to the world.</p>
-    </div>
-  </main>
+        let postsHTML = '';
+        if (filtered.length === 0) {
+          postsHTML = '<div class="empty"><div class="icon">―</div><p>No posts match.</p></div>';
+        } else {
+          postsHTML = filtered.map(p => `
+            <a class="post-card" href="#post=${p.slug}">
+              <div class="date">${fmtDate(p.date)}</div>
+              <h2>${esc(p.title)}</h2>
+              ${p.subtitle ? '<div class="subtitle">'+esc(p.subtitle)+'</div>' : ''}
+              <div class="excerpt">${esc(p.excerpt)}</div>
+            </a>
+          `).join('');
+        }
+
+        let tagHTML = '<button class="tag-chip' + (activeTags.size === 0 ? ' active' : '') + '" data-tag="__all__">All</button>';
+        allTags().forEach(([tag, cnt]) => {
+          tagHTML += '<button class="tag-chip' + (activeTags.has(tag) ? ' active' : '') + '" data-tag="' + esc(tag) + '">' + esc(tag) + '<span class="count">' + cnt + '</span></button>';
+        });
+
+        let archHTML = '<h3>Archive</h3>';
+        archiveTree().forEach(({year, months: entries}) => {
+          archHTML += '<div class="archive-year"><div class="archive-year-label">' + year + '</div>';
+          entries.forEach(([m, c]) => {
+            const active = dateYM && dateYM.year === year && dateYM.month === m;
+            archHTML += '<button class="archive-month' + (active ? ' active' : '') + '" data-ym="' + year + '-' + String(m).padStart(2,'0') + '">' + MONTHS[m-1] + ' <span class="month-count">' + c + '</span></button>';
+          });
+          archHTML += '</div>';
+        });
+
+        const clearVis = searchQ ? ' visible' : '';
+
+        $main.innerHTML = `
+          <a class="back" href="/">Adividiardi</a>
+          <h1>Blog</h1>
+          <div class="toolbar">
+            <div class="search-wrap">
+              <input type="search" class="search-input" id="search" placeholder="Search posts…" autocomplete="off" value="${esc(searchQ)}">
+              <button class="search-clear${clearVis}" id="search-clear" aria-label="Clear search">&times;</button>
+            </div>
+            <span class="post-count" id="post-count">${countText}</span>
+          </div>
+          <div class="tag-bar" id="tag-bar">${tagHTML}</div>
+          <div class="layout">
+            <div class="posts" id="posts">${postsHTML}</div>
+            <aside class="archive" id="archive">${archHTML}</aside>
+          </div>
+        `;
+      }
+
+      /* ── render: post ──────────────────────── */
+      function renderPost() {
+        const p = posts.find(p => p.slug === activePost);
+        if (!p) {
+          $main.innerHTML = '<div class="empty"><div class="icon">―</div><p>Post not found.</p></div>';
+          return;
+        }
+
+        const idx = posts.indexOf(p);
+        const prev = posts[idx + 1] || null;
+        const next = posts[idx - 1] || null;
+
+        let navHTML = '';
+        if (prev) navHTML += '<a class="prev" href="#post=' + prev.slug + '"><span class="dir">Older</span><span class="label">' + esc(prev.title) + '</span></a>';
+        else navHTML += '<span></span>';
+        if (next) navHTML += '<a class="next" href="#post=' + next.slug + '"><span class="dir">Newer</span><span class="label">' + esc(next.title) + '</span></a>';
+        else navHTML += '<span></span>';
+
+        const titleParts = p.title.split(' ');
+        const mid = Math.ceil(titleParts.length / 2);
+        const titleHTML = titleParts.length > 3
+          ? esc(titleParts.slice(0, mid).join(' ')) + '<br>' + esc(titleParts.slice(mid).join(' '))
+          : esc(p.title);
+
+        $main.innerHTML = `
+          <a class="back back-post" href="./"><span style="font-size:15px;margin-right:3px;">←</span> Blog</a>
+          <div class="post-date">${fmtDate(p.date)}</div>
+          <h1 class="post-h1">${titleHTML}</h1>
+          ${p.subtitle ? '<p class="post-subtitle">' + esc(p.subtitle) + '</p>' : ''}
+          <div class="post-body">${p.html}</div>
+          <nav class="post-nav">${navHTML}</nav>
+        `;
+      }
+
+      function renderLoading() {
+        $main.innerHTML = '<div class="loading"><p>Loading posts…</p></div>';
+      }
+
+      /* ── binding helpers ───────────────────── */
+      function bindListing() {
+        const $search = document.getElementById('search');
+        const $clear  = document.getElementById('search-clear');
+        const $tags   = document.getElementById('tag-bar');
+        const $archive = document.getElementById('archive');
+
+        if ($search) $search.addEventListener('input', () => {
+          searchQ = $search.value;
+          activePost = null;
+          renderListing(); bindListing(); writeHash();
+        });
+        if ($clear) $clear.addEventListener('click', () => {
+          if ($search) $search.value = '';
+          searchQ = '';
+          activePost = null;
+          renderListing(); bindListing(); writeHash();
+          if ($search) $search.focus();
+        });
+        if ($tags) $tags.addEventListener('click', e => {
+          const chip = e.target.closest('[data-tag]');
+          if (!chip) return;
+          const tag = chip.dataset.tag;
+          tag === '__all__' ? activeTags.clear() : activeTags.has(tag) ? activeTags.delete(tag) : activeTags.add(tag);
+          renderListing(); bindListing(); writeHash();
+        });
+        if ($archive) $archive.addEventListener('click', e => {
+          const btn = e.target.closest('[data-ym]');
+          if (!btn) return;
+          const [y, m] = btn.dataset.ym.split('-').map(Number);
+          if (dateYM && dateYM.year === y && dateYM.month === m) dateYM = null;
+          else dateYM = { year: y, month: m };
+          renderListing(); bindListing(); writeHash();
+        });
+      }
+
+      function render() {
+        if (loading) { renderLoading(); return; }
+        if (activePost) { renderPost(); return; }
+        renderListing(); bindListing();
+      }
+
+      /* ── events ────────────────────────────── */
+      window.addEventListener('hashchange', () => {
+        readHash();
+        render();
+      });
+
+      /* ── init ──────────────────────────────── */
+      (async () => {
+        renderLoading();
+        try {
+          posts = await loadPosts();
+        } catch(e) {
+          $main.innerHTML = '<div class="empty"><p>Could not load posts. Are you online?</p></div>';
+          return;
+        }
+        loading = false;
+        readHash();
+        render();
+      })();
+    })();
+  </script>
 </body>
 </html>
