@@ -1,1 +1,133 @@
-hello world!
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blog · Adividiardi</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #040507;
+      --bg2: #090b10;
+      --ink: rgba(232,224,209,0.82);
+      --muted: rgba(232,224,209,0.58);
+      --rule: rgba(232,224,209,0.10);
+      --shadow: 0 24px 80px rgba(0,0,0,0.30);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(232,224,209,0.04), transparent 26%),
+        linear-gradient(180deg, var(--bg2), var(--bg));
+      color: var(--ink);
+      font-family: Cambria, Georgia, "Times New Roman", serif;
+    }
+    body {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 32px 18px;
+    }
+    main {
+      width: min(720px, 100%);
+      border: 1px solid var(--rule);
+      border-radius: 28px;
+      padding: clamp(26px, 5vw, 54px);
+      background: rgba(255,255,255,0.018);
+      box-shadow: var(--shadow);
+    }
+    a {
+      color: rgba(232,224,209,0.58);
+      text-decoration: none;
+    }
+    a:hover { color: rgba(232,224,209,0.88); }
+    .back {
+      display: inline-block;
+      margin-bottom: 34px;
+      font-size: 13px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-weight: 400;
+      font-size: clamp(42px, 8vw, 76px);
+      line-height: 0.95;
+      color: rgba(232,224,209,0.88);
+    }
+    .subtitle {
+      margin: 0 0 40px;
+      font-size: clamp(18px, 2.4vw, 22px);
+      line-height: 1.45;
+      color: var(--muted);
+      font-weight: 400;
+      font-style: italic;
+    }
+    .body {
+      max-width: 62ch;
+    }
+    .body p {
+      margin: 0;
+      font-size: clamp(17px, 2.2vw, 20px);
+      line-height: 1.65;
+    }
+    .body p + p {
+      margin-top: 20px;
+    }
+    .body strong {
+      color: rgba(232,224,209,0.90);
+      font-weight: 600;
+    }
+    .rule {
+      margin: 44px 0;
+      border: none;
+      border-top: 1px solid var(--rule);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back" href="/">Adividiardi</a>
+    <h1>The Geometry<br>of Adaptive Belief</h1>
+    <p class="subtitle">Permeability, Coherence, and the Evolution of Internal Models</p>
+
+    <div class="body">
+      <p>One of the recurring themes in science is that the universe does not appear to build complexity by violating its own laws, but by exploiting them. Every major increase in complexity seems to arise not from escaping physical constraints, but from discovering new ways of operating within them.</p>
+
+      <p>A star does not violate gravity. It exists because gravity and nuclear fusion reach a dynamic equilibrium. Likewise, life does not violate the second law of thermodynamics. Every organism is an open system that maintains local order only by exporting entropy into its surroundings. The remarkable feature of living systems is therefore not that they escape physical law, but that they exploit the freedom permitted by physical law to sustain highly organized states over time.</p>
+
+      <p>This observation suggests a broader question. If biological evolution represents a transition in the way matter organizes itself, might cognition represent another transition altogether?</p>
+
+      <p>A rock requires no model of the universe. Its future is determined entirely by its present state and the forces acting upon it. Living organisms are different. They survive precisely because they possess internal states that are <em>not identical</em> to the external world. Those internal states encode expectations, predictions, and strategies that guide future action. Evolution can therefore be viewed as the gradual refinement of internal models that improve an organism's ability to persist.</p>
+
+      <p>Human cognition extends this process further. We no longer operate merely through instinct or immediate perception. We construct elaborate internal representations of reality: scientific theories, religions, moral systems, political ideologies, cultural traditions, personal identities, and narratives about both ourselves and the world. These structures are not reality itself. They are models through which reality is interpreted.</p>
+
+      <p>The existence of such models immediately creates an interesting tension.</p>
+
+      <p>A model that perfectly reproduced reality would be indistinguishable from reality itself and would therefore provide little computational advantage. The purpose of a model is compression. It sacrifices detail in exchange for tractability. Every useful model is therefore, in some sense, wrong. The relevant question is not whether a model is perfectly true, but whether it preserves the information necessary for successful interaction with the world.</p>
+
+      <p>This is hardly a new observation. Science itself proceeds through successive approximations. Newtonian mechanics is not fundamentally correct, yet it remains extraordinarily useful because, within an appropriate domain, it preserves precisely those features of reality needed to make reliable predictions. The usefulness of a model depends not upon its perfection but upon the relationship between its simplifications and the environment in which it is applied.</p>
+
+      <p>It is tempting, at this point, to imagine an axis running between truth and falsehood. The more I have thought about it, however, the less satisfactory that picture has become.</p>
+
+      <p>A better distinction may be between <strong>rigidity</strong> and <strong>permeability</strong>.</p>
+
+      <p>Every sufficiently complex adaptive system requires internal coherence. Without coherence there can be no persistence, no identity, no long-term planning, and no cumulative learning. Yet coherence carries its own danger. A sufficiently coherent model may eventually become self-preserving. Contradictory evidence is no longer permitted to modify the structure itself; instead it is reinterpreted until it becomes compatible with the existing framework. The model ceases to describe reality and instead begins to defend itself against reality.</p>
+
+      <p>Complete permeability is no better. A system that reconstructs itself from first principles in response to every new observation never develops the stability required for sustained action. Prediction becomes impossible because every belief remains perpetually provisional. Such a system approaches epistemic paralysis.</p>
+
+      <p>Adaptive intelligence therefore appears to require something intermediate. Internal models must remain coherent enough to organize action while remaining permeable enough to permit revision. They must possess sufficient stability to accumulate knowledge, yet sufficient flexibility to abandon knowledge when reality persistently refuses to cooperate.</p>
+
+      <p>This perspective suggests that the central property of an intelligent system is not the content of its beliefs but the dynamics by which those beliefs change. The update rule may be more fundamental than the model itself.</p>
+
+      <p>Viewed in this way, scientific inquiry, biological evolution, and individual psychological development begin to resemble different manifestations of the same underlying process. Each maintains a structured internal state that is continually exposed to external correction. Survival depends neither upon perfect stability nor upon unrestricted flexibility, but upon the capacity to preserve organization while remaining corrigible.</p>
+
+      <p>If this framework is correct, then wisdom may not consist in approaching certainty. Nor does it consist in maximizing skepticism. Both extremes sacrifice adaptation for a single virtue. Wisdom instead lies in maintaining models that remain sufficiently coherent to support action while remaining sufficiently permeable that reality can continue to reshape them.</p>
+
+      <p>Perhaps this is a general principle of complex systems. As matter organized into life without abandoning physics, perhaps minds organize themselves through models that never become identical to reality, but never lose contact with it either. The measure of an intelligence may therefore be found less in the correctness of its present beliefs than in the quality of the process by which those beliefs yield to the world.</p>
+    </div>
+  </main>
+</body>
+</html>
