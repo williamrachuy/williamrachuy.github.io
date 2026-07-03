@@ -8,3 +8,4 @@ serve-tailnet.sh
 *.log
 .env
 .env.*
+.playwright-mcp/
