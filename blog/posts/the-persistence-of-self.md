@@ -24,6 +24,6 @@ The solution does not lie at either extreme. Identity must become neither a pris
 
 Evolution succeeds because organisms change. Science progresses because theories change. Learning exists because brains change. Every adaptive system owes its success not to permanence but to disciplined revision. There is little reason to believe human identity is an exception. The self is not what survives change. The self is the process that remains capable of changing without losing the ability to remain itself.
 
----
+@[youtube](https://www.youtube.com/watch?v=0is_VwWU3EE)
 
 *This essay was written with editorial assistance from ChatGPT. The ideas, arguments, and conceptual framework are my own; AI was used to help refine and communicate them.*

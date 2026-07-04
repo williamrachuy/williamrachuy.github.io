@@ -313,6 +313,16 @@
       font-family: monospace;
     }
     .post-body a { color: rgba(232,224,209,0.72); text-decoration: underline; }
+    .post-video {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      margin: 32px 0;
+      border: 1px solid var(--rule);
+      border-radius: 18px;
+      overflow: hidden;
+      background: #000;
+    }
+    .post-video iframe { width: 100%; height: 100%; border: 0; }
     .post-nav {
       margin-top: 48px;
       padding-top: 24px;
@@ -467,6 +477,12 @@
           const h1 = line.match(/^#\s+(.+)/);
           const h2 = line.match(/^##\s+(.+)/);
           const h3 = line.match(/^###\s+(.+)/);
+          const youtube = line.match(/^@\[youtube\]\(https?:\/\/(?:www\.)?youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})\)$/);
+          if (youtube) {
+            if (inP) { html += '</p>'; inP = false; }
+            html += '<div class="post-video"><iframe src="https://www.youtube-nocookie.com/embed/' + youtube[1] + '" title="YouTube video player" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></div>';
+            continue;
+          }
           if (h1 || h2 || h3) {
             if (inP) { html += '</p>'; inP = false; }
             const tag = h1 ? 'h1' : h2 ? 'h2' : 'h3';
