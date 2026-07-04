@@ -1,4 +1,3 @@
-```markdown
 ---
 title: The Persistence of Self
 subtitle: Continuity, Permeability, and the Dynamics of the Self
@@ -28,5 +27,3 @@ Evolution succeeds because organisms change. Science progresses because theories
 ---
 
 *This essay was written with editorial assistance from ChatGPT. The ideas, arguments, and conceptual framework are my own; AI was used to help refine and communicate them.*
-```
-

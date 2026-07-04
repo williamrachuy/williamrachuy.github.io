@@ -531,10 +531,12 @@
       }
 
       async function loadPosts() {
+        const host = window.location.hostname;
+        const isProduction = host === 'www.adividiardi.com' || host === 'adividiardi.com' || host.endsWith('.github.io');
         try {
-          return await fetchPostsGitHub();
+          return isProduction ? await fetchPostsGitHub() : await fetchPostsLocal();
         } catch(e) {
-          return await fetchPostsLocal();
+          return isProduction ? await fetchPostsLocal() : await fetchPostsGitHub();
         }
       }
 
