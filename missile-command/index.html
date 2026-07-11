@@ -168,6 +168,8 @@
       Delta (center) fires fastest. Save your cities.
     </div>
     <button class="btn" id="startBtn">INSERT COIN</button>
+    <div id="hiScoreLine" style="font-size:9px;letter-spacing:0.14em;color:#3fa9f5;"></div>
+    <button id="clearHsBtn" style="background:none;border:1px solid rgba(216,208,192,0.25);color:rgba(216,208,192,0.5);font-family:'Press Start 2P',monospace;font-size:7px;letter-spacing:0.12em;padding:9px 14px;cursor:pointer;">CLEAR HIGH SCORE</button>
   </div>
 
   <!-- Wave bonus overlay -->
@@ -215,17 +217,20 @@
   // City x-positions: two groups of three, between the batteries
   const CITY_X = [200, 300, 400, 560, 660, 760];
 
+  const HS_KEY = 'mc-highscore';
   const state = {
     running: false,
     wave: 1,
     score: 0,
-    bonusCityProgress: 0,   // tracks 10k thresholds
+    highScore: parseInt(localStorage.getItem(HS_KEY) || '0', 10) || 0,
+    reserveCities: 0,       // bonus cities held, deployed at wave end
     cities: [],
     batteries: [],
     enemies: [],            // incoming missiles / smart bombs
     abms: [],               // player anti-ballistic missiles
     explosions: [],
     flyers: [],             // bombers / satellites
+    flyersLeft: 0,          // flyers remaining to spawn this wave
     spawnQueue: [],         // scheduled enemy spawns for the wave
     waveActive: false,
     crosshair: { x: W / 2, y: H / 2 },
@@ -233,6 +238,74 @@
     shake: 0,
     stars: [],
   };
+
+  // ── Sound — synthesized WebAudio, in the spirit of the analog arcade ──
+  const snd = (function () {
+    let ctx = null, master = null;
+    function ensure() {
+      if (ctx) return;
+      try {
+        ctx = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx.createGain();
+        master.gain.value = 0.32;
+        master.connect(ctx.destination);
+      } catch (e) { ctx = null; }
+    }
+    function noiseBuf(dur) {
+      const n = Math.max(1, Math.floor(ctx.sampleRate * dur));
+      const b = ctx.createBuffer(1, n, ctx.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      return b;
+    }
+    function tone(type, f0, f1, dur, vol) {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = type;
+      o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(master);
+      o.start(t); o.stop(t + dur);
+    }
+    function boomNoise(dur, cutHi, cutLo, vol) {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const src = ctx.createBufferSource();
+      src.buffer = noiseBuf(dur);
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'lowpass';
+      filt.frequency.setValueAtTime(cutHi, t);
+      filt.frequency.exponentialRampToValueAtTime(cutLo, t + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(vol, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      src.connect(filt); filt.connect(g); g.connect(master);
+      src.start(t); src.stop(t + dur);
+    }
+    return {
+      init: ensure,
+      launch(fast) { tone('square', fast ? 340 : 230, fast ? 920 : 700, 0.12, 0.16); },
+      enemyLaunch() { tone('sawtooth', 170, 85, 0.18, 0.045); },
+      explosion(size) {
+        const dur = 0.24 + size / 220;
+        boomNoise(dur, 1400, 200, 0.26);
+        tone('sine', 120, 40, dur, 0.15);
+      },
+      cityHit() { boomNoise(0.5, 700, 120, 0.4); tone('sine', 90, 30, 0.5, 0.22); },
+      waveStart() {
+        tone('square', 440, 440, 0.12, 0.11);
+        setTimeout(() => tone('square', 660, 660, 0.16, 0.11), 150);
+      },
+      bonus() {
+        [523, 659, 784, 1047].forEach((f, i) =>
+          setTimeout(() => tone('square', f, f, 0.11, 0.11), i * 80));
+      },
+      gameOver() { tone('sawtooth', 300, 55, 1.2, 0.24); tone('sine', 150, 38, 1.2, 0.17); },
+    };
+  })();
 
   function makeStars() {
     state.stars = Array.from({ length: 70 }, () => ({
@@ -246,7 +319,7 @@
   function resetGame() {
     state.wave = 1;
     state.score = 0;
-    state.bonusCityProgress = 0;
+    state.reserveCities = 0;
     state.cities = CITY_X.map(x => ({ x, alive: true }));
     state.enemies = [];
     state.abms = [];
@@ -294,10 +367,13 @@
     state.spawnQueue.sort((a, b) => a.t - b.t);
     state.waveClock = 0;
 
-    // Flyers (bombers/satellites) that cross and drop missiles, from wave 4
-    state.flyerTimer = w >= 4 ? 4 + Math.random() * 4 : Infinity;
+    // Flyers (bombers/satellites) that cross and drop missiles, from wave 4.
+    // Bounded count per wave so they can never sustain the wave indefinitely.
+    state.flyersLeft = w >= 4 ? Math.min(3, 1 + Math.floor((w - 4) / 2)) : 0;
+    state.flyerTimer = state.flyersLeft > 0 ? 3 + Math.random() * 4 : Infinity;
 
     hide('waveOverlay');
+    snd.waveStart();
   }
 
   // ── Enemy spawning ──────────────────────────────────────────
@@ -329,6 +405,7 @@
       smart: def.smart,
       color: def.smart ? '#3ff0a0' : pal().enemy,
     });
+    snd.enemyLaunch();
   }
 
   function splitMirv(e) {
@@ -368,6 +445,7 @@
       tx: targetX, ty: targetY,
       trail: [{ x: sx, y: sy }],
     });
+    snd.launch(b.fast);
     return true;
   }
 
@@ -393,6 +471,7 @@
       x, y, r: 0, max: max || 52,
       phase: 'grow', life: 0,
     });
+    snd.explosion(max || 52);
   }
 
   // ── Collision & update ──────────────────────────────────────
@@ -405,21 +484,24 @@
       spawnEnemy(state.spawnQueue.shift());
     }
 
-    // Flyers
-    if (state.waveActive && isFinite(state.flyerTimer)) {
+    // Flyers — bounded count per wave; only launch while the wave still has
+    // ground missiles pending, and cap how many each one can drop.
+    if (state.waveActive && state.flyersLeft > 0 && isFinite(state.flyerTimer)) {
       state.flyerTimer -= dt;
-      if (state.flyerTimer <= 0 && state.spawnQueue.length + state.enemies.length > 0) {
+      if (state.flyerTimer <= 0 && state.spawnQueue.length > 0) {
         const dir = Math.random() < 0.5 ? 1 : -1;
         const sat = Math.random() < 0.5;
         state.flyers.push({
           x: dir > 0 ? -30 : W + 30,
           y: 40 + Math.random() * 90,
-          vx: dir * (sat ? 90 : 60),
+          vx: dir * (sat ? 100 : 68),
           sat,
-          dropTimer: 0.6 + Math.random() * 1.2,
+          dropTimer: 0.8 + Math.random() * 1.0,
+          dropsLeft: sat ? 2 : 3,
           color: sat ? '#c0c0d0' : '#ff8a3f',
         });
-        state.flyerTimer = 6 + Math.random() * 6;
+        state.flyersLeft--;
+        state.flyerTimer = 5 + Math.random() * 5;
       }
     }
 
@@ -521,11 +603,22 @@
       }
       if (killed) { state.flyers.splice(i, 1); continue; }
       f.dropTimer -= dt;
-      if (f.dropTimer <= 0 && state.waveActive) {
+      if (f.dropTimer <= 0 && state.waveActive && f.dropsLeft > 0) {
         spawnEnemy({ speed: 60 + state.wave * 6, mirv: false, smart: false }, f.x, f.y + 6);
-        f.dropTimer = 1.2 + Math.random() * 1.6;
+        f.dropsLeft--;
+        f.dropTimer = 1.4 + Math.random() * 1.4;
       }
       if (f.x < -40 || f.x > W + 40) state.flyers.splice(i, 1);
+    }
+
+    // Hopeless state — all cities gone, none in reserve, and no ammo anywhere.
+    // The wave can no longer be won or a bonus city earned, so end it now
+    // instead of forcing the player to watch missiles fall on empty ground.
+    if (state.waveActive && state.cities.filter(c => c.alive).length === 0 &&
+        state.reserveCities === 0) {
+      let ammo = 0;
+      state.batteries.forEach(b => { if (b.alive) ammo += b.ammo; });
+      if (ammo === 0 && state.abms.length === 0) { endWave(); return; }
     }
 
     // Wave complete?
@@ -553,26 +646,40 @@
       if (d < best) { best = d; hit = { type: 'bat', ref: b }; }
     }
     if (hit) {
-      if (hit.type === 'city') hit.ref.alive = false;
-      else { hit.ref.alive = false; hit.ref.ammo = 0; }
+      if (hit.type === 'city') { hit.ref.alive = false; snd.cityHit(); }
+      else { hit.ref.alive = false; hit.ref.ammo = 0; snd.cityHit(); }
     }
   }
 
   function addScore(pts) {
     const before = state.score;
     state.score += pts;
-    // Bonus city every 10,000 points
+    // Bonus city every 10,000 points — banked in reserve, deployed at wave end
     const prevT = Math.floor(before / 10000);
     const nowT = Math.floor(state.score / 10000);
-    if (nowT > prevT) state.pendingBonusCities = (state.pendingBonusCities || 0) + (nowT - prevT);
+    if (nowT > prevT) {
+      state.reserveCities += (nowT - prevT);
+      snd.bonus();
+    }
   }
 
   // ── End of wave: tally bonuses ──────────────────────────────
   function endWave() {
     state.waveActive = false;
     const mult = multiplier();
-    const survivingCities = state.cities.filter(c => c.alive).length;
 
+    // Deploy banked reserve cities to replace destroyed ones (up to 6 on screen).
+    // This happens BEFORE the game-over check so a bonus city can save you.
+    let added = 0;
+    while (state.reserveCities > 0 && state.cities.filter(c => c.alive).length < 6) {
+      const dead = state.cities.find(c => !c.alive);
+      if (!dead) break;
+      dead.alive = true;
+      added++;
+      state.reserveCities--;
+    }
+
+    const survivingCities = state.cities.filter(c => c.alive).length;
     if (survivingCities === 0) { gameOver(); return; }
 
     let unusedAbms = 0;
@@ -581,25 +688,13 @@
     const missileBonus = unusedAbms * 5 * mult;
     const cityBonus = survivingCities * 100 * mult;
 
-    // Award any pending bonus cities (up to 6 total), replacing destroyed ones
-    let added = 0;
-    if (state.pendingBonusCities) {
-      while (state.pendingBonusCities > 0 && state.cities.filter(c => c.alive).length < 6) {
-        const dead = state.cities.find(c => !c.alive);
-        if (!dead) break;
-        dead.alive = true;
-        added++;
-        state.pendingBonusCities--;
-      }
-      state.pendingBonusCities = 0;
-    }
-
     show('waveOverlay');
     document.getElementById('waveTitle').textContent = 'WAVE ' + state.wave + ' CLEARED';
     document.getElementById('waveBonus').innerHTML =
       `CITIES &times;${survivingCities} &rarr; ${cityBonus}<br>` +
       `MISSILES &times;${unusedAbms} &rarr; ${missileBonus}` +
-      (added ? `<br><span style="color:#3ff0a0">+${added} BONUS CITY</span>` : '');
+      (added ? `<br><span style="color:#3ff0a0">+${added} BONUS CITY DEPLOYED</span>` : '') +
+      (state.reserveCities ? `<br><span style="color:#3ff0a0">${state.reserveCities} IN RESERVE</span>` : '');
 
     // Animate the bonus into the score, then start next wave
     let toAdd = missileBonus + cityBonus;
@@ -622,9 +717,18 @@
 
   function gameOver() {
     state.running = false;
+    snd.gameOver();
+    let isNew = false;
+    if (state.score > state.highScore) {
+      state.highScore = state.score;
+      localStorage.setItem(HS_KEY, String(state.highScore));
+      isNew = true;
+    }
     show('endOverlay');
     document.getElementById('endScore').innerHTML =
-      `SCORE ${state.score}<br>REACHED WAVE ${state.wave}`;
+      `SCORE ${state.score}<br>REACHED WAVE ${state.wave}<br>` +
+      (isNew ? `<span style="color:#3ff0a0">NEW HIGH SCORE!</span>`
+             : `HIGH ${state.highScore}`);
   }
 
   // ── Rendering ───────────────────────────────────────────────
@@ -804,7 +908,12 @@
     ctx.font = '16px "Press Start 2P", monospace';
     ctx.textBaseline = 'top';
     ctx.textAlign = 'center';
-    ctx.fillText(String(state.score), W / 2, 14);
+    ctx.fillText(String(state.score), W / 2, 12);
+
+    // High score, centered just under the score
+    ctx.font = '7px "Press Start 2P", monospace';
+    ctx.fillStyle = 'rgba(216,208,192,0.4)';
+    ctx.fillText('HI ' + Math.max(state.highScore, state.score), W / 2, 32);
 
     ctx.font = '9px "Press Start 2P", monospace';
     ctx.textAlign = 'left';
@@ -812,6 +921,23 @@
     ctx.fillText('WAVE ' + state.wave, 16, 16);
     ctx.textAlign = 'right';
     ctx.fillText('x' + multiplier(), W - 16, 16);
+
+    // Reserve cities (banked bonus cities), small icons top-left
+    if (state.reserveCities > 0) {
+      ctx.fillStyle = p.struct;
+      const show = Math.min(state.reserveCities, 8);
+      for (let i = 0; i < show; i++) {
+        const bx = 16 + i * 14;
+        ctx.fillRect(bx, 34, 3, 5);
+        ctx.fillRect(bx + 4, 32, 3, 7);
+        ctx.fillRect(bx + 8, 35, 3, 4);
+      }
+      if (state.reserveCities > 8) {
+        ctx.font = '7px "Press Start 2P", monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText('+' + (state.reserveCities - 8), 16 + show * 14, 33);
+      }
+    }
 
     // Battery labels
     ctx.textAlign = 'center';
@@ -880,14 +1006,27 @@
   function hide(id) { document.getElementById(id).classList.add('hidden'); }
 
   function begin() {
+    snd.init();            // AudioContext must be created from a user gesture
     hide('startOverlay');
     hide('endOverlay');
     state.running = true;
     resetGame();
   }
 
+  function refreshHiScore() {
+    const el = document.getElementById('hiScoreLine');
+    el.textContent = state.highScore > 0 ? 'HIGH SCORE  ' + state.highScore : '';
+    document.getElementById('clearHsBtn').style.display = state.highScore > 0 ? '' : 'none';
+  }
+
   document.getElementById('startBtn').addEventListener('click', begin);
   document.getElementById('restartBtn').addEventListener('click', begin);
+  document.getElementById('clearHsBtn').addEventListener('click', () => {
+    state.highScore = 0;
+    localStorage.removeItem(HS_KEY);
+    refreshHiScore();
+  });
+  refreshHiScore();
 
   // Kick off render loop immediately (shows attract state under overlay)
   makeStars();
