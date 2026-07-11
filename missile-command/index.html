@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Missile Command · Adividiardi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: dark;
+      --arcade: 'Press Start 2P', 'Courier New', monospace;
+    }
+    html, body {
+      height: 100%;
+      background: #000;
+      color: #d8d0c0;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    #wrap {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .topbar {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      pointer-events: none;
+    }
+    .back {
+      pointer-events: auto;
+      font-size: 8px;
+      letter-spacing: 0.15em;
+      color: rgba(216,208,192,0.55);
+      text-decoration: none;
+      transition: color 160ms;
+    }
+    .back:hover { color: #e0b93c; }
+
+    #game {
+      display: block;
+      background: #000;
+      image-rendering: pixelated;
+      cursor: none;
+      max-width: 100vw;
+      max-height: 100vh;
+    }
+
+    /* Overlays */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      background: rgba(0,0,0,0.86);
+      gap: 26px;
+    }
+    .overlay.hidden { display: none; }
+    .ov-title {
+      font-size: clamp(20px, 6vw, 44px);
+      color: #e0b93c;
+      letter-spacing: 0.08em;
+      line-height: 1.4;
+      text-shadow: 0 0 18px rgba(224,185,60,0.35);
+    }
+    .ov-sub {
+      font-size: clamp(8px, 2vw, 12px);
+      color: rgba(216,208,192,0.62);
+      line-height: 2.2;
+      max-width: 560px;
+    }
+    .ov-sub .k {
+      color: #3fa9f5;
+    }
+    .ov-sub .c {
+      color: #e0b93c;
+    }
+    .btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(10px, 2.4vw, 14px);
+      color: #000;
+      background: #e0b93c;
+      border: none;
+      padding: 16px 28px;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: transform 120ms, box-shadow 200ms, background 200ms;
+      box-shadow: 0 0 0 rgba(224,185,60,0);
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      background: #f0cb50;
+      box-shadow: 0 8px 30px rgba(224,185,60,0.35);
+    }
+    .btn:active { transform: translateY(0); }
+
+    .the-end {
+      font-size: clamp(28px, 9vw, 72px);
+      color: #e83a2c;
+      letter-spacing: 0.14em;
+      text-shadow: 0 0 24px rgba(232,58,44,0.5);
+      animation: pulse 900ms ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(1.04); }
+    }
+    .final-score {
+      font-size: clamp(11px, 3vw, 18px);
+      color: #e0b93c;
+      line-height: 2;
+    }
+    .credit {
+      position: fixed;
+      bottom: 8px;
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 7px;
+      letter-spacing: 0.12em;
+      color: rgba(216,208,192,0.28);
+      z-index: 20;
+      pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      .ov-sub { line-height: 2; }
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <a href="/" class="back">&larr; HOME</a>
+  </div>
+
+  <div id="wrap">
+    <canvas id="game" width="960" height="640"></canvas>
+  </div>
+
+  <div class="credit">MISSILE COMMAND &middot; AFTER ATARI 1980 &middot; DEFEND THE SIX CITIES</div>
+
+  <!-- Start overlay -->
+  <div class="overlay" id="startOverlay">
+    <div class="ov-title">MISSILE<br>COMMAND</div>
+    <div class="ov-sub">
+      Six cities under attack.<br><br>
+      <span class="c">MOVE</span> mouse / finger to aim the crosshair<br>
+      <span class="c">FIRE</span> click or tap to launch<br>
+      Keys <span class="k">1</span> <span class="k">2</span> <span class="k">3</span> fire the Alpha / Delta / Omega batteries<br><br>
+      Detonate ahead of the falling missiles &mdash;<br>your blasts chain into each other.<br>
+      Delta (center) fires fastest. Save your cities.
+    </div>
+    <button class="btn" id="startBtn">INSERT COIN</button>
+  </div>
+
+  <!-- Wave bonus overlay -->
+  <div class="overlay hidden" id="waveOverlay">
+    <div class="ov-title" id="waveTitle">WAVE CLEARED</div>
+    <div class="final-score" id="waveBonus"></div>
+    <div class="ov-sub" id="waveNext">Bonus counting&hellip;</div>
+  </div>
+
+  <!-- Game over overlay -->
+  <div class="overlay hidden" id="endOverlay">
+    <div class="the-end">THE END</div>
+    <div class="final-score" id="endScore"></div>
+    <button class="btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = 960, H = 640;
+  const GROUND_Y = H - 44;          // top of the ground strip
+  const GROUND_H = H - GROUND_Y;
+
+  // ── Per-wave color palettes (rotate, echoing the arcade's shifting look) ──
+  const PALETTES = [
+    { ground: '#e0b93c', struct: '#e0b93c', enemy: '#e83a2c', abm: '#3fa9f5', star: '#fff2c8' },
+    { ground: '#3fa9f5', struct: '#54c0ff', enemy: '#ffd23f', abm: '#ff5a3c', star: '#cfe8ff' },
+    { ground: '#8b5cf6', struct: '#a877ff', enemy: '#3ff0a0', abm: '#ffb43f', star: '#e8d8ff' },
+    { ground: '#2ecf6b', struct: '#4ff08a', enemy: '#ff4fb0', abm: '#4fb0ff', star: '#d0ffe0' },
+    { ground: '#e8582c', struct: '#ff7a4a', enemy: '#4fd0ff', abm: '#ffe23f', star: '#ffd8c0' },
+    { ground: '#c0c0d0', struct: '#e0e0f0', enemy: '#ff4040', abm: '#40d0ff', star: '#ffffff' },
+  ];
+  function pal() { return PALETTES[(state.wave - 1) % PALETTES.length]; }
+
+  // ── Structures ──────────────────────────────────────────────
+  // Batteries: Alpha (left), Delta (center), Omega (right)
+  const BATTERY_DEFS = [
+    { name: 'ALPHA', x: 70 },
+    { name: 'DELTA', x: W / 2 },
+    { name: 'OMEGA', x: W - 70 },
+  ];
+  // City x-positions: two groups of three, between the batteries
+  const CITY_X = [200, 300, 400, 560, 660, 760];
+
+  const state = {
+    running: false,
+    wave: 1,
+    score: 0,
+    bonusCityProgress: 0,   // tracks 10k thresholds
+    cities: [],
+    batteries: [],
+    enemies: [],            // incoming missiles / smart bombs
+    abms: [],               // player anti-ballistic missiles
+    explosions: [],
+    flyers: [],             // bombers / satellites
+    spawnQueue: [],         // scheduled enemy spawns for the wave
+    waveActive: false,
+    crosshair: { x: W / 2, y: H / 2 },
+    lastFireBattery: 0,
+    shake: 0,
+    stars: [],
+  };
+
+  function makeStars() {
+    state.stars = Array.from({ length: 70 }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * (GROUND_Y - 40),
+      r: Math.random() * 1.1 + 0.3,
+      tw: Math.random() * Math.PI * 2,
+    }));
+  }
+
+  function resetGame() {
+    state.wave = 1;
+    state.score = 0;
+    state.bonusCityProgress = 0;
+    state.cities = CITY_X.map(x => ({ x, alive: true }));
+    state.enemies = [];
+    state.abms = [];
+    state.explosions = [];
+    state.flyers = [];
+    makeStars();
+    startWave();
+  }
+
+  // ── Wave setup ──────────────────────────────────────────────
+  function multiplier() {
+    return Math.min(6, Math.floor((state.wave - 1) / 2) + 1);
+  }
+
+  function startWave() {
+    // Refill / restore all three batteries each wave (destroyed bases return)
+    state.batteries = BATTERY_DEFS.map(b => ({
+      name: b.name, x: b.x, ammo: 10, alive: true,
+      fast: b.name === 'DELTA',
+    }));
+    state.enemies = [];
+    state.abms = [];
+    state.explosions = [];
+    state.flyers = [];
+    state.waveActive = true;
+
+    const w = state.wave;
+    const count = Math.min(26, 12 + w * 2);
+    const baseSpeed = 34 + w * 7;             // px/s downward, ramps each wave
+    const mirvChance = w >= 3 ? Math.min(0.45, 0.12 + w * 0.03) : 0;
+    const smartChance = w >= 5 ? Math.min(0.30, (w - 4) * 0.05) : 0;
+
+    // Schedule spawns across ~18 seconds, front-loaded a touch
+    state.spawnQueue = [];
+    const window_ = 16 + w * 0.4;
+    for (let i = 0; i < count; i++) {
+      const t = Math.random() * window_ * 0.9 + (i / count) * window_ * 0.2;
+      state.spawnQueue.push({
+        t,
+        speed: baseSpeed * (0.85 + Math.random() * 0.4),
+        mirv: Math.random() < mirvChance,
+        smart: Math.random() < smartChance,
+      });
+    }
+    state.spawnQueue.sort((a, b) => a.t - b.t);
+    state.waveClock = 0;
+
+    // Flyers (bombers/satellites) that cross and drop missiles, from wave 4
+    state.flyerTimer = w >= 4 ? 4 + Math.random() * 4 : Infinity;
+
+    hide('waveOverlay');
+  }
+
+  // ── Enemy spawning ──────────────────────────────────────────
+  function targetsList() {
+    const t = [];
+    state.cities.forEach(c => { if (c.alive) t.push(c.x); });
+    state.batteries.forEach(b => { if (b.alive) t.push(b.x); });
+    return t.length ? t : CITY_X.slice();
+  }
+
+  function spawnEnemy(def, fromX, fromY) {
+    const targets = targetsList();
+    const tx = targets[(Math.random() * targets.length) | 0];
+    const sx = fromX != null ? fromX : Math.random() * W;
+    const sy = fromY != null ? fromY : -6;
+    const ex = tx + (Math.random() * 30 - 15);
+    const dx = ex - sx, dy = GROUND_Y - sy;
+    const len = Math.hypot(dx, dy);
+    state.enemies.push({
+      x: sx, y: sy,
+      sx, sy,
+      vx: (dx / len) * def.speed,
+      vy: (dy / len) * def.speed,
+      speed: def.speed,
+      tx: ex,
+      trail: [{ x: sx, y: sy }],
+      mirv: def.mirv,
+      splitAt: def.mirv ? (GROUND_Y * (0.35 + Math.random() * 0.2)) : -1,
+      smart: def.smart,
+      color: def.smart ? '#3ff0a0' : pal().enemy,
+    });
+  }
+
+  function splitMirv(e) {
+    const n = 2 + ((Math.random() * 2) | 0);
+    const targets = targetsList();
+    for (let i = 0; i < n; i++) {
+      const tx = targets[(Math.random() * targets.length) | 0] + (Math.random() * 40 - 20);
+      const dx = tx - e.x, dy = GROUND_Y - e.y;
+      const len = Math.hypot(dx, dy) || 1;
+      state.enemies.push({
+        x: e.x, y: e.y, sx: e.x, sy: e.y,
+        vx: (dx / len) * e.speed,
+        vy: (dy / len) * e.speed,
+        speed: e.speed, tx,
+        trail: [{ x: e.x, y: e.y }],
+        mirv: false, splitAt: -1,
+        smart: false,
+        color: e.color,
+      });
+    }
+  }
+
+  // ── Firing ──────────────────────────────────────────────────
+  function fireBattery(idx, targetX, targetY) {
+    const b = state.batteries[idx];
+    if (!b || !b.alive || b.ammo <= 0) return false;
+    if (targetY >= GROUND_Y - 6) targetY = GROUND_Y - 6;
+    b.ammo--;
+    const sx = b.x, sy = GROUND_Y - 6;
+    const dx = targetX - sx, dy = targetY - sy;
+    const len = Math.hypot(dx, dy) || 1;
+    const speed = b.fast ? 900 : 520;
+    state.abms.push({
+      x: sx, y: sy, sx, sy,
+      vx: (dx / len) * speed,
+      vy: (dy / len) * speed,
+      tx: targetX, ty: targetY,
+      trail: [{ x: sx, y: sy }],
+    });
+    return true;
+  }
+
+  function fireNearest(targetX, targetY) {
+    // Prefer center Delta if it has ammo (its missiles are fastest),
+    // otherwise the nearest battery with ammo — mirrors picking a base.
+    const order = [1, 0, 2];
+    // Sort remaining by distance to target x, but keep Delta priority
+    const candidates = state.batteries
+      .map((b, i) => ({ b, i, d: Math.abs(b.x - targetX) }))
+      .filter(o => o.b.alive && o.b.ammo > 0)
+      .sort((a, z) => a.d - z.d);
+    if (!candidates.length) return;
+    // If Delta is within reasonable range, use it for speed
+    const delta = candidates.find(o => o.i === 1);
+    const pick = (delta && delta.d < 360) ? delta : candidates[0];
+    fireBattery(pick.i, targetX, targetY);
+  }
+
+  // ── Explosions ──────────────────────────────────────────────
+  function boom(x, y, max) {
+    state.explosions.push({
+      x, y, r: 0, max: max || 52,
+      phase: 'grow', life: 0,
+    });
+  }
+
+  // ── Collision & update ──────────────────────────────────────
+  function update(dt) {
+    state.waveClock += dt;
+    if (state.shake > 0) state.shake = Math.max(0, state.shake - dt * 60);
+
+    // Release scheduled enemies
+    while (state.spawnQueue.length && state.spawnQueue[0].t <= state.waveClock) {
+      spawnEnemy(state.spawnQueue.shift());
+    }
+
+    // Flyers
+    if (state.waveActive && isFinite(state.flyerTimer)) {
+      state.flyerTimer -= dt;
+      if (state.flyerTimer <= 0 && state.spawnQueue.length + state.enemies.length > 0) {
+        const dir = Math.random() < 0.5 ? 1 : -1;
+        const sat = Math.random() < 0.5;
+        state.flyers.push({
+          x: dir > 0 ? -30 : W + 30,
+          y: 40 + Math.random() * 90,
+          vx: dir * (sat ? 90 : 60),
+          sat,
+          dropTimer: 0.6 + Math.random() * 1.2,
+          color: sat ? '#c0c0d0' : '#ff8a3f',
+        });
+        state.flyerTimer = 6 + Math.random() * 6;
+      }
+    }
+
+    // ABMs travel toward their target, then detonate
+    for (let i = state.abms.length - 1; i >= 0; i--) {
+      const a = state.abms[i];
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      a.trail.push({ x: a.x, y: a.y });
+      if (a.trail.length > 40) a.trail.shift();
+      const reached = Math.hypot(a.tx - a.x, a.ty - a.y) < 10;
+      if (reached || a.y < 2) {
+        boom(a.tx, a.ty, 52);
+        state.abms.splice(i, 1);
+      }
+    }
+
+    // Explosions grow / shrink; destroy anything inside
+    for (let i = state.explosions.length - 1; i >= 0; i--) {
+      const ex = state.explosions[i];
+      ex.life += dt;
+      if (ex.phase === 'grow') {
+        ex.r += 150 * dt;
+        if (ex.r >= ex.max) { ex.r = ex.max; ex.phase = 'hold'; ex.hold = 0; }
+      } else if (ex.phase === 'hold') {
+        ex.hold += dt;
+        if (ex.hold > 0.25) ex.phase = 'shrink';
+      } else {
+        ex.r -= 90 * dt;
+        if (ex.r <= 0) { state.explosions.splice(i, 1); continue; }
+      }
+    }
+
+    // Enemies move; MIRV split; check ground / explosion hits
+    for (let i = state.enemies.length - 1; i >= 0; i--) {
+      const e = state.enemies[i];
+
+      // Smart bombs steer around nearby explosions
+      if (e.smart) {
+        let dodge = 0;
+        for (const ex of state.explosions) {
+          const dx = e.x - ex.x, dy = e.y - ex.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < ex.r + 46 && dy < 40) {
+            dodge += (dx >= 0 ? 1 : -1) * (60 / (dist + 8)) * 30;
+          }
+        }
+        if (dodge) {
+          e.vx += Math.max(-90, Math.min(90, dodge)) * dt;
+          const sp = Math.hypot(e.vx, e.vy) || 1;
+          e.vx = (e.vx / sp) * e.speed;
+          e.vy = (e.vy / sp) * e.speed;
+        }
+      }
+
+      e.x += e.vx * dt;
+      e.y += e.vy * dt;
+      e.trail.push({ x: e.x, y: e.y });
+      if (e.trail.length > 500) e.trail.shift();
+
+      if (e.mirv && e.splitAt > 0 && e.y >= e.splitAt) {
+        e.mirv = false; e.splitAt = -1;
+        splitMirv(e);
+      }
+
+      // Hit by an explosion?
+      let killed = false;
+      for (const ex of state.explosions) {
+        if (Math.hypot(e.x - ex.x, e.y - ex.y) < ex.r) {
+          addScore((e.smart ? 125 : 25) * multiplier());
+          boom(e.x, e.y, 40);              // chain reaction
+          killed = true;
+          break;
+        }
+      }
+      if (killed) { state.enemies.splice(i, 1); continue; }
+
+      // Reached the ground — damage a city or battery
+      if (e.y >= GROUND_Y) {
+        boom(e.x, GROUND_Y, 34);
+        state.shake = 8;
+        damageGround(e.x);
+        state.enemies.splice(i, 1);
+      }
+    }
+
+    // Flyers move and drop
+    for (let i = state.flyers.length - 1; i >= 0; i--) {
+      const f = state.flyers[i];
+      f.x += f.vx * dt;
+      // Killed by explosion?
+      let killed = false;
+      for (const ex of state.explosions) {
+        if (Math.hypot(f.x - ex.x, f.y - ex.y) < ex.r + 8) {
+          addScore(100 * multiplier());
+          boom(f.x, f.y, 40);
+          killed = true; break;
+        }
+      }
+      if (killed) { state.flyers.splice(i, 1); continue; }
+      f.dropTimer -= dt;
+      if (f.dropTimer <= 0 && state.waveActive) {
+        spawnEnemy({ speed: 60 + state.wave * 6, mirv: false, smart: false }, f.x, f.y + 6);
+        f.dropTimer = 1.2 + Math.random() * 1.6;
+      }
+      if (f.x < -40 || f.x > W + 40) state.flyers.splice(i, 1);
+    }
+
+    // Wave complete?
+    if (state.waveActive &&
+        state.spawnQueue.length === 0 &&
+        state.enemies.length === 0 &&
+        state.flyers.length === 0 &&
+        state.abms.length === 0) {
+      // let final explosions fade, then tally
+      if (state.explosions.length === 0) endWave();
+    }
+  }
+
+  function damageGround(x) {
+    // Find nearest structure within blast radius on the ground
+    let hit = null, best = 40;
+    for (const c of state.cities) {
+      if (!c.alive) continue;
+      const d = Math.abs(c.x - x);
+      if (d < best) { best = d; hit = { type: 'city', ref: c }; }
+    }
+    for (const b of state.batteries) {
+      if (!b.alive) continue;
+      const d = Math.abs(b.x - x);
+      if (d < best) { best = d; hit = { type: 'bat', ref: b }; }
+    }
+    if (hit) {
+      if (hit.type === 'city') hit.ref.alive = false;
+      else { hit.ref.alive = false; hit.ref.ammo = 0; }
+    }
+  }
+
+  function addScore(pts) {
+    const before = state.score;
+    state.score += pts;
+    // Bonus city every 10,000 points
+    const prevT = Math.floor(before / 10000);
+    const nowT = Math.floor(state.score / 10000);
+    if (nowT > prevT) state.pendingBonusCities = (state.pendingBonusCities || 0) + (nowT - prevT);
+  }
+
+  // ── End of wave: tally bonuses ──────────────────────────────
+  function endWave() {
+    state.waveActive = false;
+    const mult = multiplier();
+    const survivingCities = state.cities.filter(c => c.alive).length;
+
+    if (survivingCities === 0) { gameOver(); return; }
+
+    let unusedAbms = 0;
+    state.batteries.forEach(b => { if (b.alive) unusedAbms += b.ammo; });
+
+    const missileBonus = unusedAbms * 5 * mult;
+    const cityBonus = survivingCities * 100 * mult;
+
+    // Award any pending bonus cities (up to 6 total), replacing destroyed ones
+    let added = 0;
+    if (state.pendingBonusCities) {
+      while (state.pendingBonusCities > 0 && state.cities.filter(c => c.alive).length < 6) {
+        const dead = state.cities.find(c => !c.alive);
+        if (!dead) break;
+        dead.alive = true;
+        added++;
+        state.pendingBonusCities--;
+      }
+      state.pendingBonusCities = 0;
+    }
+
+    show('waveOverlay');
+    document.getElementById('waveTitle').textContent = 'WAVE ' + state.wave + ' CLEARED';
+    document.getElementById('waveBonus').innerHTML =
+      `CITIES &times;${survivingCities} &rarr; ${cityBonus}<br>` +
+      `MISSILES &times;${unusedAbms} &rarr; ${missileBonus}` +
+      (added ? `<br><span style="color:#3ff0a0">+${added} BONUS CITY</span>` : '');
+
+    // Animate the bonus into the score, then start next wave
+    let toAdd = missileBonus + cityBonus;
+    document.getElementById('waveNext').textContent = 'Get ready…';
+    const tickAdd = () => {
+      if (toAdd <= 0) {
+        setTimeout(() => {
+          state.wave++;
+          startWave();
+        }, 900);
+        return;
+      }
+      const chunk = Math.min(toAdd, Math.max(5 * mult, Math.ceil(toAdd / 20)));
+      state.score += chunk;
+      toAdd -= chunk;
+      setTimeout(tickAdd, 30);
+    };
+    setTimeout(tickAdd, 500);
+  }
+
+  function gameOver() {
+    state.running = false;
+    show('endOverlay');
+    document.getElementById('endScore').innerHTML =
+      `SCORE ${state.score}<br>REACHED WAVE ${state.wave}`;
+  }
+
+  // ── Rendering ───────────────────────────────────────────────
+  function draw() {
+    const p = pal();
+    let ox = 0, oy = 0;
+    if (state.shake > 0) {
+      ox = (Math.random() - 0.5) * state.shake;
+      oy = (Math.random() - 0.5) * state.shake;
+    }
+    ctx.setTransform(1, 0, 0, 1, ox, oy);
+    ctx.clearRect(-20, -20, W + 40, H + 40);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(-20, -20, W + 40, H + 40);
+
+    // Stars
+    for (const s of state.stars) {
+      s.tw += 0.03;
+      const a = 0.3 + Math.sin(s.tw) * 0.25;
+      ctx.fillStyle = `rgba(255,250,235,${Math.max(0, a)})`;
+      ctx.fillRect(s.x, s.y, s.r, s.r);
+    }
+
+    // Enemy trails + heads
+    for (const e of state.enemies) {
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(e.sx, e.sy);
+      for (const pt of e.trail) ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+      if (e.smart) {
+        ctx.fillStyle = '#3ff0a0';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(e.x - 2, e.y - 2, 4, 4);
+      }
+    }
+
+    // Flyers
+    for (const f of state.flyers) {
+      ctx.fillStyle = f.color;
+      if (f.sat) {
+        ctx.fillRect(f.x - 8, f.y - 3, 16, 6);
+        ctx.fillRect(f.x - 14, f.y - 1, 6, 2);
+        ctx.fillRect(f.x + 8, f.y - 1, 6, 2);
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(f.x - 12, f.y);
+        ctx.lineTo(f.x + 12, f.y);
+        ctx.lineTo(f.x + 4, f.y + 5);
+        ctx.lineTo(f.x - 4, f.y + 5);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // ABM trails
+    for (const a of state.abms) {
+      ctx.strokeStyle = p.abm;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(a.sx, a.sy);
+      for (const pt of a.trail) ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+      // target marker
+      ctx.fillStyle = p.abm;
+      ctx.fillRect(a.tx - 2, a.ty - 2, 4, 4);
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(a.x - 1.5, a.y - 1.5, 3, 3);
+    }
+
+    // Explosions — cycling fireball
+    for (const ex of state.explosions) {
+      const flick = (Math.sin(ex.life * 40) + 1) / 2;
+      const cols = ['#fff', '#ffe23f', '#ff8a2f', '#e83a2c'];
+      const c = cols[(ex.life * 18) % cols.length | 0];
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255,255,255,${0.4 + flick * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, ex.r * 0.55, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Ground strip
+    ctx.fillStyle = p.ground;
+    ctx.fillRect(-20, GROUND_Y, W + 40, GROUND_H + 20);
+
+    // Cities (skyline blocks)
+    for (const c of state.cities) {
+      if (c.alive) drawCity(c.x, p.struct);
+      else drawRubble(c.x, p.ground);
+    }
+
+    // Batteries (mound + stacked ammo)
+    for (const b of state.batteries) {
+      if (b.alive) drawBattery(b, p.struct);
+      else drawRubble(b.x, p.ground);
+    }
+
+    // Crosshair
+    if (state.running) {
+      const ch = state.crosshair;
+      ctx.strokeStyle = p.abm;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(ch.x - 10, ch.y); ctx.lineTo(ch.x - 3, ch.y);
+      ctx.moveTo(ch.x + 3, ch.y); ctx.lineTo(ch.x + 10, ch.y);
+      ctx.moveTo(ch.x, ch.y - 10); ctx.lineTo(ch.x, ch.y - 3);
+      ctx.moveTo(ch.x, ch.y + 3); ctx.lineTo(ch.x, ch.y + 10);
+      ctx.stroke();
+    }
+
+    // HUD
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawHUD(p);
+  }
+
+  function drawCity(x, color) {
+    ctx.fillStyle = color;
+    const base = GROUND_Y + 2;
+    const heights = [6, 12, 9, 15, 8, 11, 7];
+    let bx = x - 21;
+    for (let i = 0; i < heights.length; i++) {
+      ctx.fillRect(bx, base - heights[i], 5, heights[i]);
+      bx += 6;
+    }
+  }
+
+  function drawRubble(x, color) {
+    ctx.fillStyle = 'rgba(120,90,50,0.9)';
+    const base = GROUND_Y + 2;
+    ctx.fillRect(x - 18, base - 3, 6, 3);
+    ctx.fillRect(x - 6, base - 5, 7, 5);
+    ctx.fillRect(x + 6, base - 2, 8, 2);
+  }
+
+  function drawBattery(b, color) {
+    ctx.fillStyle = color;
+    const base = GROUND_Y + GROUND_H;
+    // mound
+    ctx.beginPath();
+    ctx.moveTo(b.x - 26, base);
+    ctx.lineTo(b.x, GROUND_Y - 12);
+    ctx.lineTo(b.x + 26, base);
+    ctx.closePath();
+    ctx.fill();
+    // stacked ammo pyramid (up to 10)
+    ctx.fillStyle = '#fff';
+    const rows = [
+      [-3, 0], [-2, 1], [-1, 1], [0, 1], [1, 1], [2, 1],  // placeholder
+    ];
+    // draw ammo as small dots in a triangle reflecting remaining count
+    let drawn = 0;
+    const layout = [4, 3, 2, 1];      // 10 max
+    let ry = GROUND_Y - 4;
+    for (let r = 0; r < layout.length; r++) {
+      const n = layout[r];
+      const startX = b.x - (n - 1) * 3;
+      for (let i = 0; i < n; i++) {
+        if (drawn >= b.ammo) break;
+        ctx.fillRect(startX + i * 6 - 1, ry - r * 5, 2.5, 2.5);
+        drawn++;
+      }
+      if (drawn >= b.ammo) break;
+    }
+  }
+
+  function drawHUD(p) {
+    ctx.fillStyle = p.struct;
+    ctx.font = '16px "Press Start 2P", monospace';
+    ctx.textBaseline = 'top';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(state.score), W / 2, 14);
+
+    ctx.font = '9px "Press Start 2P", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(216,208,192,0.6)';
+    ctx.fillText('WAVE ' + state.wave, 16, 16);
+    ctx.textAlign = 'right';
+    ctx.fillText('x' + multiplier(), W - 16, 16);
+
+    // Battery labels
+    ctx.textAlign = 'center';
+    ctx.font = '7px "Press Start 2P", monospace';
+    for (const b of state.batteries) {
+      ctx.fillStyle = b.alive ? 'rgba(216,208,192,0.5)' : 'rgba(160,110,70,0.7)';
+      ctx.fillText(b.name, b.x, GROUND_Y + 24);
+    }
+  }
+
+  // ── Loop ────────────────────────────────────────────────────
+  let last = 0;
+  function loop(ts) {
+    if (!last) last = ts;
+    let dt = (ts - last) / 1000;
+    last = ts;
+    if (dt > 0.05) dt = 0.05;          // clamp after tab-switches
+    if (state.running && state.waveActive) update(dt);
+    else if (state.running) {
+      // during wave-cleared tally, keep explosions fading
+      for (let i = state.explosions.length - 1; i >= 0; i--) {
+        const ex = state.explosions[i];
+        ex.life += dt;
+        ex.r -= 90 * dt;
+        if (ex.r <= 0) state.explosions.splice(i, 1);
+      }
+    }
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ── Input ───────────────────────────────────────────────────
+  function canvasPoint(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left) / rect.width * W,
+      y: (clientY - rect.top) / rect.height * H,
+    };
+  }
+
+  canvas.addEventListener('pointermove', e => {
+    const pt = canvasPoint(e.clientX, e.clientY);
+    state.crosshair.x = Math.max(0, Math.min(W, pt.x));
+    state.crosshair.y = Math.max(0, Math.min(GROUND_Y - 4, pt.y));
+  });
+
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if (!state.running || !state.waveActive) return;
+    const pt = canvasPoint(e.clientX, e.clientY);
+    state.crosshair.x = Math.max(0, Math.min(W, pt.x));
+    state.crosshair.y = Math.max(0, Math.min(GROUND_Y - 4, pt.y));
+    fireNearest(state.crosshair.x, state.crosshair.y);
+  });
+
+  window.addEventListener('keydown', e => {
+    if (!state.running || !state.waveActive) return;
+    if (e.key === '1') fireBattery(0, state.crosshair.x, state.crosshair.y);
+    else if (e.key === '2') fireBattery(1, state.crosshair.x, state.crosshair.y);
+    else if (e.key === '3') fireBattery(2, state.crosshair.x, state.crosshair.y);
+    else if (e.key === ' ') { e.preventDefault(); fireNearest(state.crosshair.x, state.crosshair.y); }
+  });
+
+  // ── Overlay helpers ─────────────────────────────────────────
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+  function begin() {
+    hide('startOverlay');
+    hide('endOverlay');
+    state.running = true;
+    resetGame();
+  }
+
+  document.getElementById('startBtn').addEventListener('click', begin);
+  document.getElementById('restartBtn').addEventListener('click', begin);
+
+  // Kick off render loop immediately (shows attract state under overlay)
+  makeStars();
+  state.batteries = BATTERY_DEFS.map(b => ({ name: b.name, x: b.x, ammo: 10, alive: true, fast: b.name === 'DELTA' }));
+  state.cities = CITY_X.map(x => ({ x, alive: true }));
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
