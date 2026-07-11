@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Star Trek · Film Reviews · Adividiardi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: dark;
+      --void:      #050710;
+      --deep:      #080d1c;
+      --panel:     rgba(255,255,255,0.026);
+      --panel-h:   rgba(255,255,255,0.048);
+      --gold:      #c8a84b;
+      --gold-dim:  rgba(200,168,75,0.14);
+      --blue:      #7ab3d4;
+      --ink:       rgba(232,224,209,0.86);
+      --muted:     rgba(232,224,209,0.52);
+      --faint:     rgba(232,224,209,0.20);
+      --rule:      rgba(232,224,209,0.07);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--void);
+      color: var(--ink);
+      font-family: 'Crimson Text', Cambria, Georgia, serif;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    #starfield {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .page { position: relative; z-index: 1; }
+
+    /* ── Navigation ─────────────────────────────────────────── */
+    nav {
+      padding: 20px 28px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .back {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 160ms;
+    }
+    .back:hover { color: var(--gold); }
+    .nav-sep { color: var(--faint); font-size: 12px; }
+    .nav-current {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    /* ── Header ─────────────────────────────────────────────── */
+    header {
+      padding: clamp(48px, 10dvh, 96px) 24px clamp(40px, 8dvh, 72px);
+      text-align: center;
+    }
+    .eyebrow {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      letter-spacing: 0.45em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: 0.75;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-family: 'Cinzel', serif;
+      font-weight: 400;
+      font-size: clamp(44px, 11vw, 92px);
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: rgba(232,224,209,0.92);
+      line-height: 1;
+      margin-bottom: 12px;
+    }
+    .title-films {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(11px, 2vw, 14px);
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 36px;
+    }
+    .header-rule {
+      width: 48px;
+      height: 1px;
+      background: var(--gold);
+      opacity: 0.45;
+      margin: 0 auto 28px;
+    }
+    .header-desc {
+      max-width: 540px;
+      margin: 0 auto;
+      font-size: 18px;
+      line-height: 1.68;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Scorecard ──────────────────────────────────────────── */
+    .scorecard-wrap {
+      max-width: 900px;
+      margin: 0 auto 48px;
+      padding: 0 24px;
+    }
+    .section-label {
+      font-family: 'Cinzel', serif;
+      font-size: 9px;
+      letter-spacing: 0.38em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: 0.6;
+      margin-bottom: 14px;
+    }
+    .scorecard-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+    }
+    @media (max-width: 520px) {
+      .scorecard-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    .sc-cell {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 14px 8px 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: background 200ms, border-color 200ms, transform 150ms;
+    }
+    .sc-cell:hover {
+      background: var(--panel-h);
+      border-color: rgba(200,168,75,0.22);
+      transform: translateY(-3px);
+    }
+    .sc-numeral {
+      font-family: 'Cinzel', serif;
+      font-size: 10px;
+      color: var(--gold);
+      opacity: 0.7;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+    .sc-score {
+      font-family: 'Cinzel', serif;
+      font-size: 22px;
+      font-weight: 600;
+      color: var(--gold);
+      line-height: 1;
+      margin-bottom: 5px;
+    }
+    .sc-your {
+      font-size: 13px;
+      color: var(--blue);
+      opacity: 0.85;
+      margin-bottom: 2px;
+      min-height: 18px;
+    }
+    .sc-lbl {
+      font-size: 9px;
+      color: var(--faint);
+      letter-spacing: 0.1em;
+      line-height: 1.3;
+    }
+
+    /* ── Sort controls ───────────────────────────────────────── */
+    .controls {
+      max-width: 900px;
+      margin: 0 auto 20px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ctrl-lbl {
+      font-size: 12px;
+      color: var(--faint);
+      letter-spacing: 0.08em;
+    }
+    .sort-btn {
+      font-family: 'Cinzel', serif;
+      font-size: 9px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
+      color: var(--muted);
+      padding: 7px 14px;
+      cursor: pointer;
+      transition: border-color 200ms, color 200ms, background 200ms;
+    }
+    .sort-btn:hover { border-color: rgba(200,168,75,0.25); color: var(--ink); }
+    .sort-btn.active { border-color: var(--gold); color: var(--gold); background: var(--gold-dim); }
+
+    /* ── Film cards ─────────────────────────────────────────── */
+    .films {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 24px 96px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .film-card {
+      background: var(--panel);
+      border: 1px solid var(--rule);
+      border-radius: 16px;
+      overflow: hidden;
+      transition: border-color 300ms;
+    }
+    .film-card:hover { border-color: rgba(200,168,75,0.14); }
+    .film-card.expanded { border-color: rgba(200,168,75,0.28); }
+
+    /* Always-visible card header */
+    .card-head {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      align-items: center;
+      gap: 0;
+      cursor: pointer;
+      padding: 24px 28px;
+      user-select: none;
+    }
+    @media (max-width: 500px) {
+      .card-head { grid-template-columns: 52px 1fr auto; padding: 18px 18px; }
+    }
+
+    .roman {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(26px, 4.5vw, 42px);
+      font-weight: 400;
+      color: var(--gold);
+      opacity: 0.55;
+      line-height: 1;
+      transition: opacity 280ms;
+    }
+    .film-card:hover .roman,
+    .film-card.expanded .roman { opacity: 1; }
+
+    .card-meta { padding: 0 16px 0 8px; }
+    .film-title {
+      font-family: 'Cinzel', serif;
+      font-size: clamp(14px, 2.5vw, 19px);
+      font-weight: 400;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: rgba(232,224,209,0.90);
+      line-height: 1.25;
+      margin-bottom: 5px;
+    }
+    .film-year {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      margin-bottom: 10px;
+    }
+
+    .ratings-row {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      flex-wrap: wrap;
+    }
+    .rating-group { display: flex; align-items: center; gap: 4px; }
+    .rating-group-lbl {
+      font-size: 10px;
+      color: var(--faint);
+      letter-spacing: 0.1em;
+      margin-right: 3px;
+    }
+
+    /* Stars — mine (gold) */
+    .star { font-size: 13px; color: var(--gold); line-height: 1; }
+    .star.half { position: relative; color: var(--faint); }
+    .star.half::before {
+      content: '★';
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 50%;
+      overflow: hidden;
+      color: var(--gold);
+    }
+    .star.empty { color: var(--faint); }
+
+    /* Stars — yours (blue, interactive) */
+    .yr-star {
+      font-size: 13px;
+      color: var(--faint);
+      cursor: pointer;
+      transition: color 120ms, transform 100ms;
+      line-height: 1;
+      user-select: none;
+    }
+    .yr-star.lit { color: var(--blue); }
+    .yr-star.preview { color: #a0cce0; transform: scale(1.25); }
+    .yr-star:hover { transform: scale(1.2); }
+
+    .expand-icon {
+      font-size: 16px;
+      color: var(--faint);
+      transition: transform 320ms cubic-bezier(0.4,0,0.2,1), color 200ms;
+      width: 24px;
+      text-align: center;
+      align-self: flex-start;
+      margin-top: 4px;
+    }
+    .film-card.expanded .expand-icon {
+      transform: rotate(180deg);
+      color: var(--gold);
+    }
+
+    /* Capsule (single punchy line visible in collapsed header) */
+    .capsule-line {
+      margin-top: 10px;
+      font-size: 14px;
+      font-style: italic;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    /* Expandable body */
+    .card-body {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 420ms cubic-bezier(0.4,0,0.2,1);
+    }
+    .film-card.expanded .card-body {
+      grid-template-rows: 1fr;
+    }
+    .card-body-inner {
+      overflow: hidden;
+    }
+    .card-body-content {
+      padding: 0 28px 28px;
+      border-top: 1px solid var(--rule);
+    }
+    @media (max-width: 500px) {
+      .card-body-content { padding: 0 18px 22px; }
+    }
+    .review-text {
+      padding-top: 22px;
+      font-size: 17px;
+      line-height: 1.74;
+      color: var(--ink);
+    }
+    .review-text p + p { margin-top: 15px; }
+
+    .verdict-line {
+      margin-top: 22px;
+      padding-top: 16px;
+      border-top: 1px solid var(--rule);
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .verdict-lbl {
+      font-family: 'Cinzel', serif;
+      font-size: 9px;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--gold);
+      opacity: 0.65;
+      flex-shrink: 0;
+    }
+    .verdict-txt {
+      font-size: 15px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 40px 24px 48px;
+      border-top: 1px solid var(--rule);
+      font-family: 'Cinzel', serif;
+      font-size: 9px;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--faint);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .card-body { transition: none; }
+      .expand-icon { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="starfield"></canvas>
+  <div class="page">
+
+    <nav>
+      <a href="/" class="back">← Home</a>
+      <span class="nav-sep">/</span>
+      <span class="nav-current">Star Trek</span>
+    </nav>
+
+    <header>
+      <p class="eyebrow">Stardate Reviews</p>
+      <h1>Star Trek</h1>
+      <p class="title-films">The Motion Picture · Through · The Undiscovered Country</p>
+      <div class="header-rule"></div>
+      <p class="header-desc">Six films. One crew. An ongoing argument about which of them was actually good.</p>
+    </header>
+
+    <!-- Scorecard -->
+    <div class="scorecard-wrap">
+      <p class="section-label">Fleet Scorecard</p>
+      <div class="scorecard-grid" id="scorecard"></div>
+    </div>
+
+    <!-- Sort controls -->
+    <div class="controls">
+      <span class="ctrl-lbl">Sort by</span>
+      <button class="sort-btn active" data-sort="order" onclick="setSort('order')">Release Order</button>
+      <button class="sort-btn" data-sort="mine" onclick="setSort('mine')">My Rating</button>
+      <button class="sort-btn" data-sort="yours" onclick="setSort('yours')">Your Rating</button>
+    </div>
+
+    <!-- Film cards -->
+    <div class="films" id="films-list"></div>
+
+    <footer>To boldly go · 1979–1991</footer>
+  </div>
+
+<script>
+const STORAGE_KEY = 'st-ratings-v1';
+
+const FILMS = [
+  {
+    id: 'tmp',
+    roman: 'I',
+    title: 'The Motion Picture',
+    year: 1979,
+    score: 3.0,
+    capsule: 'A machine that became a god, and a film that mistakes length for grandeur.',
+    verdict: 'Earn your patience with it. The last ten minutes justify most of the wait.',
+    review: `<p>Shatner once called it a ten-year-old's best dream, and that's half right. V'Ger is a genuinely sublime piece of science fiction — a machine that has become a god, searching for its maker — buried under two hours of slow-panning approach shots and an infamously deliberate pace. The reunion of the crew feels real, Decker and Ilia are underused but interesting, and Goldsmith's score is among the finest ever written for the genre.</p>
+<p>The film mistakes awe for length, and it tests you for it. But when it finally exhales at the center of the cloud, it earns something rare: genuine cosmic wonder, the kind that asks a sincere question about consciousness and doesn't rush to answer it. Watch it in the right mood — late, large screen, unhurried — and it holds. Just get comfortable first.</p>`,
+  },
+  {
+    id: 'wok',
+    roman: 'II',
+    title: 'The Wrath of Khan',
+    year: 1982,
+    score: 5.0,
+    capsule: 'The one against which all others are measured.',
+    verdict: 'The gold standard. Not just of Trek — of blockbuster filmmaking.',
+    review: `<p>Nicholas Meyer understood something about this franchise that the first film missed: that Star Trek works best as naval drama, not cosmic tourism. The best space battles aren't about special effects — they're about psychology, about two commanders reading each other through closed walls, making decisions with incomplete information. The Mutara Nebula sequence is the finest space combat ever filmed, claustrophobic and elegant at once, won by the character of the men inside the ships.</p>
+<p>Khan himself is perfect because he's right about everything except what matters. His intelligence is real, his grievance is real, and his obsession destroys him anyway — making him a genuine tragic antagonist, not a cackling villain. And Spock's death lands fifty years later because it was earned across three films and hundreds of hours of television. The needs of the many. You already know the line. The scene still works.</p>`,
+  },
+  {
+    id: 'tsfs',
+    roman: 'III',
+    title: 'The Search for Spock',
+    year: 1984,
+    score: 3.5,
+    capsule: 'The bridge nobody remembers — and shouldn\'t overlook.',
+    verdict: 'Underrated. It asks the crew to pay real costs, and they do.',
+    review: `<p>Usually dismissed as connective tissue between II and IV, and it isn't. Nimoy directs with a surprising restraint that keeps the film honest about what it's asking: that Kirk and his crew throw away their careers, possibly their freedom, for a friend. The execution of that choice — the theft of the Enterprise, the quiet farewell to a dying ship — is the franchise at its most genuinely moving.</p>
+<p>The destruction of the Enterprise is the film's defining moment, and Nimoy handles it without score, without ceremony, just a quiet detonation watched from a hillside. David Marcus's death is abrupt and cruel in exactly the right way. Christopher Lloyd's Klingon commander is cartoonish in places, but he doesn't sink the film. What you're left with is a story that proves the original crew will pay almost any price for each other — which is what makes IV possible.</p>`,
+  },
+  {
+    id: 'tvh',
+    roman: 'IV',
+    title: 'The Voyage Home',
+    year: 1986,
+    score: 4.0,
+    capsule: 'Whales, time travel, and an inexplicable amount of joy.',
+    verdict: 'The lightest film. Also, somehow, one of the most rewatchable.',
+    review: `<p>The crew travels back to 1986 San Francisco to rescue two humpback whales, and it works entirely. The comedy is broad and earned — McCoy navigating a hospital, Chekov asking bystanders for directions to "nuclear wessels" — because the cast commits without winking. These characters have enough history that watching them be fish out of water feels like affection, not parody.</p>
+<p>Beneath the lightness is a genuinely felt environmental argument, delivered without lecturing, wrapped in enough charm that you absorb it without noticing. Nimoy directs with a confidence that knows exactly how much to lean into the absurdity and exactly when to pull back. It is the least Star Trek-like film in the series and one of the most purely pleasurable. Sometimes the franchise earns the right to exhale.</p>`,
+  },
+  {
+    id: 'tff',
+    roman: 'V',
+    title: 'The Final Frontier',
+    year: 1989,
+    score: 1.5,
+    capsule: 'God was unavailable. So was the budget.',
+    verdict: 'The one we don\'t talk about. The campfire scenes are good. That\'s your reward.',
+    review: `<p>Shatner directed a film about finding God at the center of the galaxy. The production budget was slashed, the effects crumbled, and the script never found its center. The premise — a renegade Vulcan leads a cult to the galactic core in search of Sha Ka Ree — has genuine ambition, but the execution is a muddle of broad comedy and a climax that dissolves on contact with thought.</p>
+<p>There are real moments buried here. The campfire sequences with Kirk, Spock, and McCoy are the most intimate the original cast ever got on film — three old men telling stories, and it's warm and honest. But the film earns those scenes, uses them, and then surrounds them with a movie that doesn't work. The "what does God need with a starship" exchange is genuinely good television. It's also the peak. What a summit for a very short mountain.</p>`,
+  },
+  {
+    id: 'tuc',
+    roman: 'VI',
+    title: 'The Undiscovered Country',
+    year: 1991,
+    score: 4.5,
+    capsule: 'The crew they deserved. The goodbye they earned.',
+    verdict: 'A graceful curtain call, and smarter than it gets credit for.',
+    review: `<p>Meyer returned for the sendoff and gave the original crew exactly the right kind of farewell: a Cold War allegory that maps the Federation-Klingon détente onto the collapse of the Soviet Union, with Kirk's prejudice made explicit, his redemption earned rather than granted. The film trusts that the audience has spent enough time with these characters to hold both things at once — that Kirk can be wrong in ways that matter, and still be worth following.</p>
+<p>Chang, played by Christopher Plummer in a performance of open, unrepentant relish, quoting Shakespeare in combat, is one of the franchise's finest antagonists. The mystery plot sags slightly in the middle, but the final act recovers everything. The last scene — signatures scrolling across the viewscreen, the Enterprise banking into the light — is precisely the ending these characters deserved. They flew off toward the next adventure. We knew, this time, it was really goodbye.</p>`,
+  },
+];
+
+/* ── Storage ────────────────────────────────────────────────── */
+function getRatings() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; }
+  catch { return {}; }
+}
+function saveRating(id, r) {
+  const ratings = getRatings();
+  ratings[id] = r;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(ratings));
+}
+
+/* ── Star rendering ─────────────────────────────────────────── */
+function renderStars(score, cls = 'star') {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    if (score >= i) {
+      html += `<span class="${cls}">★</span>`;
+    } else if (score >= i - 0.5) {
+      html += `<span class="${cls} half">★</span>`;
+    } else {
+      html += `<span class="${cls} empty">★</span>`;
+    }
+  }
+  return html;
+}
+
+/* ── Scorecard ──────────────────────────────────────────────── */
+function buildScorecard() {
+  const ratings = getRatings();
+  const sc = document.getElementById('scorecard');
+  sc.innerHTML = FILMS.map(f => {
+    const yr = ratings[f.id];
+    return `
+      <div class="sc-cell" onclick="scrollToFilm('${f.id}')" title="Jump to ${f.title}">
+        <div class="sc-numeral">${f.roman}</div>
+        <div class="sc-score">${f.score % 1 === 0 ? f.score.toFixed(0) : f.score.toFixed(1)}</div>
+        <div class="sc-your">${yr ? `<span style="color:var(--blue)">${yr}/5</span>` : '—'}</div>
+        <div class="sc-lbl">Mine${yr ? '\nYours' : ''}</div>
+      </div>`;
+  }).join('');
+}
+
+function scrollToFilm(id) {
+  document.getElementById('card-' + id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ── Sort ───────────────────────────────────────────────────── */
+let currentSort = 'order';
+
+function setSort(type) {
+  currentSort = type;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort === type));
+  renderFilms();
+}
+
+/* ── User rating stars ──────────────────────────────────────── */
+function makeYrStars(filmId) {
+  const ratings = getRatings();
+  const current = ratings[filmId] || 0;
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    html += `<span class="yr-star${i <= current ? ' lit' : ''}" data-film="${filmId}" data-val="${i}"
+      onmouseenter="previewRating('${filmId}', ${i})"
+      onmouseleave="unpreviewRating('${filmId}')"
+      onclick="setRating('${filmId}', ${i})">★</span>`;
+  }
+  return html;
+}
+
+function previewRating(filmId, val) {
+  document.querySelectorAll(`.yr-star[data-film="${filmId}"]`).forEach(s => {
+    const v = parseInt(s.dataset.val);
+    s.classList.toggle('preview', v <= val);
+    s.classList.remove('lit');
+  });
+}
+
+function unpreviewRating(filmId) {
+  const ratings = getRatings();
+  const current = ratings[filmId] || 0;
+  document.querySelectorAll(`.yr-star[data-film="${filmId}"]`).forEach(s => {
+    s.classList.remove('preview');
+    s.classList.toggle('lit', parseInt(s.dataset.val) <= current);
+  });
+}
+
+function setRating(filmId, val) {
+  const ratings = getRatings();
+  // Click same rating again to clear
+  if (ratings[filmId] === val) { val = 0; }
+  saveRating(filmId, val);
+  unpreviewRating(filmId);
+  buildScorecard();
+  // Update scorecard your-score display
+  document.querySelectorAll(`.yr-star[data-film="${filmId}"]`).forEach(s => {
+    s.classList.toggle('lit', parseInt(s.dataset.val) <= val);
+  });
+  // Refresh yr-label in card header
+  const lbl = document.querySelector(`#card-${filmId} .yr-score-display`);
+  if (lbl) lbl.textContent = val ? `${val}/5` : '—';
+}
+
+/* ── Expand/collapse ────────────────────────────────────────── */
+function toggleCard(id) {
+  const card = document.getElementById('card-' + id);
+  card.classList.toggle('expanded');
+}
+
+/* ── Render films ───────────────────────────────────────────── */
+function renderFilms() {
+  const ratings = getRatings();
+  let sorted = [...FILMS];
+  if (currentSort === 'mine') sorted.sort((a, b) => b.score - a.score);
+  else if (currentSort === 'yours') sorted.sort((a, b) => (ratings[b.id] || 0) - (ratings[a.id] || 0));
+
+  const list = document.getElementById('films-list');
+  list.innerHTML = sorted.map(f => {
+    const yr = ratings[f.id] || 0;
+    return `
+    <div class="film-card" id="card-${f.id}">
+      <div class="card-head" onclick="toggleCard('${f.id}')">
+        <div class="roman">${f.roman}</div>
+        <div class="card-meta">
+          <div class="film-title">${f.title}</div>
+          <div class="film-year">${f.year}</div>
+          <div class="ratings-row">
+            <div class="rating-group">
+              <span class="rating-group-lbl">Mine</span>
+              ${renderStars(f.score)}
+            </div>
+            <div class="rating-group">
+              <span class="rating-group-lbl">Yours</span>
+              ${makeYrStars(f.id)}
+              <span class="yr-score-display" style="font-size:11px;color:var(--blue);margin-left:6px;">${yr ? yr + '/5' : '—'}</span>
+            </div>
+          </div>
+          <div class="capsule-line">${f.capsule}</div>
+        </div>
+        <div class="expand-icon">▾</div>
+      </div>
+      <div class="card-body">
+        <div class="card-body-inner">
+          <div class="card-body-content">
+            <div class="review-text">${f.review}</div>
+            <div class="verdict-line">
+              <span class="verdict-lbl">Verdict</span>
+              <span class="verdict-txt">${f.verdict}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ── Starfield canvas ───────────────────────────────────────── */
+(function () {
+  const canvas = document.getElementById('starfield');
+  const ctx = canvas.getContext('2d');
+  let stars = [], W, H, raf;
+
+  function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    stars = Array.from({ length: 200 }, () => ({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: Math.random() * 1.1 + 0.15,
+      speed: Math.random() * 0.04 + 0.008,
+      phase: Math.random() * Math.PI * 2,
+      phaseSpeed: Math.random() * 0.015 + 0.004,
+      base: Math.random() * 0.4 + 0.15,
+    }));
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      s.phase += s.phaseSpeed;
+      const a = s.base + Math.sin(s.phase) * 0.13;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(210,222,240,${Math.max(0, a)})`;
+      ctx.fill();
+      s.y -= s.speed;
+      if (s.y < -2) { s.y = H + 2; s.x = Math.random() * W; }
+    }
+    raf = requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', resize);
+  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    resize(); draw();
+  }
+})();
+
+/* ── Init ───────────────────────────────────────────────────── */
+buildScorecard();
+renderFilms();
+</script>
+</body>
+</html>
