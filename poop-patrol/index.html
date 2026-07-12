@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Poop Patrol · Adividiardi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #6a4a2a;
+      color: #fff5e8;
+      font-family: 'Baloo 2', system-ui, sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none; user-select: none;
+    }
+    #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    #game {
+      display: block;
+      max-width: 100vw; max-height: 100vh;
+      background: #8ec5e6;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 20;
+      display: flex; align-items: center; gap: 14px; padding: 12px 16px; pointer-events: none;
+    }
+    .back {
+      pointer-events: auto; font-size: 14px; font-weight: 800; letter-spacing: 0.04em;
+      color: rgba(255,245,232,0.85); text-decoration: none;
+      background: rgba(90,60,30,0.5); padding: 6px 12px; border-radius: 20px;
+      transition: background 160ms;
+    }
+    .back:hover { background: rgba(90,60,30,0.85); }
+
+    .overlay {
+      position: fixed; inset: 0; z-index: 15;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: 24px; gap: 22px;
+      background: radial-gradient(circle at 50% 40%, rgba(120,80,40,0.82), rgba(60,38,18,0.94));
+      backdrop-filter: blur(2px);
+    }
+    .overlay.hidden { display: none; }
+    .ov-title {
+      font-size: clamp(40px, 11vw, 92px); font-weight: 800; line-height: 0.95;
+      color: #ffd98a; text-shadow: 0 4px 0 #7a4a1e, 0 0 30px rgba(255,180,90,0.4);
+    }
+    .ov-emoji { font-size: clamp(48px, 13vw, 104px); line-height: 1; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.35)); }
+    .ov-sub {
+      font-size: clamp(14px, 2.6vw, 19px); font-weight: 600; line-height: 1.7;
+      color: rgba(255,245,232,0.92); max-width: 540px;
+    }
+    .ov-sub .hi { color: #ffd98a; }
+    .btn {
+      font-family: 'Baloo 2', sans-serif; font-size: clamp(18px, 4vw, 26px); font-weight: 800;
+      color: #5a3410; background: linear-gradient(180deg, #ffd98a, #f5b74e);
+      border: none; border-radius: 999px; padding: 16px 40px; cursor: pointer;
+      box-shadow: 0 6px 0 #b9822f, 0 10px 24px rgba(0,0,0,0.3);
+      transition: transform 100ms, box-shadow 100ms;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 0 #b9822f, 0 14px 28px rgba(0,0,0,0.35); }
+    .btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #b9822f, 0 4px 12px rgba(0,0,0,0.3); }
+    .final { font-size: clamp(18px, 4vw, 26px); font-weight: 800; color: #fff5e8; line-height: 1.6; }
+    .final .big { font-size: clamp(34px, 8vw, 60px); color: #ffd98a; }
+    .newhi { color: #9fe870; }
+    .hs-line { font-size: clamp(13px, 2.4vw, 16px); font-weight: 600; color: rgba(255,245,232,0.7); }
+    .clearhs {
+      background: rgba(0,0,0,0.2); border: 2px solid rgba(255,245,232,0.3); color: rgba(255,245,232,0.7);
+      font-family: 'Baloo 2', sans-serif; font-weight: 600; font-size: 12px; letter-spacing: 0.04em;
+      padding: 8px 16px; border-radius: 999px; cursor: pointer;
+    }
+    .clearhs:hover { border-color: rgba(255,245,232,0.6); }
+    .credit {
+      position: fixed; bottom: 6px; left: 0; right: 0; text-align: center;
+      font-size: 11px; font-weight: 600; color: rgba(255,245,232,0.4); z-index: 20; pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar"><a href="/" class="back">← home</a></div>
+  <div id="wrap"><canvas id="game" width="960" height="640"></canvas></div>
+  <div class="credit">POOP PATROL · a distinguished waste-management simulator</div>
+
+  <!-- Start -->
+  <div class="overlay" id="startOverlay">
+    <div class="ov-emoji">🐦💩</div>
+    <div class="ov-title">POOP PATROL</div>
+    <div class="ov-sub">
+      You are a pigeon of <span class="hi">questionable manners</span>.<br>
+      <span class="hi">MOVE</span> — mouse / finger / arrow keys<br>
+      <span class="hi">DROP</span> — click, tap, or spacebar<br><br>
+      Bomb the pedestrians and cars below. Chain hits for combos.<br>
+      Mind the <span class="hi">umbrellas</span> — they'll block your payload.<br>
+      90 seconds. Make a mess.
+    </div>
+    <button class="btn" id="startBtn">LET IT FLY</button>
+    <div class="hs-line" id="hsLine"></div>
+    <button class="clearhs" id="clearHsBtn">clear high score</button>
+  </div>
+
+  <!-- Game over -->
+  <div class="overlay hidden" id="endOverlay">
+    <div class="ov-emoji" id="endEmoji">💩</div>
+    <div class="final" id="endStats"></div>
+    <button class="btn" id="restartBtn">GO AGAIN</button>
+    <div class="hs-line" id="endHsLine"></div>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = 960, H = 640;
+  const STREET_Y = 500;          // top of the street
+  const SIDEWALK_Y = 512;        // pedestrians walk here
+  const ROAD_Y = 566;            // cars drive here
+  const ROUND_TIME = 90;
+  const HS_KEY = 'poop-patrol-hi';
+
+  const state = {
+    running: false,
+    score: 0,
+    highScore: parseInt(localStorage.getItem(HS_KEY) || '0', 10) || 0,
+    timeLeft: ROUND_TIME,
+    elapsed: 0,
+    combo: 0,
+    bestCombo: 0,
+    bird: { x: W / 2, y: 90, vx: 0, flap: 0 },
+    targetX: W / 2,
+    ammo: 6, maxAmmo: 6, ammoRegen: 0,
+    poops: [],
+    targets: [],
+    splats: [],       // persistent ground decals
+    pops: [],         // floating score text
+    spawnTimer: 0,
+    keys: {},
+    stats: { hits: 0, misses: 0 },
+  };
+
+  // ── Sound (synth WebAudio) ──────────────────────────────────
+  const snd = (function () {
+    let ctx2 = null, master = null;
+    function ensure() {
+      if (ctx2) return;
+      try {
+        ctx2 = new (window.AudioContext || window.webkitAudioContext)();
+        master = ctx2.createGain(); master.gain.value = 0.3; master.connect(ctx2.destination);
+      } catch (e) { ctx2 = null; }
+    }
+    function noise(dur) {
+      const n = Math.max(1, (ctx2.sampleRate * dur) | 0);
+      const b = ctx2.createBuffer(1, n, ctx2.sampleRate);
+      const d = b.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+      return b;
+    }
+    function tone(type, f0, f1, dur, vol) {
+      if (!ctx2) return;
+      const t = ctx2.currentTime, o = ctx2.createOscillator(), g = ctx2.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + dur);
+    }
+    function squish(dur, cutHi, cutLo, vol) {
+      if (!ctx2) return;
+      const t = ctx2.currentTime, s = ctx2.createBufferSource(); s.buffer = noise(dur);
+      const f = ctx2.createBiquadFilter(); f.type = 'lowpass';
+      f.frequency.setValueAtTime(cutHi, t); f.frequency.exponentialRampToValueAtTime(cutLo, t + dur);
+      const g = ctx2.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur);
+    }
+    return {
+      init: ensure,
+      drop() { tone('sawtooth', 700, 180, 0.22, 0.10); },          // descending whistle
+      splatHit(combo) {
+        squish(0.18, 1200, 200, 0.25);
+        tone('square', 300 + combo * 40, 520 + combo * 60, 0.12, 0.12);
+      },
+      miss() { squish(0.22, 500, 120, 0.22); tone('sine', 120, 60, 0.2, 0.12); },
+      block() { tone('square', 400, 120, 0.1, 0.12); },
+      golden() { [660, 880, 1174, 1568].forEach((f, i) => setTimeout(() => tone('square', f, f, 0.1, 0.12), i * 70)); },
+      gameOver() { tone('sawtooth', 300, 70, 1.1, 0.22); tone('sine', 150, 45, 1.1, 0.16); },
+      tick() { tone('sine', 880, 880, 0.05, 0.06); },
+    };
+  })();
+
+  // ── Target types ────────────────────────────────────────────
+  const TYPES = {
+    walker:  { emoji: '🚶', value: 100, lane: SIDEWALK_Y, w: 34, speed: 60,  block: false },
+    dog:     { emoji: '🐕', value: 120, lane: SIDEWALK_Y, w: 34, speed: 95,  block: false },
+    runner:  { emoji: '🏃', value: 160, lane: SIDEWALK_Y, w: 34, speed: 130, block: false },
+    car:     { emoji: '🚗', value: 220, lane: ROAD_Y,     w: 52, speed: 175, block: false },
+    umbrella:{ emoji: '🧑', value: 0,   lane: SIDEWALK_Y, w: 34, speed: 55,  block: true },
+    vip:     { emoji: '🤵', value: 500, lane: SIDEWALK_Y, w: 34, speed: 80,  block: false, golden: true },
+  };
+
+  function resetGame() {
+    state.score = 0; state.timeLeft = ROUND_TIME; state.elapsed = 0;
+    state.combo = 0; state.bestCombo = 0;
+    state.bird.x = W / 2; state.targetX = W / 2; state.bird.vx = 0;
+    state.ammo = state.maxAmmo; state.ammoRegen = 0;
+    state.poops = []; state.targets = []; state.splats = []; state.pops = [];
+    state.spawnTimer = 0.5;
+    state.stats = { hits: 0, misses: 0 };
+    state._lastTick = ROUND_TIME;
+  }
+
+  function spawnTarget() {
+    const t = state.elapsed;
+    // Difficulty: weight faster/juicier targets as time goes on
+    const roll = Math.random();
+    let key;
+    if (roll < 0.02 + t * 0.001) key = 'vip';
+    else if (roll < 0.20) key = 'umbrella';
+    else if (roll < 0.42) key = 'car';
+    else if (roll < 0.62) key = 'runner';
+    else if (roll < 0.80) key = 'dog';
+    else key = 'walker';
+    const def = TYPES[key];
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const speedMul = 1 + t / 120;              // everyone speeds up over the round
+    state.targets.push({
+      key, def,
+      x: dir > 0 ? -40 : W + 40,
+      y: def.lane,
+      dir,
+      speed: def.speed * speedMul,
+      w: def.w,
+      alive: true,
+      hitFlash: 0,
+      bob: Math.random() * Math.PI * 2,
+    });
+  }
+
+  function dropPoop() {
+    if (!state.running || state.ammo <= 0) return;
+    state.ammo--;
+    state.poops.push({
+      x: state.bird.x, y: state.bird.y + 18,
+      vx: state.bird.vx * 0.25, vy: 40,
+      rot: 0, vrot: (Math.random() - 0.5) * 8,
+    });
+    snd.drop();
+  }
+
+  function addSplat(x, y, big) {
+    state.splats.push({ x, y, r: big ? 20 : 14, a: 1, born: state.elapsed });
+    if (state.splats.length > 80) state.splats.shift();   // cap decals
+  }
+
+  function pop(x, y, text, color) {
+    state.pops.push({ x, y, text, color: color || '#fff5e8', life: 1 });
+  }
+
+  // ── Update ──────────────────────────────────────────────────
+  function update(dt) {
+    state.elapsed += dt;
+    state.timeLeft -= dt;
+
+    // countdown ticks in the final 5 seconds
+    if (state.timeLeft <= 5 && Math.ceil(state.timeLeft) < Math.ceil(state._lastTick)) snd.tick();
+    state._lastTick = state.timeLeft;
+
+    if (state.timeLeft <= 0) { state.timeLeft = 0; gameOver(); return; }
+
+    // Ammo regen
+    if (state.ammo < state.maxAmmo) {
+      state.ammoRegen += dt;
+      if (state.ammoRegen >= 0.7) { state.ammo++; state.ammoRegen = 0; }
+    }
+
+    // Bird follows target X (mouse/touch) or keyboard
+    let kx = 0;
+    if (state.keys['ArrowLeft'] || state.keys['a']) kx -= 1;
+    if (state.keys['ArrowRight'] || state.keys['d']) kx += 1;
+    if (kx !== 0) state.targetX += kx * 420 * dt;
+    state.targetX = Math.max(30, Math.min(W - 30, state.targetX));
+    const prevX = state.bird.x;
+    state.bird.x += (state.targetX - state.bird.x) * Math.min(1, dt * 10);
+    state.bird.vx = (state.bird.x - prevX) / Math.max(dt, 0.001);
+    state.bird.flap += dt * 12;
+
+    // Spawn targets
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) {
+      spawnTarget();
+      const base = Math.max(0.45, 1.3 - state.elapsed / 90);   // ramps up
+      state.spawnTimer = base * (0.6 + Math.random() * 0.8);
+    }
+
+    // Move targets
+    for (let i = state.targets.length - 1; i >= 0; i--) {
+      const tg = state.targets[i];
+      tg.x += tg.dir * tg.speed * dt;
+      tg.bob += dt * 8;
+      if (tg.hitFlash > 0) tg.hitFlash -= dt;
+      if (tg.x < -60 || tg.x > W + 60) state.targets.splice(i, 1);
+    }
+
+    // Move poops + collisions
+    for (let i = state.poops.length - 1; i >= 0; i--) {
+      const p = state.poops[i];
+      p.vy += 900 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.rot += p.vrot * dt;
+
+      let consumed = false;
+      // Hit a target?
+      for (const tg of state.targets) {
+        if (!tg.alive) continue;
+        if (p.y > tg.y - 26 && p.y < tg.y + 8 &&
+            Math.abs(p.x - tg.x) < tg.w / 2 + 8) {
+          if (tg.def.block) {
+            // umbrella deflects
+            snd.block();
+            pop(tg.x, tg.y - 40, 'BLOCKED', '#cfe0ff');
+            addSplat(p.x, tg.y - 30, false);
+            tg.hitFlash = 0.2;
+            consumed = true;
+            break;
+          }
+          // Direct hit!
+          state.combo++;
+          state.bestCombo = Math.max(state.bestCombo, state.combo);
+          const mult = 1 + Math.floor(state.combo / 3);
+          const pts = tg.def.value * mult;
+          state.score += pts;
+          state.stats.hits++;
+          tg.alive = false;
+          tg.hitFlash = 0.35;
+          tg.vy = -120;                 // knock down
+          addSplat(tg.x, tg.y + 2, true);
+          if (tg.def.golden) { snd.golden(); pop(tg.x, tg.y - 44, 'VIP! +' + pts, '#ffd98a'); }
+          else { snd.splatHit(state.combo); pop(tg.x, tg.y - 44, '+' + pts + (mult > 1 ? ' x' + mult : ''), '#9fe870'); }
+          consumed = true;
+          break;
+        }
+      }
+      if (consumed) { state.poops.splice(i, 1); continue; }
+
+      // Hit the ground → miss, combo breaks
+      if (p.y >= STREET_Y + 24) {
+        addSplat(p.x, STREET_Y + 22, false);
+        state.stats.misses++;
+        if (state.combo >= 3) pop(p.x, STREET_Y - 6, 'combo lost', 'rgba(255,220,200,0.8)');
+        state.combo = 0;
+        snd.miss();
+        state.poops.splice(i, 1);
+      }
+    }
+
+    // Knocked-down targets fall away
+    for (const tg of state.targets) {
+      if (!tg.alive && tg.vy != null) { tg.vy += 500 * dt; tg.y += tg.vy * dt; tg.rotDead = (tg.rotDead || 0) + dt * 6; }
+    }
+    state.targets = state.targets.filter(tg => tg.alive || tg.y < H + 40);
+
+    // Splats fade slightly (but linger)
+    for (const s of state.splats) { if (s.a > 0.5) s.a -= dt * 0.05; }
+
+    // Floating score text
+    for (let i = state.pops.length - 1; i >= 0; i--) {
+      const f = state.pops[i]; f.y -= 40 * dt; f.life -= dt * 1.2;
+      if (f.life <= 0) state.pops.splice(i, 1);
+    }
+  }
+
+  // ── Draw ────────────────────────────────────────────────────
+  function draw() {
+    // Sky
+    const sky = ctx.createLinearGradient(0, 0, 0, STREET_Y);
+    sky.addColorStop(0, '#8ec5e6'); sky.addColorStop(1, '#cfe8f5');
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, STREET_Y);
+
+    // Distant buildings
+    ctx.fillStyle = 'rgba(150,170,190,0.5)';
+    for (let i = 0; i < 10; i++) {
+      const bx = i * 100, bh = 60 + (i * 37 % 90);
+      ctx.fillRect(bx, STREET_Y - bh, 84, bh);
+    }
+    ctx.fillStyle = 'rgba(130,150,175,0.35)';
+    for (let i = 0; i < 7; i++) {
+      const bx = 40 + i * 140, bh = 100 + (i * 53 % 120);
+      ctx.fillRect(bx, STREET_Y - bh, 100, bh);
+    }
+
+    // Street
+    ctx.fillStyle = '#9a9a9a'; ctx.fillRect(0, STREET_Y, W, H - STREET_Y);
+    ctx.fillStyle = '#8a8a8a'; ctx.fillRect(0, ROAD_Y - 16, W, 60);   // road
+    // road dashes
+    ctx.fillStyle = 'rgba(255,240,180,0.8)';
+    for (let x = ((state.elapsed * 40) % 80) - 80; x < W; x += 80) ctx.fillRect(x, ROAD_Y + 12, 40, 5);
+    // curb
+    ctx.fillStyle = '#c8c8c8'; ctx.fillRect(0, ROAD_Y - 20, W, 5);
+
+    // Ground splat decals (persistent poopy mess)
+    for (const s of state.splats) drawSplat(s.x, s.y, s.r, s.a);
+
+    // Targets
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (const tg of state.targets) {
+      ctx.save();
+      ctx.translate(tg.x, tg.y - 16 + Math.sin(tg.bob) * (tg.alive ? 2 : 0));
+      if (!tg.alive) ctx.rotate((tg.rotDead || 0));
+      if (tg.hitFlash > 0) { ctx.globalAlpha = 0.6 + Math.sin(state.elapsed * 40) * 0.4; }
+      const flip = tg.dir < 0 ? -1 : 1;
+      ctx.scale(flip, 1);
+      ctx.font = (tg.key === 'car' ? '44px' : '36px') + ' serif';
+      ctx.fillText(tg.def.emoji, 0, 0);
+      // umbrella on top of the blocker
+      if (tg.def.block) { ctx.font = '30px serif'; ctx.fillText('☂️', 0, -22); }
+      ctx.restore();
+    }
+
+    // Poops falling
+    for (const p of state.poops) {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.font = '26px serif'; ctx.fillText('💩', 0, 0);
+      ctx.restore();
+    }
+
+    // Bird
+    const b = state.bird;
+    ctx.save(); ctx.translate(b.x, b.y);
+    const tilt = Math.max(-0.3, Math.min(0.3, b.vx / 900));
+    ctx.rotate(tilt);
+    ctx.font = '44px serif';
+    ctx.fillText(Math.sin(b.flap) > 0 ? '🐦' : '🕊️', 0, 0);
+    ctx.restore();
+    // aim line
+    ctx.strokeStyle = 'rgba(120,80,40,0.25)'; ctx.setLineDash([4, 8]); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(b.x, b.y + 20); ctx.lineTo(b.x, STREET_Y); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Floating score pops
+    for (const f of state.pops) {
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.fillStyle = f.color;
+      ctx.font = '800 22px "Baloo 2", sans-serif';
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.globalAlpha = 1;
+    }
+
+    drawHUD();
+  }
+
+  function drawSplat(x, y, r, a) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.fillStyle = '#5f3a17';
+    ctx.beginPath();
+    // irregular blob
+    for (let i = 0; i < 7; i++) {
+      const ang = (i / 7) * Math.PI * 2;
+      const rr = r * (0.7 + ((i * 3) % 5) / 10);
+      const px = x + Math.cos(ang) * rr, py = y + Math.sin(ang) * rr * 0.5;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#764a20';
+    ctx.beginPath(); ctx.ellipse(x, y - 2, r * 0.45, r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  function drawHUD() {
+    ctx.textBaseline = 'top';
+    // Score (left)
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#5a3410';
+    ctx.font = '800 30px "Baloo 2", sans-serif';
+    ctx.fillText(String(state.score), 18, 46);
+    ctx.font = '600 13px "Baloo 2", sans-serif';
+    ctx.fillStyle = 'rgba(90,52,16,0.7)';
+    ctx.fillText('HI ' + Math.max(state.highScore, state.score), 20, 80);
+
+    // Timer (center)
+    ctx.textAlign = 'center';
+    const urgent = state.timeLeft <= 10;
+    ctx.fillStyle = urgent ? '#c0392b' : '#5a3410';
+    ctx.font = '800 34px "Baloo 2", sans-serif';
+    ctx.fillText(Math.ceil(state.timeLeft) + 's', W / 2, 44);
+
+    // Combo (center under timer)
+    if (state.combo >= 2) {
+      const mult = 1 + Math.floor(state.combo / 3);
+      ctx.fillStyle = '#e07b1a';
+      ctx.font = '800 22px "Baloo 2", sans-serif';
+      ctx.fillText('COMBO ' + state.combo + (mult > 1 ? '  x' + mult : ''), W / 2, 86);
+    }
+
+    // Ammo (right) — poop icons
+    ctx.textAlign = 'right';
+    ctx.font = '22px serif';
+    let s = '';
+    for (let i = 0; i < state.maxAmmo; i++) s = (i < state.ammo ? '💩' : '·') + s;
+    ctx.fillText(s, W - 16, 50);
+  }
+
+  // ── Loop ────────────────────────────────────────────────────
+  let last = 0;
+  function loop(ts) {
+    if (!last) last = ts;
+    let dt = (ts - last) / 1000; last = ts;
+    if (dt > 0.05) dt = 0.05;
+    if (state.running) update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  // ── Game over ───────────────────────────────────────────────
+  function gameOver() {
+    state.running = false;
+    snd.gameOver();
+    let isNew = false;
+    if (state.score > state.highScore) {
+      state.highScore = state.score;
+      localStorage.setItem(HS_KEY, String(state.highScore));
+      isNew = true;
+    }
+    const acc = state.stats.hits + state.stats.misses > 0
+      ? Math.round(state.stats.hits / (state.stats.hits + state.stats.misses) * 100) : 0;
+    document.getElementById('endEmoji').textContent = isNew ? '🏆💩' : (acc >= 70 ? '💩✨' : '💩');
+    document.getElementById('endStats').innerHTML =
+      `<div class="big">${state.score}</div>` +
+      `direct hits ${state.stats.hits} · accuracy ${acc}%<br>` +
+      `best combo x${1 + Math.floor(state.bestCombo / 3)} (${state.bestCombo} in a row)` +
+      (isNew ? `<br><span class="newhi">NEW HIGH SCORE!</span>` : '');
+    document.getElementById('endHsLine').textContent = isNew ? '' : 'HIGH SCORE  ' + state.highScore;
+    show('endOverlay');
+  }
+
+  // ── Input ───────────────────────────────────────────────────
+  function pt(cx, cy) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (cx - r.left) / r.width * W, y: (cy - r.top) / r.height * H };
+  }
+  canvas.addEventListener('pointermove', e => {
+    const p = pt(e.clientX, e.clientY);
+    state.targetX = Math.max(30, Math.min(W - 30, p.x));
+  });
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const p = pt(e.clientX, e.clientY);
+    state.targetX = Math.max(30, Math.min(W - 30, p.x));
+    dropPoop();
+  });
+  window.addEventListener('keydown', e => {
+    state.keys[e.key] = true;
+    if (e.key === ' ') { e.preventDefault(); dropPoop(); }
+  });
+  window.addEventListener('keyup', e => { state.keys[e.key] = false; });
+
+  // ── Overlays ────────────────────────────────────────────────
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+  function begin() {
+    snd.init();
+    hide('startOverlay'); hide('endOverlay');
+    resetGame();
+    state.running = true;
+  }
+  function refreshHi() {
+    const el = document.getElementById('hsLine');
+    el.textContent = state.highScore > 0 ? 'HIGH SCORE  ' + state.highScore : '';
+    document.getElementById('clearHsBtn').style.display = state.highScore > 0 ? '' : 'none';
+  }
+
+  document.getElementById('startBtn').addEventListener('click', begin);
+  document.getElementById('restartBtn').addEventListener('click', begin);
+  document.getElementById('clearHsBtn').addEventListener('click', () => {
+    state.highScore = 0; localStorage.removeItem(HS_KEY); refreshHi();
+  });
+
+  refreshHi();
+  requestAnimationFrame(loop);
+  globalThis.__test = { state, update, dropPoop, spawnTarget, begin, resetGame, gameOver, TYPES };
+})();
+</script>
+</body>
+</html>
