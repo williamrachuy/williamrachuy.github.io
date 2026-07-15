@@ -94,8 +94,15 @@
   .cbtn.pace{background:linear-gradient(180deg,#4f86c0,#345f8e)}
   .cbtn.pace.gallop{background:linear-gradient(180deg,#d08a3f,#a5632a)}
   .cbtn.jump{background:linear-gradient(180deg,#5fae5a,#3d7a3a)}
+  .cbtn.pace.route{background:linear-gradient(180deg,#6a8fb0,#3f5f7e)}
+  .cbtn.jump.route{background:linear-gradient(180deg,#d0563f,#9a3826); animation:pulseR .7s infinite}
+  @keyframes pulseR{0%,100%{box-shadow:0 5px 0 rgba(0,0,0,.4)}50%{box-shadow:0 5px 0 rgba(0,0,0,.4),0 0 18px rgba(208,86,63,.7)}}
   .toast{position:absolute; left:50%; top:64px; transform:translateX(-50%); z-index:7; background:rgba(8,14,10,.85); border:1px solid var(--line); padding:8px 14px; border-radius:20px; font-weight:600; font-size:14px; white-space:nowrap; opacity:0; transition:opacity .2s, top .2s; pointer-events:none; max-width:92%; overflow:hidden; text-overflow:ellipsis}
   .toast.show{opacity:1}
+  .decide{position:absolute; left:50%; top:96px; transform:translateX(-50%); z-index:7; text-align:center; pointer-events:none; opacity:0; transition:opacity .2s}
+  .decide.show{opacity:1}
+  .decide .nm{font-family:'Cinzel'; font-weight:700; font-size:17px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.7)}
+  .decide .q{font-size:12px; color:var(--ink); background:rgba(8,14,10,.7); border:1px solid var(--line); border-radius:16px; padding:4px 12px; margin-top:5px; display:inline-block}
 
   .rosette{font-size:40px}
   .result-row{display:flex; justify-content:space-between; padding:7px 2px; border-bottom:1px solid var(--line); font-size:14px}
@@ -165,6 +172,7 @@ const FENCE_TYPES = {
   log:      { label:'Log',       glyph:'log',     window:1.00, stat:'scope',    spook:0.02, idealPace:'any',    efforts:1 },
   brush:    { label:'Brush',     glyph:'brush',   window:1.05, stat:'scope',    spook:0.02, idealPace:'gallop', efforts:1 },
   table:    { label:'Table',     glyph:'table',   window:0.92, stat:'scope',    spook:0.05, idealPace:'gallop', efforts:1 },
+  rolltop:  { label:'Rolltop',   glyph:'rolltop', window:0.94, stat:'scope',    spook:0.06, idealPace:'gallop', efforts:1 },
   water:    { label:'Water',     glyph:'water',   window:0.90, stat:'boldness', spook:0.20, idealPace:'steady', efforts:1, wet:true },
   ditch:    { label:'Ditch',     glyph:'ditch',   window:0.82, stat:'boldness', spook:0.18, idealPace:'any',    efforts:1 },
   trakehner:{ label:'Trakehner', glyph:'trak',    window:0.74, stat:'boldness', spook:0.24, idealPace:'gallop', efforts:1 },
@@ -176,17 +184,49 @@ const FENCE_TYPES = {
   bounce:   { label:'Bounce',    glyph:'bounce',  window:0.70, stat:'scope',    spook:0.10, idealPace:'steady', efforts:2 },
 };
 
-// Career events, ascending. speed in m/s used for optimum time calc feel.
+// THE GOING — ground conditions. speed/drain/jar/slip multipliers; rush = how
+// much a horse instinctively quickens on deep ground (you must steady it).
+const GOINGS = {
+  firm:  { label:'Firm',         emoji:'🌤️', speed:1.05, drain:1.12, jar:1.5, slip:0.00, rush:0.00, sky:'sunny',    note:'Fast but jarring — hard on the legs.' },
+  good:  { label:'Good',         emoji:'☀️', speed:1.00, drain:1.00, jar:1.0, slip:0.00, rush:0.00, sky:'sunny',    note:'Perfect galloping ground.' },
+  gts:   { label:'Good to Soft', emoji:'⛅', speed:0.95, drain:1.12, jar:0.9, slip:0.12, rush:0.15, sky:'overcast', note:'A touch holding — studs advised.' },
+  soft:  { label:'Soft',         emoji:'🌧️', speed:0.88, drain:1.30, jar:0.8, slip:0.28, rush:0.35, sky:'rain',     note:'Holding & slick — tiring; horses rush.' },
+  heavy: { label:'Heavy',        emoji:'🟤', speed:0.80, drain:1.50, jar:0.7, slip:0.45, rush:0.50, sky:'mud',      note:'Deep mud — sapping, slippery, hard graft.' },
+};
+
+// Career events, ascending. Upper levels are tributes to the real 5* fixtures,
+// each with its signature fences & complexes. `sig` entries get injected at
+// spread-out positions; complex:true => a route-choice question (direct/long).
 const EVENTS = [
-  { id:0, venue:'Hillcrest Pony Club',   star:1, fences:12, len:2200, speed:4.2, fee:0,    purse:600,   pool:['log','brush','table','ditch','bank','water','log','brush'] },
-  { id:1, venue:'Riverbend Horse Trials',star:2, fences:16, len:2900, speed:4.8, fee:80,   purse:1400,  pool:['log','brush','table','water','ditch','bank','drop','skinny','corner'] },
-  { id:2, venue:'Maplewood Park',        star:3, fences:20, len:3600, speed:5.2, fee:220,  purse:3200,  pool:['table','water','ditch','coffin','corner','skinny','drop','bounce','brush','bank'] },
-  { id:3, venue:'Stonebrook Manor',      star:4, fences:26, len:4400, speed:5.7, fee:520,  purse:7000,  pool:['table','water','trakehner','coffin','corner','skinny','drop','bounce','ditch','bank'] },
-  { id:4, venue:'Badmington 5*',         star:5, fences:32, len:5700, speed:6.1, fee:1100, purse:16000, pool:['table','water','trakehner','coffin','corner','skinny','drop','bounce','ditch','brush'] },
+  { id:0, venue:'Loch Moy Starter', region:'Maryland, USA', theme:'meadow', star:1, fences:12, fee:0, purse:600,
+    goings:['good','good','firm','gts'], pool:['log','brush','table','ditch','bank','rolltop','log','brush'],
+    sig:[ {type:'water', name:'The Splash'} ] },
+  { id:1, venue:'Riverbend Horse Trials', region:'Area II', theme:'meadow', star:2, fences:16, fee:80, purse:1400,
+    goings:['good','gts','firm','soft'], pool:['log','brush','table','rolltop','ditch','bank','drop','skinny','corner'],
+    sig:[ {type:'water', name:'The River Crossing', complex:true}, {type:'coffin', name:'The Sunken Lane', terrain:'hollow'} ] },
+  { id:2, venue:'Stable View', region:'Aiken, South Carolina', theme:'meadow', star:3, fences:20, fee:220, purse:3600,
+    goings:['good','firm','gts','soft'], pool:['table','rolltop','water','ditch','coffin','corner','skinny','drop','bounce','brush','bank'],
+    sig:[ {type:'water', name:'The Pond', complex:true}, {type:'coffin', name:'The Hollow', terrain:'hollow'}, {type:'corner', name:'The Brush Corners'} ] },
+  { id:3, venue:'Maryland 5 Star at Fair Hill', region:'Elkton, Maryland', theme:'estate', star:4, fences:24, fee:520, purse:8000,
+    designer:'Ian Stark',
+    goings:['good','gts','soft','soft'], pool:['table','rolltop','water','trakehner','coffin','corner','skinny','drop','bounce','ditch'],
+    sig:[ {type:'water', name:'The Fair Hill Waterway', complex:true}, {type:'bank', name:'The Sawmill', terrain:'bank'}, {type:'trakehner', name:'The Ridge Trakehner'}, {type:'skinny', name:'The Chapel Skinnies'} ] },
+  { id:4, venue:'Defender Kentucky', region:'Kentucky Horse Park', theme:'bluegrass', star:5, fences:28, fee:1100, purse:16000,
+    designer:'Derek di Grazia',
+    goings:['firm','good','good','gts'], pool:['table','rolltop','water','trakehner','coffin','corner','skinny','drop','bounce','ditch','brush'],
+    sig:[ {type:'rolltop', name:'Head of the Lake', complex:true, terrain:'water'}, {type:'coffin', name:"Pete's Hollow", terrain:'hollow'}, {type:'skinny', name:'The Corgi', fun:'🐕'}, {type:'corner', name:'The Normandy Bank', terrain:'bank'} ] },
+  { id:5, venue:'Badminton', region:'Gloucestershire, England', theme:'parkland', star:5, fences:30, fee:1500, purse:20000,
+    designer:'Eric Winter',
+    goings:['good','gts','soft','soft'], pool:['table','rolltop','water','trakehner','coffin','corner','skinny','drop','bounce','ditch','brush'],
+    sig:[ {type:'trakehner', name:'The Vicarage Vee', complex:true}, {type:'brush', name:'The Sunken Road', terrain:'hollow'}, {type:'water', name:'The Lake', complex:true}, {type:'skinny', name:"Huntsman's Close"} ] },
+  { id:6, venue:'Burghley', region:'Lincolnshire, England', theme:'estate', star:5, fences:32, fee:1800, purse:24000,
+    designer:'Derek di Grazia',
+    goings:['good','firm','gts','soft'], pool:['table','rolltop','water','trakehner','coffin','corner','skinny','drop','bounce','ditch','brush'],
+    sig:[ {type:'ditch', name:'The Cottesmore Leap', complex:true}, {type:'water', name:'The Trout Hatchery', complex:true, terrain:'water'}, {type:'drop', name:'The Leaf Pit', terrain:'drop'}, {type:'coffin', name:"Capability's Cutting", terrain:'hollow'} ] },
 ];
 
 const TACK = [
-  { id:'studs',   name:'Studs',            ic:'🔩', cost:250,  desc:'Screw-in grip. Cancels most mud & water slip.', stat:null,       flag:'grip' },
+  { id:'studs',   name:'Studs',            ic:'🔩', cost:250,  desc:'Screw-in grip (bigger behind — the engine). Cancels most soft/heavy-ground slip.', stat:null,       flag:'grip' },
   { id:'bit',     name:'Anatomic Bit',     ic:'🎛️', cost:400,  desc:'+6 Rideability. Softer, more responsive steering.', stat:'ride', amt:6 },
   { id:'breast',  name:'Breastplate',      ic:'🎗️', cost:400,  desc:'+8 Stamina. Keeps the saddle — and the engine — in place.', stat:'stamina', amt:8 },
   { id:'pad',     name:'Sheepskin Half-Pad', ic:'🐑', cost:500, desc:'+6 Scope. A comfy back is a brave back.', stat:'scope', amt:6 },
@@ -196,11 +236,13 @@ const TACK = [
 ];
 
 const TIPS = [
-  'Tap STEADY into technical fences (skinnies, corners, coffins). Gallop only where it flows.',
-  'Green takeoff patch = clean. Yellow = a rub. Miss it entirely and your horse ducks out: 20 penalties.',
-  'Every second over the optimum time is 0.4 penalties. Going faster than optimum earns nothing — just risk.',
-  'Stamina drains at gallop. A tired horse jumps flat. Build Fitness in the yard before big tracks.',
-  'Brave horses (Boldness) rarely spook at water and ditches. Rideable horses hold a line to skinnies.',
+  'At a signature complex you choose your line: DIRECT saves seconds but is bold and unforgiving; the LONG ROUTE is safe but costs time.',
+  'Read the going. On Soft or Heavy ground buy Studs — without them you slip on landings. Deep ground also makes horses rush, so steady them.',
+  'Green takeoff patch = clean. Yellow = a rub. Miss it and your horse ducks out: 20 penalties.',
+  'Every second over the optimum is 0.4 penalties. Faster than optimum earns nothing — pace, don’t race.',
+  'Gallop the open lanes, steady into the technical questions. Uphill saps stamina; downhill, collect before the fence.',
+  'Brave horses shrug off water and ditches; rideable horses hold a line to skinnies and corners.',
+  'The birthplace of US 5* eventing is the Kentucky Horse Park. Its Head of the Lake is the most famous water on the planet.',
 ];
 
 //---------------------------------------------------------------
@@ -470,6 +512,7 @@ function scrYard(intro){
         <span class="faint" style="font-size:11px">${San(G.rider)} · ${bh.breed}</span></div>
       <div style="margin-left:auto" class="row">
         <span class="pill money">${fmt(G.money)}</span>
+        <button class="iconbtn" id="heritage" title="Heritage — the real sport">📜</button>
         <button class="iconbtn" id="mute">${Audio_.isMuted()?'🔇':'🔊'}</button>
       </div>
     </div>
@@ -518,6 +561,7 @@ function scrYard(intro){
     </div></div>`);
 
   $('#mute').onclick=(e)=>{ const m=Audio_.toggleMute(); e.target.textContent=m?'🔇':'🔊'; if(!m){Audio_.resume();Audio_.startMusic('menu');} };
+  $('#heritage').onclick=()=>{ Audio_.play('click'); scrHeritage(); };
   $('#train').onclick=()=>act(()=>{ if(spend(60)){ h.fitness=clamp(h.fitness+rint(7,11),0,100); h.mood=clamp(h.mood-4,0,100); Audio_.play('hoof'); flash('Fitness up! 🫀'); } });
   $('#treat').onclick=()=>act(()=>{ if(spend(30)){ const boost = bh.quirk==='peppermint'?rint(12,16):rint(7,10); h.mood=clamp(h.mood+boost,0,100); Audio_.play('whinny'); flash(bh.quirk==='peppermint'?`${San(h.name)} adores you. 😍`:'Mood up! 😊'); } });
   $('#rest').onclick=()=>act(()=>{ h.mood=clamp(h.mood+6,0,100); h.fitness=clamp(h.fitness+2,0,100); Audio_.play('click'); flash('A quiet day off. 🌙'); });
@@ -561,10 +605,58 @@ function scrShop(){
 }
 
 //---------------------------------------------------------------
+// HERITAGE — real eventing history + links to genuine footage/resources
+//---------------------------------------------------------------
+function xlink(label,url){ return `<a href="${url}" target="_blank" rel="noopener" class="pill" style="text-decoration:none;color:var(--sky)">↗ ${label}</a>`; }
+function scrHeritage(){
+  Audio_.startMusic('menu');
+  show(`<div class="screen on"><div class="topbar"><button class="iconbtn" id="bk">←</button>
+     <h2 class="cinzel">Heritage</h2><span class="muted" style="margin-left:auto;font-size:12px">the real sport</span></div>
+     <div class="scroll"><div class="col" style="max-width:520px;margin:0 auto">
+       <div class="card">
+         <h3 class="cinzel">A cavalry sport</h3>
+         <p class="muted" style="font-size:13.5px;line-height:1.6">Eventing began in the early 19th century as a test of cavalry chargers — on the Continent it's still called <i>the militaire</i>. Its cross-country phase traces to military endurance rides and the fox-hunting field: a test of a horse bold and fit enough to cross any country its officer pointed it at.</p>
+         <div class="row wrap" style="gap:6px;margin-top:8px">${xlink('FEI — History of Eventing','https://www.fei.org/stories/sport/eventing/history-eventing')} ${xlink('Wikipedia — Eventing','https://en.wikipedia.org/wiki/Eventing')}</div>
+       </div>
+       <div class="card">
+         <h3 class="cinzel">The classic long format</h3>
+         <p class="muted" style="font-size:13.5px;line-height:1.6">A traditional three-day event ran dressage, then endurance day, then show jumping. Endurance day had four phases: <b>A</b> roads &amp; tracks, <b>B</b> steeplechase at a gallop over brush, <b>C</b> roads &amp; tracks again — then the compulsory <b>ten-minute box</b>, where a vet checked each horse's temperature and heart rate before it was allowed out onto <b>D</b>, the cross-country proper. The 10-minute halt arrived in 1963; the long format was retired for the 2004 Olympics in favour of straight cross-country, but lives on in the USEA Classic Series.</p>
+         <div class="row wrap" style="gap:6px;margin-top:8px">${xlink('USEA — the sport','https://useventing.com')} ${xlink('Origin of steeplechase','https://useventing.com/news-media/news/the-origin-of-steeplechase')}</div>
+       </div>
+       <div class="card">
+         <h3 class="cinzel">The five-star majors &amp; their famous fences</h3>
+         <div class="muted" style="font-size:13.5px;line-height:1.6">
+           <p><b>Defender Kentucky</b> (Kentucky Horse Park) — the birthplace of American 5* eventing, on rolling bluegrass. Derek di Grazia's <b>Head of the Lake</b> is the most famous water complex on earth: a rolltop with a drop into the lake, ridden in front of the grandstands.</p>
+           <p><b>Badminton</b> (Gloucestershire, since 1949) — the <b>Vicarage Vee</b> (angled rails over a ditch), the <b>Sunken Road</b>, and the Lake draw the biggest crowds in the sport.</p>
+           <p><b>Burghley</b> (Lincolnshire) — the enormous <b>Cottesmore Leap</b>, the <b>Trout Hatchery</b> water, the <b>Leaf Pit</b> drop and Capability's Cutting, set in parkland by 'Capability' Brown.</p>
+           <p>Alongside them: <b>Maryland 5 Star</b> at Fair Hill, Luhmühlen, Pau and Australia's Adelaide complete the elite CCI5* circuit.</p>
+         </div>
+         <div class="row wrap" style="gap:6px;margin-top:8px">
+           ${xlink('Kentucky','https://www.kentuckythreedayevent.com')} ${xlink('Badminton','https://www.badminton-horse.co.uk')} ${xlink('Burghley','https://www.burghley-horse.co.uk')} ${xlink('Maryland 5 Star','https://marylandfivestar.us')}
+         </div>
+       </div>
+       <div class="card" style="border-color:var(--gold-d)">
+         <h3 class="cinzel">Watch the real thing</h3>
+         <p class="muted" style="font-size:13px">Genuine cross-country footage — the fences this game is a love letter to:</p>
+         <div class="row wrap" style="gap:6px;margin-top:6px">
+           ${xlink('Head of the Lake (footage)','https://www.youtube.com/results?search_query=Kentucky+Head+of+the+Lake+cross+country')}
+           ${xlink('Cottesmore Leap','https://www.youtube.com/results?search_query=Burghley+Cottesmore+Leap+cross+country')}
+           ${xlink('Badminton XC','https://www.youtube.com/results?search_query=Badminton+Horse+Trials+cross+country')}
+           ${xlink('USEA on YouTube','https://www.youtube.com/@useventing')}
+         </div>
+         <div class="faint" style="font-size:10.5px;margin-top:8px">External links open real third-party sites. This game is an independent fan tribute, not affiliated with any event or organisation.</div>
+       </div>
+       <button class="btn sec" id="bk2" style="margin:4px 0 8px">← Back to the yard</button>
+     </div></div></div>`);
+  $('#bk').onclick=scrYard; $('#bk2').onclick=scrYard;
+}
+
+//---------------------------------------------------------------
 // COURSE GENERATION + BRIEFING
 //---------------------------------------------------------------
 function makeCourse(ev){
-  const weather = pick(ev.star>=3 ? ['sunny','sunny','overcast','rain','mud'] : ['sunny','sunny','overcast','rain']);
+  const going = pick(ev.goings||['good']);
+  const weather = GOINGS[going].sky;
   const pool=ev.pool;
   const isTech=t=>{ const f=FENCE_TYPES[t]; return f.idealPace==='steady'||f.wet||f.accuracy||f.efforts>1; };
   const simple=pool.filter(t=>!isTech(t)), tech=pool.filter(t=>isTech(t));
@@ -573,11 +665,8 @@ function makeCourse(ev){
   const tightBase=360 - ev.star*8, galBase=760 - ev.star*14;
   const fences=[]; let x=760;
   function add(type,gap){ x+=gap; const ft=FENCE_TYPES[type];
-    fences.push({ type, x, done:false, refusals:0, spookRolled:false, efforts:ft.efforts, effortsDone:0, id:fences.length }); }
-  // friendly opening: two let-them-gallop fences to settle into a rhythm
+    fences.push({ type, x, done:false, refusals:0, spookRolled:false, efforts:ft.efforts, effortsDone:0, id:fences.length, name:null, complex:false, route:null }); }
   add('log',0); add(anySimple(), galBase);
-  // then assemble the course from randomised SECTIONS so every run has its own
-  // shape — long galloping lanes broken up by tight technical clusters & combos
   while(fences.length<ev.fences){
     const left=ev.fences-fences.length, roll=Math.random();
     if(roll<0.42 || tech.length===0){                    // galloping lane
@@ -594,44 +683,86 @@ function makeCourse(ev){
     }
   }
   fences.length=Math.min(fences.length,ev.fences); fences.forEach((f,i)=>f.id=i);
-  const courseLen = fences[fences.length-1].x + 460;
-  // optimum tied to the actual (pixel) course length so it adapts to each layout
-  const optimum = courseLen / (238 + ev.star*15); // seconds
-  // undulating terrain — a few gentle sine components the ground/horse follow
+  // undulating base terrain the ground/horse follow
   const hills=[]; for(let i=0,n=rint(2,3);i<n;i++) hills.push({ a:rnd(15,6), f:(2*Math.PI)/rnd(920,340), p:rnd(6.28,0) });
-  // roadside scenery (trees / bushes / crowds) for depth & variety
+  const features=[];
+  // inject the venue's SIGNATURE fences at spread-out positions & tag terrain
+  const sig=ev.sig||[]; const F=fences.length; const used=new Set();
+  sig.forEach((s,i)=>{
+    let idx=Math.round((i+1)/(sig.length+1)*(F-3))+2; // avoid first 2 & last
+    while(used.has(idx) && idx<F-1) idx++;
+    used.add(idx); const f=fences[idx]; if(!f) return;
+    f.type=s.type; f.name=s.name; f.complex=!!s.complex; f.fun=s.fun||null;
+    f.efforts=FENCE_TYPES[s.type].efforts; f.effortsDone=0;
+    if(s.terrain){ f.terrain=s.terrain;
+      const w=s.terrain==='water'?150:110, amp=s.terrain==='bank'?30:s.terrain==='water'?20:26;
+      features.push({ x:f.x, kind:s.terrain, w, amp }); }
+  });
+  // guarantee a clear galloping run-up before every route-choice complex so the
+  // rider always has room to read it and commit to a line
+  for(let i=1;i<fences.length;i++){ if(fences[i].complex){
+    const gap=fences[i].x-fences[i-1].x, need=680;
+    if(gap<need){ const shift=need-gap; for(let j=i;j<fences.length;j++) fences[j].x+=shift; }
+  }}
+  // (re)build terrain features from the fences' final positions
+  features.length=0;
+  fences.forEach(f=>{ if(f.terrain){ const w=f.terrain==='water'?150:110, amp=f.terrain==='bank'?30:f.terrain==='water'?20:26; features.push({ x:f.x, kind:f.terrain, w, amp }); } });
+  const courseLen = fences[fences.length-1].x + 460;
+  // optimum tied to the pixel course; a partial allowance for testing ground
+  const optimum = courseLen/(238+ev.star*15) * (1 + (1-GOINGS[going].speed)*0.6);
   const scenery=[]; for(let sx=180; sx<courseLen-200; sx+=rint(150,360)) scenery.push({ x:sx, type:pick(['tree','tree','bush','bush','crowd']), s:rnd(1.25,0.7), far:Math.random()<0.5 });
-  return { fences, courseLen, optimum, weather, ev, hills, scenery };
+  return { fences, courseLen, optimum, weather, going, ev, hills, features, scenery };
 }
-// terrain helpers — offset(worldPx) sums the hill sines; ground rises as it grows
-function terrOff(R,wx){ let o=0; if(R.hills) for(const h of R.hills) o+=h.a*Math.sin(wx*h.f+h.p); return o; }
+// terrain helpers — offset(worldPx) sums hill sines + local features (hollows,
+// banks, drops, water). ground rises as the offset grows (screen y shrinks).
+function bump(d,w){ return Math.exp(-(d*d)/(w*w)); }
+function terrOff(R,wx){
+  let o=0; if(R.hills) for(const h of R.hills) o+=h.a*Math.sin(wx*h.f+h.p);
+  if(R.features) for(const f of R.features){ const d=wx-f.x;
+    if(f.kind==='bank') o+=f.amp*bump(d,f.w);
+    else if(f.kind==='drop') o+=f.amp*(0.5-0.5*Math.tanh(d/(f.w*0.5)));
+    else o-=f.amp*bump(d,f.w); // hollow / water = dip
+  }
+  return o;
+}
 function slopeAt(R,wx){ return (terrOff(R,wx+8)-terrOff(R,wx-8))/16; }
 function groundYAt(R,wx,base){ return base - terrOff(R,wx); }
 function scrBrief(ev){
   const course=makeCourse(ev); G._course=course;
-  const wIcon={sunny:'☀️ Sunny, good ground',overcast:'☁️ Overcast',rain:'🌧️ Rain, slick ground',mud:'🟤 Heavy mud'}[course.weather];
-  const wetWarn = (course.weather==='rain'||course.weather==='mud') && !hasTack('grip');
+  const gd=GOINGS[course.going];
+  const slick = gd.slip>0.1;
+  const studWarn = slick && !hasTack('grip');
+  const sigs = course.fences.filter(f=>f.name);
   show(`<div class="screen on"><div class="topbar"><button class="iconbtn" id="bk">←</button>
      <h2 class="cinzel">Course Walk</h2></div>
      <div class="scroll"><div class="col" style="max-width:460px;margin:0 auto">
        <div class="card center">
          <h2 class="cinzel">${San(ev.venue)}</h2>
-         <div class="stars" style="font-size:18px">${starStr(ev.star)}</div>
-         <div class="row wrap center-x" style="gap:16px;margin-top:10px;justify-content:center">
+         <div class="faint" style="font-size:12px;margin-top:2px">${ev.region?San(ev.region)+' · ':''}${ev.designer?'Designer '+San(ev.designer):''}</div>
+         <div class="stars" style="font-size:18px;margin-top:4px">${starStr(ev.star)}</div>
+         <div class="row wrap center-x" style="gap:10px;margin-top:10px;justify-content:center">
            <span class="pill">⛳ ${ev.fences} fences</span>
            <span class="pill">⏱️ Optimum ${fmtTime(course.optimum)}</span>
-           <span class="pill">${wIcon}</span>
+           <span class="pill">${gd.emoji} ${gd.label}</span>
          </div>
+         <div class="faint" style="font-size:11.5px;margin-top:8px">Going: ${gd.note}</div>
        </div>
-       ${wetWarn?`<div class="card" style="border-color:var(--red)"><b>⚠️ Slippery going.</b> <span class="muted">Without <b>Studs</b> you'll slip on landing — buy them in the Tack Room to be safe.</span></div>`:''}
+       ${studWarn?`<div class="card" style="border-color:var(--red)"><b>⚠️ ${gd.label} going.</b> <span class="muted">Without <b>Studs</b> you'll slip on landings — grab a set in the Tack Room.</span></div>`
+         :slick?`<div class="card" style="border-color:var(--green)"><b>✔ Studs fitted.</b> <span class="muted">You'll keep your feet under you on the ${gd.label.toLowerCase()} ground.</span></div>`:''}
+       ${sigs.length?`<div class="card"><h3 class="cinzel">Signature Fences</h3>
+         <div class="row wrap" style="gap:6px;margin-top:8px">
+           ${sigs.map(f=>`<span class="pill" style="${f.complex?'border-color:var(--gold-d);color:var(--gold)':''}">${f.fun?f.fun+' ':''}${San(f.name)}${f.complex?' ⇄':''}</span>`).join('')}
+         </div>
+         <div class="faint" style="font-size:11.5px;margin-top:8px">⇄ = a route-choice complex: pick <b style="color:var(--gold)">DIRECT</b> (fast, bold) or the <b>LONG ROUTE</b> (safe, +time).</div></div>`:''}
        <div class="card">
          <h3 class="cinzel">How to ride</h3>
          <ul class="muted" style="font-size:13px;margin:8px 0 0;padding-left:18px;line-height:1.55">
            <li><b>JUMP</b> when your horse hits the <b style="color:var(--green)">green</b> takeoff patch. Yellow = a rub.</li>
-           <li><b>PACE</b> toggles Gallop ⇄ Steady. Gallop saves time; Steady nails technical fences & water.</li>
-           <li>Miss a fence and your horse <b>ducks out</b>: 20 penalties. Watch your stamina late on.</li>
+           <li><b>PACE</b> toggles Gallop ⇄ Steady. Gallop the open lanes; steady into technical questions & water.</li>
+           <li>At a <b style="color:var(--gold)">⇄ complex</b> the buttons become <b>LONG</b> / <b>DIRECT</b> — commit to a line.</li>
+           <li>Uphill saps stamina; deep going tires and makes horses rush. Miss a fence and you duck out: 20 penalties.</li>
          </ul>
-         <div class="faint" style="font-size:11.5px;margin-top:8px">Keys: <b>Space/↑</b> jump · <b>Shift/↓</b> pace · or use the on-screen buttons.</div>
+         <div class="faint" style="font-size:11.5px;margin-top:8px">Keys: <b>Space/→</b> jump/direct · <b>Shift/←</b> pace/long · or the on-screen buttons.</div>
        </div>
        <button class="btn" id="go" style="font-size:19px;padding:16px">🏇 Enter the Start Box</button>
      </div></div></div>`);
@@ -753,6 +884,7 @@ function startRun(course){
   const cv=$('#cv'); cv.style.display='block';
   Audio_.startMusic('run');
   const es=effStats(); const bh=baseHorse();
+  const gd=GOINGS[course.going];
   APP.innerHTML=`
     <div class="hud">
       <div class="hudbox">⏱️ <b id="h-time">0:00</b>
@@ -760,9 +892,10 @@ function startRun(course){
       <button class="iconbtn" id="quitrun" style="pointer-events:auto" title="Retire from course">✕</button>
       <div class="hudbox" style="text-align:right">Faults <b id="h-pen">0</b>
         <div class="meter" id="stambar"><i style="width:100%;background:linear-gradient(90deg,#c0552f,#5fae5a)"></i></div>
-        <div class="faint" style="font-size:10px">stamina</div></div>
+        <div class="faint" style="font-size:10px">${gd.emoji} ${gd.label} · stamina</div></div>
     </div>
     <div class="toast" id="toast"></div>
+    <div class="decide" id="decide"><div class="nm"></div><div class="q">Choose your line</div></div>
     <div class="controls">
       <button class="cbtn pace" id="c-pace">🐢 STEADY</button>
       <button class="cbtn jump" id="c-jump">JUMP ⤴</button>
@@ -775,24 +908,33 @@ function startRun(course){
     stamina:100, maxStam:100,
     penalties:0, jumpPen:0, elapsed:0, optimum:course.optimum,
     phase:0, jumping:null, state:'run', nextIdx:0,
-    finished:false, quitting:false, slip:(course.weather==='rain'||course.weather==='mud')&&!hasTack('grip'),
+    finished:false, quitting:false, slipChance: Math.max(0, GOINGS[course.going].slip - (hasTack('grip')?0.35:0)),
     lastHoof:0, spookMsgTimer:0, wobble:0, flagPole:0,
-    silk:G.silk||bh.silk, hills:course.hills, scenery:course.scenery,
+    silk:G.silk||bh.silk, hills:course.hills, features:course.features, scenery:course.scenery,
+    going:course.going, gd:GOINGS[course.going], deciding:null, minute:0,
   };
   RUN=R;
   const cx=cv.getContext('2d'); const horse=new HorseSprite();
   function resize(){ const r=APP.getBoundingClientRect(); cv.width=r.width; cv.height=r.height; }
   resize(); window.addEventListener('resize',resize);
 
-  // input
+  // input — the two buttons double as the route-choice picker at a complex
   const pace=$('#c-pace'), jumpB=$('#c-jump');
-  function togglePace(){ if(R.state!=='run'&&R.state!=='approach')return; R.targetPace = (R.targetPace>0.5? 0.42 : R.gallopPace);
-    const g=R.targetPace>0.5; pace.classList.toggle('gallop',g); pace.textContent=g?'🐇 GALLOP':'🐢 STEADY'; Audio_.play('click'); }
-  function doJump(){ tryJump(R); }
-  pace.onclick=togglePace; jumpB.onclick=doJump;
+  R._btn={pace,jumpB};
+  function leftBtn(){   // STEADY  /  LONG ROUTE
+    if(R.deciding){ chooseRoute(R,'long'); return; }
+    if(R.state!=='run'&&R.state!=='approach')return;
+    R.targetPace=(R.targetPace>0.5?0.42:R.gallopPace);
+    const g=R.targetPace>0.5; pace.classList.toggle('gallop',g); pace.textContent=g?'🐇 GALLOP':'🐢 STEADY'; Audio_.play('click');
+  }
+  function rightBtn(){  // JUMP  /  DIRECT
+    if(R.deciding){ chooseRoute(R,'direct'); return; }
+    tryJump(R);
+  }
+  pace.onclick=leftBtn; jumpB.onclick=rightBtn;
   const key=e=>{ if(e.repeat)return;
-    if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); doJump(); }
-    else if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='ArrowDown'){ e.preventDefault(); togglePace(); } };
+    if(e.code==='Space'||e.code==='ArrowUp'||e.code==='ArrowRight'){ e.preventDefault(); rightBtn(); }
+    else if(e.code==='ShiftLeft'||e.code==='ShiftRight'||e.code==='ArrowDown'||e.code==='ArrowLeft'){ e.preventDefault(); leftBtn(); } };
   window.addEventListener('keydown',key);
   $('#quitrun').onclick=(e)=>{ e.preventDefault(); if(confirm('Retire on course? Counts as elimination.')){ cleanup(); G.horse.mood=clamp(G.horse.mood-6,0,100); save(); scrYard(); } };
   function cleanup(){ window.removeEventListener('keydown',key); window.removeEventListener('resize',resize); cv.style.display='none'; APP.style.background=''; Audio_.startMusic('menu'); RUN=null; }
@@ -817,13 +959,16 @@ function update(R,dt){
   // quirks affecting pace
   if(R.bh.quirk==='racehorse' && R.state==='run'){ R.targetPace=Math.min(R.gallopPace, R.targetPace+dt*0.02); }
   if(R.bh.quirk==='bombproof'){ R.gallopPace=Math.min(R.gallopPace,0.58+R.es.gallop/520); }
+  // THE GOING: on soft/heavy ground the horse instinctively quickens — you must
+  // steady it — and every stride costs more; firm ground is fast but jars.
+  if(R.gd.rush>0 && R.state==='run'){ R.targetPace=Math.min(R.gallopPace, R.targetPace + dt*0.05*R.gd.rush); }
   // stamina — fitness/stamina stat is the main lever (higher stat => far less drain)
-  const drain=Math.max(0.08,(R.pace>0.5?0.82:0.38)*(1 - R.es.stamina/165));
+  const drain=Math.max(0.08,(R.pace>0.5?0.82:0.38)*(1 - R.es.stamina/165))*R.gd.drain;
   if(R.state==='run'||R.state==='approach') R.stamina=clamp(R.stamina - drain*dt*3.2, 0, 100);
   const tired = R.stamina<28 ? (0.6+R.stamina/70) : 1; // <1 when tired
   // speed
   let base = 250 + R.pace*360;
-  base *= (0.82 + R.es.gallop/300) * tired;
+  base *= (0.82 + R.es.gallop/300) * tired * R.gd.speed;
   // carry momentum THROUGH the fence — a horse keeps its gallop rhythm over a
   // jump. Only a slight dip at the apex; a rub scrubs a bit more speed.
   if(R.jumping){
@@ -848,21 +993,43 @@ function update(R,dt){
   // refusal recovery
   if(R.state==='refuse'){ R.refuseT-=dt; if(R.refuseT<=0){ R.state='run'; } }
 
-  // approach detection / spook
+  // minute markers (immersion) — call the minute as it ticks over
+  const m=Math.floor(R.elapsed/60); if(m>R.minute){ R.minute=m; if(!R.finished && !R.deciding) toast(R, `⏱️ ${m} minute${m>1?'s':''} — ${R.elapsed<R.optimum?'on your minute!':'a touch behind…'}`); }
+
+  // approach detection / route decision / spook
   const nf=R.fences[R.nextIdx];
-  if(nf && R.state==='run'){
+  if(nf && R.state==='run' && !R.jumping){
     const d=nf.x - R.horseX;
-    if(d<300 && d>0 && !nf.spookRolled){ nf.spookRolled=true; rollSpook(R,nf); }
-    if(d<=0 && !nf.done && !R.jumping){
-      // ran into the fence face without a good jump -> refusal
-      refuse(R,nf,'ran past the takeoff');
+    // route choice at a signature complex — offer it early, lock in near the fence
+    if(nf.complex && !nf.route){
+      if(d<540 && d>150){ if(R.deciding!==nf){ R.deciding=nf; setDecideBtns(R); } }
+      else if(d<=150){ chooseRoute(R,'long', true); } // default to the safe line
     }
+    if(d<300 && d>0 && !nf.spookRolled){ nf.spookRolled=true; rollSpook(R,nf); }
+    if(d<=0 && !nf.done){ refuse(R,nf,'ran past the takeoff'); }
   }
   // finish
   if(R.dist>=R.len && !R.jumping){ finishRun(R); }
   // HUD
   hud(R);
 }
+
+// route choice at a complex: DIRECT is bold/fast/unforgiving; LONG is safe/slow
+function chooseRoute(R, kind, auto){
+  const nf=R.deciding || (R.fences[R.nextIdx] && R.fences[R.nextIdx].complex ? R.fences[R.nextIdx] : null);
+  if(!nf || nf.route) { R.deciding=null; return; }
+  nf.route=kind; R.deciding=null;
+  restoreBtns(R);
+  if(kind==='direct'){ Audio_.play('click'); toast(R, `➡️ Direct route at ${nf.name||'the complex'} — kick on!`); }
+  else { Audio_.play('click'); toast(R, `↩️ Long route at ${nf.name||'the complex'} — safe & steady.`);
+    if(!auto) R.targetPace=0.42; R.longPending=nf; }
+}
+function restoreBtns(R){ if(!R._btn)return; const g=R.targetPace>0.5;
+  R._btn.pace.textContent=g?'🐇 GALLOP':'🐢 STEADY'; R._btn.pace.classList.toggle('gallop',g); R._btn.pace.classList.remove('route');
+  R._btn.jumpB.textContent='JUMP ⤴'; R._btn.jumpB.classList.remove('route'); }
+function setDecideBtns(R){ if(!R._btn)return;
+  R._btn.pace.textContent='↩️ LONG'; R._btn.pace.classList.add('route'); R._btn.pace.classList.remove('gallop');
+  R._btn.jumpB.textContent='➡️ DIRECT'; R._btn.jumpB.classList.add('route'); }
 
 function rollSpook(R,nf){
   const ft=FENCE_TYPES[nf.type];
@@ -894,12 +1061,14 @@ function tryJump(R){
   const statVal=R.es[ft.stat]||60;
   const paceOk = ft.idealPace==='any' ? 1 : (ft.idealPace==='steady'? (R.pace<0.5?1:0.6) : (R.pace>0.5?1:0.85));
   const stamF = R.stamina<30?0.7:1;
-  let cleanHalf = 46*ft.window*(0.7+statVal/220)*paceOk*stamF;
+  // route modifier: DIRECT is unforgiving (tighter window); LONG is generous
+  const routeW = nf.route==='direct' ? 0.82 : nf.route==='long' ? 1.7 : 1;
+  let cleanHalf = 46*ft.window*routeW*(0.7+statVal/220)*paceOk*stamF;
   let okHalf = cleanHalf*1.9;
   const ideal = 118*(0.8+R.pace*0.5);   // ideal distance-out for takeoff
   const err=Math.abs(d-ideal);
-  // spook that wasn't overcome -> refusal unless steady + decent timing
-  if(nf.willSpook && !(R.pace<0.5 && err<okHalf)){ refuse(R,nf,'spooked'); nf.willSpook=false; return; }
+  // long route neutralises spooks; direct/none can still balk
+  if(nf.route!=='long' && nf.willSpook && !(R.pace<0.5 && err<okHalf)){ refuse(R,nf,'spooked'); nf.willSpook=false; return; }
   nf.willSpook=false;
   let result;
   if(err<=cleanHalf) result='clean';
@@ -908,8 +1077,8 @@ function tryJump(R){
   else { refuse(R,nf,'wrong distance'); return; }
   // water at gallop = splash penalty (still clears)
   const splash = ft.wet && R.pace>0.5;
-  // slip on landing (bad going, no studs) at drops/water
-  const slip = R.slip && (ft.jolt||ft.wet) && Math.random()<0.4;
+  // slip on landing — worse on soft/heavy going, at drops/water/turns; studs help
+  const slip = Math.random() < R.slipChance*((ft.jolt||ft.wet)?1.4:0.7);
   Audio_.play('jump');
   R.jumping={ t:0, dur: ft.efforts>1?0.72:0.56, fromX:R.horseX, type:nf.type, result, fence:nf, splash, slip, ft };
   R.state='run';
@@ -925,15 +1094,16 @@ function landJump(R){
     return;
   }
   nf.done=true; R.nextIdx++;
-  // stamina cost per fence (small — the gallop between fences is the real drain)
-  R.stamina=clamp(R.stamina - (ft.jolt?3:1.5) - (j.result==='rub'?1:0), 0, 100);
+  // stamina cost per fence — firm ground jars more; a rub costs a little extra
+  R.stamina=clamp(R.stamina - ((ft.jolt?3:1.5)*R.gd.jar) - (j.result==='rub'?1:0), 0, 100);
+  // long route costs time but keeps you safe; direct route saves it
+  if(nf.route==='long'){ addTime(R, 4.5 + nf.efforts*1.2); }
   if(j.result==='clean'){
-    if(j.splash){ Audio_.play('splash'); R.penalties+=0; addTime(R,1.2); toast(R,'💦 Big splash — through the water!'); }
-    else { Audio_.play('clean'); if(Math.random()<0.25) toast(R, cleanLine(R,ft)); }
+    if(j.splash){ Audio_.play('splash'); addTime(R,1.2); toast(R,'💦 Big splash — through the water!'); }
+    else { Audio_.play('clean'); if(nf.name) toast(R, `✅ Clear at ${nf.name}!`); else if(Math.random()<0.25) toast(R, cleanLine(R,ft)); }
   } else { // rub
     Audio_.play('rub'); addTime(R,0.8); if(Math.random()<0.5) toast(R,'😬 A rub — that stays up, just.'); }
-  if(j.slip){ Audio_.play('splash'); addTime(R,1.0); toast(R,'🩹 Slips on landing! (no studs)'); }
-  // wildfire "send it" bonus/nap resolved at spook stage already
+  if(j.slip){ Audio_.play('splash'); addTime(R,1.2); toast(R, hasTack('grip')?'🩹 A slither on landing!':'🩹 Slips on the going! (studs would help)'); }
   hud(R);
 }
 function cleanLine(R,ft){
@@ -989,6 +1159,7 @@ function hud(R){
   $('#h-fence').textContent=`${Math.min(R.nextIdx+1,R.fences.length)}/${R.fences.length}`;
   $('#h-pen').textContent=Math.round(R.penalties + Math.max(0,R.elapsed-R.optimum)*0.4);
   const sb=$('#stambar'); if(sb) sb.firstElementChild.style.width=R.stamina+'%';
+  const dc=$('#decide'); if(dc){ if(R.deciding){ dc.classList.add('show'); dc.firstElementChild.textContent=R.deciding.name||'Complex'; } else dc.classList.remove('show'); }
 }
 let _toastT=null;
 function toast(R,msg){ const el=$('#toast'); if(!el)return; el.textContent=msg; el.classList.add('show');
@@ -1023,6 +1194,8 @@ function render(cx,cv,R,horse){
   // grassy top edge
   cx.strokeStyle=gedge; cx.lineWidth=4; cx.beginPath();
   for(let px=0;px<=W;px+=8){ const y=groundYAt(R,R.camX+px,ground); if(px===0)cx.moveTo(px,y);else cx.lineTo(px,y); } cx.stroke();
+  // water pools in the terrain dips
+  drawWaterFeatures(cx,R,ground,W);
   // near scenery (on the ground)
   drawScenery(cx,R,ground,W,false);
   // start/finish flags
@@ -1038,8 +1211,15 @@ function render(cx,cv,R,horse){
     const gy=groundYAt(R,f.x,ground);
     if(!f.done && i===R.nextIdx){ drawTakeoff(cx,R,f,ground); }
     drawFence(cx, sx, gy, f, R);
-    if(!f.done){ cx.fillStyle='rgba(0,0,0,.5)'; cx.font='bold 11px Baloo 2, sans-serif'; cx.textAlign='center';
-      cx.fillText((i+1), sx, gy-58); }
+    if(!f.done){ cx.textAlign='center';
+      cx.fillStyle='rgba(0,0,0,.5)'; cx.font='bold 11px Baloo 2, sans-serif'; cx.fillText((i+1), sx, gy-58);
+      if(f.name){ // signature fence: name plate + optional fun emoji
+        cx.font='bold 12px "Cinzel", serif'; const tw=cx.measureText(f.name).width+14;
+        cx.fillStyle='rgba(8,14,10,.7)'; roundRect(cx, sx-tw/2, gy-92, tw, 18, 6); cx.fill();
+        cx.fillStyle=f.complex?'#e3b53f':'#ece3d0'; cx.fillText(f.name, sx, gy-79);
+        if(f.fun){ cx.font='16px serif'; cx.fillText(f.fun, sx, gy-98); }
+      }
+    }
   });
 
   // horse
@@ -1073,6 +1253,18 @@ function render(cx,cv,R,horse){
       cx.beginPath(); cx.moveTo(rx,ry); cx.lineTo(rx-4,ry+10); cx.stroke(); } }
 }
 function worldX(R,wx){ return wx - R.camX; }
+function roundRect(cx,x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
+// water pools that sit in the terrain dips at 'water' feature complexes
+function drawWaterFeatures(cx,R,ground,W){
+  if(!R.features) return;
+  for(const f of R.features){ if(f.kind!=='water') continue;
+    const sx=worldX(R,f.x); if(sx<-220||sx>W+220) continue;
+    const gy=groundYAt(R,f.x,ground), half=f.w*0.9;
+    cx.fillStyle='#4f97bd'; cx.beginPath(); cx.ellipse(sx,gy+3,half,14,0,0,7); cx.fill();
+    cx.strokeStyle='rgba(255,255,255,.35)'; cx.lineWidth=2;
+    for(let i=-3;i<=3;i++){ const yy=gy+i*2.4+((R.elapsed*24)%5); cx.beginPath(); cx.moveTo(sx-half*0.7,yy); cx.lineTo(sx+half*0.7,yy); cx.stroke(); }
+  }
+}
 function hills(cx,W,ground,off,col,tilt,H){
   cx.fillStyle=col; cx.beginPath(); cx.moveTo(0,ground);
   for(let px=0;px<=W;px+=10){ const wx=px+off; const y=ground-70 - Math.sin(wx*0.004)*40 - Math.cos(wx*0.0015)*30; cx.lineTo(px,y); }
@@ -1132,6 +1324,7 @@ function drawFence(cx,sx,ground,f,R){
     case 'log': cx.fillStyle=wood; cx.fillRect(-26,-22,52,18); cx.fillStyle=dk; cx.beginPath(); cx.arc(26,-13,9,0,7); cx.fill(); break;
     case 'brush': cx.fillStyle=wood; cx.fillRect(-24,-14,48,12); cx.fillStyle='#4f6b34'; for(let i=-24;i<24;i+=6){ cx.beginPath(); cx.moveTo(i,-14); cx.lineTo(i+3,-40); cx.lineTo(i+6,-14); cx.fill(); } break;
     case 'table': cx.fillStyle=brown; cx.fillRect(-30,-30,60,26); cx.fillStyle=wood; cx.fillRect(-32,-32,64,6); break;
+    case 'rolltop': cx.fillStyle=wood; cx.beginPath(); cx.moveTo(-28,-2); cx.lineTo(-28,-18); cx.quadraticCurveTo(0,-34,28,-18); cx.lineTo(28,-2); cx.closePath(); cx.fill(); cx.fillStyle='rgba(255,255,255,.12)'; cx.fillRect(-28,-20,56,4); break;
     case 'water': cx.fillStyle='#5fa8c8'; cx.fillRect(-40,-6,80,10); cx.fillStyle='rgba(255,255,255,.4)'; for(let i=-36;i<40;i+=14){ cx.fillRect(i+(R.elapsed*20%14),-3,6,2);} break;
     case 'ditch': cx.fillStyle='#2c2116'; cx.fillRect(-24,-4,48,10); cx.fillStyle=wood; cx.fillRect(-26,-8,52,5); break;
     case 'trak': cx.fillStyle='#2c2116'; cx.fillRect(-24,-4,48,8); cx.fillStyle=wood; cx.save(); cx.rotate(-0.12); cx.fillRect(-28,-26,56,8); cx.restore(); break;
@@ -1226,6 +1419,6 @@ function commentary(place,pen,R){
 // BOOT
 //---------------------------------------------------------------
 // expose for headless test harness
-if(typeof window!=='undefined'){ window.__XC={ update, tryJump, makeCourse, EVENTS, STABLE, effStats:()=>effStats(), FENCE_TYPES, get RUN(){return RUN;}, get G(){return G;}, setG(o){G=o;} }; }
+if(typeof window!=='undefined'){ window.__XC={ update, tryJump, chooseRoute, makeCourse, EVENTS, STABLE, GOINGS, effStats:()=>effStats(), FENCE_TYPES, get RUN(){return RUN;}, get G(){return G;}, setG(o){G=o;} }; }
 scrTitle();
 </script>
