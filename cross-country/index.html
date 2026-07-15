@@ -565,22 +565,48 @@ function scrShop(){
 //---------------------------------------------------------------
 function makeCourse(ev){
   const weather = pick(ev.star>=3 ? ['sunny','sunny','overcast','rain','mud'] : ['sunny','sunny','overcast','rain']);
-  const fences=[]; const pool=ev.pool;
-  let x=760; // first fence position (px)
-  const gap0 = 620 - ev.star*22;   // tighter fences at higher levels
-  for(let i=0;i<ev.fences;i++){
-    let type = i===0 ? 'log' : (i===1? 'brush' : pick(pool));
-    const ft=FENCE_TYPES[type];
-    fences.push({ type, x, done:false, refusals:0, spookRolled:false, efforts:ft.efforts, effortsDone:0, id:i });
-    x += gap0 + rnd(90,-40) + (ft.efforts>1?70:0);
+  const pool=ev.pool;
+  const isTech=t=>{ const f=FENCE_TYPES[t]; return f.idealPace==='steady'||f.wet||f.accuracy||f.efforts>1; };
+  const simple=pool.filter(t=>!isTech(t)), tech=pool.filter(t=>isTech(t));
+  const anySimple=()=>simple.length?pick(simple):pick(pool);
+  const anyTech=()=>tech.length?pick(tech):pick(pool);
+  const tightBase=360 - ev.star*8, galBase=760 - ev.star*14;
+  const fences=[]; let x=760;
+  function add(type,gap){ x+=gap; const ft=FENCE_TYPES[type];
+    fences.push({ type, x, done:false, refusals:0, spookRolled:false, efforts:ft.efforts, effortsDone:0, id:fences.length }); }
+  // friendly opening: two let-them-gallop fences to settle into a rhythm
+  add('log',0); add(anySimple(), galBase);
+  // then assemble the course from randomised SECTIONS so every run has its own
+  // shape — long galloping lanes broken up by tight technical clusters & combos
+  while(fences.length<ev.fences){
+    const left=ev.fences-fences.length, roll=Math.random();
+    if(roll<0.42 || tech.length===0){                    // galloping lane
+      add(anySimple(), galBase+rnd(70,-50));
+      if(left>3 && Math.random()<0.45) add(anySimple(), rnd(540,430));
+    } else if(roll<0.76){                                 // technical cluster
+      const n=Math.min(left, rint(2,3));
+      add(anyTech(), tightBase+rnd(140,50));
+      for(let k=1;k<n;k++) add(anyTech(), tightBase+rnd(40,-20));
+    } else {                                              // combination "line"
+      const n=Math.min(left, rint(2,3));
+      add(anyTech(), tightBase+rnd(80,10));
+      for(let k=1;k<n;k++) add(pick(pool), rnd(310,240));
+    }
   }
-  const courseLen = x + 420;
-  // optimum time tied to the actual (pixel) course: tight enough that
-  // riding everything at a safe steady pace runs slightly over, but
-  // galloping the open stretches gets you clear inside the time.
+  fences.length=Math.min(fences.length,ev.fences); fences.forEach((f,i)=>f.id=i);
+  const courseLen = fences[fences.length-1].x + 460;
+  // optimum tied to the actual (pixel) course length so it adapts to each layout
   const optimum = courseLen / (238 + ev.star*15); // seconds
-  return { fences, courseLen, optimum, weather, ev };
+  // undulating terrain — a few gentle sine components the ground/horse follow
+  const hills=[]; for(let i=0,n=rint(2,3);i<n;i++) hills.push({ a:rnd(15,6), f:(2*Math.PI)/rnd(920,340), p:rnd(6.28,0) });
+  // roadside scenery (trees / bushes / crowds) for depth & variety
+  const scenery=[]; for(let sx=180; sx<courseLen-200; sx+=rint(150,360)) scenery.push({ x:sx, type:pick(['tree','tree','bush','bush','crowd']), s:rnd(1.25,0.7), far:Math.random()<0.5 });
+  return { fences, courseLen, optimum, weather, ev, hills, scenery };
 }
+// terrain helpers — offset(worldPx) sums the hill sines; ground rises as it grows
+function terrOff(R,wx){ let o=0; if(R.hills) for(const h of R.hills) o+=h.a*Math.sin(wx*h.f+h.p); return o; }
+function slopeAt(R,wx){ return (terrOff(R,wx+8)-terrOff(R,wx-8))/16; }
+function groundYAt(R,wx,base){ return base - terrOff(R,wx); }
 function scrBrief(ev){
   const course=makeCourse(ev); G._course=course;
   const wIcon={sunny:'☀️ Sunny, good ground',overcast:'☁️ Overcast',rain:'🌧️ Rain, slick ground',mud:'🟤 Heavy mud'}[course.weather];
@@ -617,37 +643,105 @@ function fmtTime(s){ const m=Math.floor(s/60), ss=Math.round(s%60); return m+':'
 //---------------------------------------------------------------
 // HORSE SPRITE (canvas)
 //---------------------------------------------------------------
+const DEG=Math.PI/180;
 function HorseSprite(){}
-HorseSprite.prototype.draw=function(x,phase,silk,silhouette){
-  // origin at hooves-center. Body ~ 70px long.
-  const gp=Math.sin(phase), gp2=Math.sin(phase+Math.PI);
-  const bodyCol = silhouette?silk:'#6b4a2e', dark=silhouette?silk:'#4f3620';
-  x.save();
-  // legs
-  x.strokeStyle=dark; x.lineWidth=5; x.lineCap='round';
-  const legs=[[-22,gp],[-16,gp2],[20,gp2],[26,gp]];
-  legs.forEach(([lx,ph],i)=>{ x.beginPath(); x.moveTo(lx,-26);
-    const kx=lx+ph*7, ky=-12+Math.abs(ph)*3; x.lineTo(kx,ky); x.lineTo(kx+ph*6,-2); x.stroke(); });
-  // body
-  x.fillStyle=bodyCol; x.beginPath(); x.ellipse(0,-30,30,15,0,0,7); x.fill();
-  // neck + head
-  x.beginPath(); x.moveTo(20,-38); x.quadraticCurveTo(40,-52,44,-40);
-  x.quadraticCurveTo(52,-34,48,-28); x.quadraticCurveTo(38,-30,28,-30); x.closePath(); x.fill();
-  // ears
-  x.beginPath(); x.moveTo(42,-50); x.lineTo(45,-58); x.lineTo(47,-49); x.fill();
-  // tail
-  x.strokeStyle=dark; x.lineWidth=6; x.beginPath(); x.moveTo(-28,-34);
-  x.quadraticCurveTo(-40,-30+gp*4,-38,-14); x.stroke();
-  if(!silhouette){
-    // rider in two-point
-    x.fillStyle=silk||'#3f7ac0'; x.beginPath(); x.ellipse(2,-44,9,11,-.2,0,7); x.fill(); // torso
-    x.fillStyle='#e8d3b0'; x.beginPath(); x.arc(6,-54,5,0,7); x.fill(); // head
-    x.fillStyle='#222'; x.beginPath(); x.arc(6,-56,5.4,Math.PI,0); x.fill(); // helmet
-    // arm to rein
-    x.strokeStyle=silk||'#3f7ac0'; x.lineWidth=4; x.beginPath(); x.moveTo(4,-44); x.lineTo(20,-38); x.stroke();
-    // leg
-    x.beginPath(); x.moveTo(0,-36); x.lineTo(6,-24); x.stroke();
+// draw a galloping horse + rider. origin = ground contact point, faces +x.
+// jumpP: null while galloping, else 0..1 progress through the jump arc.
+HorseSprite.prototype.draw=function(x,phase,silk,silhouette,jumpP){
+  const sil=!!silhouette;
+  const coat = sil?silk:'#7a5230', shade=sil?silk:'#5e3e23', belly=sil?silk:'#87613a';
+  const mane = sil?silk:'#2f2010', hoof=sil?silk:'#20140a';
+  const tuck = jumpP==null?0:Math.sin(clamp(jumpP,0,1)*Math.PI); // 0→1→0 over the arc
+  const bob = jumpP==null ? Math.sin(phase*2)*1.3 : 0;            // gait body bounce
+  x.save(); x.translate(0,bob);
+
+  // ---- articulated leg: anchor, seg lengths, upper/lower angles (deg from vertical), widths
+  function leg(ax,ay,L1,L2,upA,loA,w1,w2){
+    const u=upA*DEG, l=loA*DEG;
+    const kx=ax+Math.sin(u)*L1, ky=ay+Math.cos(u)*L1;
+    const hx=kx+Math.sin(l)*L2, hy=ky+Math.cos(l)*L2;
+    x.strokeStyle=shade; x.lineCap='round';
+    x.lineWidth=w1; x.beginPath(); x.moveTo(ax,ay); x.lineTo(kx,ky); x.stroke();
+    x.lineWidth=w2; x.beginPath(); x.moveTo(kx,ky); x.lineTo(hx,hy); x.stroke();
+    x.fillStyle=hoof; x.beginPath(); x.ellipse(hx,hy,w2*0.75,w2*0.6,l,0,7); x.fill();
   }
+  const sN=Math.sin(phase), s2=Math.sin(phase+Math.PI);   // lead / trailing pair
+  const L=(a,b)=>a+(b-a)*tuck;                              // lerp toward jump pose
+
+  // ---- HIND legs (behind body) : hip ~ (-20,-34)
+  // gallop: push back then gather; jump: extended back then tucked up
+  (function(){
+    const hipx=-20, hipy=-34;
+    // near hind (lead)
+    leg(hipx-3,hipy, 15,15, L(-14+26*sN, -46+18*tuck), L(-14+26*sN+ (34+18*Math.max(0,sN)), -78+40*tuck), 8,5.5);
+    // far hind (trailing)
+    leg(hipx+2,hipy, 15,15, L(-14+26*s2, -40+18*tuck), L(-14+26*s2+ (34+18*Math.max(0,s2)), -70+40*tuck), 7,5);
+  })();
+
+  // ---- TAIL (flows behind)
+  x.strokeStyle=mane; x.lineCap='round'; x.lineWidth=7;
+  const tSwing=jumpP==null?Math.sin(phase*2)*5:14*tuck+8;
+  x.beginPath(); x.moveTo(-30,-40);
+  x.quadraticCurveTo(-46,-34+tSwing*0.4, -50,-14+tSwing);
+  x.quadraticCurveTo(-51,-6+tSwing, -46,-2+tSwing); x.stroke();
+
+  // ---- BODY (barrel + haunch + chest)
+  x.fillStyle=coat;
+  x.beginPath(); x.ellipse(-2,-36,32,17,0,0,7); x.fill();      // barrel
+  x.beginPath(); x.ellipse(-20,-36,15,17,0,0,7); x.fill();     // haunch
+  x.beginPath(); x.ellipse(20,-38,15,15,0,0,7); x.fill();      // shoulder/chest
+  x.fillStyle=belly; x.beginPath(); x.ellipse(-2,-30,28,9,0,0,7); x.fill(); // belly highlight
+
+  // ---- NECK + HEAD (angle lifts a touch on take-off)
+  const headLift=tuck*6;
+  x.fillStyle=coat; x.beginPath();
+  x.moveTo(26,-46);
+  x.quadraticCurveTo(40,-58-headLift, 47,-56-headLift);          // crest
+  x.quadraticCurveTo(56,-54-headLift, 57,-46-headLift);          // poll→face
+  x.lineTo(60,-40-headLift);                                     // muzzle top
+  x.quadraticCurveTo(58,-36-headLift, 53,-37-headLift);          // muzzle underside
+  x.quadraticCurveTo(46,-40-headLift, 40,-42);                   // throat
+  x.quadraticCurveTo(30,-42, 26,-38); x.closePath(); x.fill();
+  // ear
+  x.fillStyle=shade; x.beginPath(); x.moveTo(47,-56-headLift); x.lineTo(48,-64-headLift); x.lineTo(52,-55-headLift); x.closePath(); x.fill();
+  // mane along the crest
+  x.strokeStyle=mane; x.lineWidth=3;
+  for(let i=0;i<7;i++){ const t=i/6; const mx=28+ (47-28)*t, my=-46 + (-56-headLift+46)*t;
+    x.beginPath(); x.moveTo(mx,my); x.lineTo(mx-3-2*Math.sin(phase*3+i),my+7); x.stroke(); }
+  if(!sil){ x.fillStyle='#160d05'; x.beginPath(); x.arc(52,-49-headLift,1.6,0,7); x.fill(); } // eye
+
+  // ---- FRONT legs (in front of body) : shoulder ~ (20,-34)
+  (function(){
+    const shx=20, shy=-34;
+    // near fore (lead) : reaches forward in gallop; tucks up in jump
+    leg(shx+2,shy, 15,15, L(10+30*s2, 42-10*tuck), L(10+30*s2-(30+16*Math.max(0,-s2)), 42-120*tuck), 8,5.5);
+    // far fore
+    leg(shx-3,shy, 15,15, L(10+30*sN, 36-10*tuck), L(10+30*sN-(30+16*Math.max(0,-sN)), 36-118*tuck), 7,5);
+  })();
+
+  // ---- RIDER (two-point / jumping seat; folds deeper over the fence)
+  const silkC = sil?silk:(silk||'#3f7ac0');
+  const fold=tuck; // extra forward fold during jump
+  // anchor points
+  const hipX=2-fold*2, hipY=-48;
+  const shX=12+fold*4, shY=-58+fold*3;      // shoulders fold down & forward on jump
+  const handX=30+fold*3, handY=-45-headLift; // hands follow the horse's mouth
+  const kneeX=9, kneeY=-40, heelX=4, heelY=-29;
+  // upper leg + boot (heel down)
+  x.strokeStyle='#2b2b30'; x.lineCap='round'; x.lineWidth=6;
+  x.beginPath(); x.moveTo(hipX,hipY); x.lineTo(kneeX,kneeY); x.lineTo(heelX,heelY); x.stroke();
+  x.fillStyle='#15151a'; x.beginPath(); x.ellipse(heelX-1,heelY+1,4,3,0,0,7); x.fill(); // boot
+  // torso (silks)
+  x.strokeStyle=silkC; x.lineWidth=11; x.lineCap='round';
+  x.beginPath(); x.moveTo(hipX,hipY); x.lineTo(shX,shY); x.stroke();
+  // arm to rein contact
+  x.lineWidth=5; x.beginPath(); x.moveTo(shX,shY); x.quadraticCurveTo((shX+handX)/2,shY+2,handX,handY); x.stroke();
+  // rein line to bit
+  x.strokeStyle=sil?silk:'#20140a'; x.lineWidth=1.5; x.beginPath(); x.moveTo(handX,handY); x.lineTo(59,-40-headLift); x.stroke();
+  // head + helmet
+  x.fillStyle=sil?silk:'#e6c9a4'; x.beginPath(); x.arc(shX+4,shY-6,4.6,0,7); x.fill();
+  x.fillStyle=sil?silk:'#26262c'; x.beginPath(); x.arc(shX+4,shY-8,5.4,Math.PI*0.9,Math.PI*2.1); x.fill();
+  x.fillStyle=sil?silk:'#26262c'; x.fillRect(shX+7,shY-9,4,2); // peak
   x.restore();
 };
 
@@ -683,7 +777,7 @@ function startRun(course){
     phase:0, jumping:null, state:'run', nextIdx:0,
     finished:false, quitting:false, slip:(course.weather==='rain'||course.weather==='mud')&&!hasTack('grip'),
     lastHoof:0, spookMsgTimer:0, wobble:0, flagPole:0,
-    silk:G.silk||bh.silk,
+    silk:G.silk||bh.silk, hills:course.hills, scenery:course.scenery,
   };
   RUN=R;
   const cx=cv.getContext('2d'); const horse=new HorseSprite();
@@ -730,7 +824,15 @@ function update(R,dt){
   // speed
   let base = 250 + R.pace*360;
   base *= (0.82 + R.es.gallop/300) * tired;
-  if(R.jumping) base*=0.15;
+  // carry momentum THROUGH the fence — a horse keeps its gallop rhythm over a
+  // jump. Only a slight dip at the apex; a rub scrubs a bit more speed.
+  if(R.jumping){
+    const p=R.jumping.t/R.jumping.dur;
+    const drag=R.jumping.result==='rub'?0.80:0.97;
+    base *= drag*(1 - 0.10*Math.sin(p*Math.PI));
+  }
+  // terrain slope: uphill saps a little speed, downhill adds a little
+  if(R.hills){ base *= clamp(1 - slopeAt(R,R.horseX)*0.9, 0.8, 1.15); }
   if(R.state==='refuse') base=0;
   R.speedPx = base;
   R.horseX += base*dt; R.dist += base*dt;
@@ -911,51 +1013,58 @@ function render(cx,cv,R,horse){
   // parallax hills
   hills(cx,W,ground,R.camX*0.2,'#8bbf76',-0.12,H);
   hills(cx,W,ground,R.camX*0.4,'#6ba35a',-0.05,H);
-  // ground
-  const gcol = wx==='mud'?'#6f5a35':'#6a9a4c';
-  cx.fillStyle=gcol; cx.fillRect(0,ground,W,H-ground);
-  cx.fillStyle='rgba(0,0,0,.08)'; cx.fillRect(0,ground,W,4);
+  // far scenery (behind ground line, drawn at half parallax)
+  drawScenery(cx,R,ground,W,true);
+  // ground — follows the undulating terrain
+  const gcol = wx==='mud'?'#6f5a35':'#6a9a4c', gedge= wx==='mud'?'#5a4a2c':'#5a8640';
+  cx.fillStyle=gcol; cx.beginPath(); cx.moveTo(0,H);
+  for(let px=0;px<=W;px+=8){ cx.lineTo(px, groundYAt(R,R.camX+px,ground)); }
+  cx.lineTo(W,H); cx.closePath(); cx.fill();
+  // grassy top edge
+  cx.strokeStyle=gedge; cx.lineWidth=4; cx.beginPath();
+  for(let px=0;px<=W;px+=8){ const y=groundYAt(R,R.camX+px,ground); if(px===0)cx.moveTo(px,y);else cx.lineTo(px,y); } cx.stroke();
+  // near scenery (on the ground)
+  drawScenery(cx,R,ground,W,false);
   // start/finish flags
-  drawPost(cx, worldX(R,0)+40, ground, 'START');
-  drawPost(cx, worldX(R,R.len-380), ground, 'FINISH');
+  drawPost(cx, worldX(R,0)+40, groundYAt(R,0,ground), 'START');
+  drawPost(cx, worldX(R,R.len-380), groundYAt(R,R.len-380,ground), 'FINISH');
   // course line markers (distance ticks)
   cx.strokeStyle='rgba(255,255,255,.12)'; cx.lineWidth=2;
-  for(let mx=0; mx<R.len; mx+=260){ const sx=worldX(R,mx); if(sx>-20&&sx<W+20){ cx.beginPath(); cx.moveTo(sx,ground); cx.lineTo(sx,ground+7); cx.stroke(); } }
+  for(let mx=0; mx<R.len; mx+=260){ const sx=worldX(R,mx); if(sx>-20&&sx<W+20){ const gy=groundYAt(R,mx,ground); cx.beginPath(); cx.moveTo(sx,gy); cx.lineTo(sx,gy+7); cx.stroke(); } }
 
   // fences + takeoff patches
   R.fences.forEach((f,i)=>{
     const sx=worldX(R,f.x); if(sx<-140||sx>W+140) return;
-    if(!f.done){
-      // takeoff patch (green/yellow) shown when it's the next fence or near
-      if(i===R.nextIdx || (i===R.nextIdx && R.state!=='refuse')){
-        drawTakeoff(cx,R,f,ground);
-      }
-    }
-    drawFence(cx, sx, ground, f, R);
-    // flag number
+    const gy=groundYAt(R,f.x,ground);
+    if(!f.done && i===R.nextIdx){ drawTakeoff(cx,R,f,ground); }
+    drawFence(cx, sx, gy, f, R);
     if(!f.done){ cx.fillStyle='rgba(0,0,0,.5)'; cx.font='bold 11px Baloo 2, sans-serif'; cx.textAlign='center';
-      cx.fillText((i+1), sx, ground-58); }
+      cx.fillText((i+1), sx, gy-58); }
   });
 
   // horse
   cx.save();
-  let hy=ground + (R.wobble||0);
+  let hbase=groundYAt(R,R.horseX,ground);
+  let hy=hbase + (R.wobble||0);
   let hx=worldX(R,R.horseX);
-  if(R.jumping){ const p=R.jumping.t/R.jumping.dur; const arc=Math.sin(p*Math.PI);
-    hy -= arc*70*(1+ (FENCE_TYPES[R.jumping.type].efforts>1?0.1:0));
-    if(FENCE_TYPES[R.jumping.type].jolt && p>0.6) hy += (p-0.6)*40; // drop landing lower
-    cx.translate(hx,hy); cx.rotate((0.5-p)*0.5*(R.jumping.result==='clean'?1:0.7));
-  } else { cx.translate(hx,hy); }
+  let jP=null;
+  if(R.jumping){ const p=R.jumping.t/R.jumping.dur; jP=p; const arc=Math.sin(p*Math.PI);
+    hy -= arc*72*(FENCE_TYPES[R.jumping.type].efforts>1?1.08:1);
+    if(FENCE_TYPES[R.jumping.type].jolt && p>0.62) hy += (p-0.62)*46; // drop fence: lower landing
+    cx.translate(hx,hy); cx.rotate((0.5-p)*0.34*(R.jumping.result==='clean'?1:0.7));
+  } else {
+    // subtle body pitch following the slope of the ground
+    cx.translate(hx,hy); cx.rotate(clamp(slopeAt(R,R.horseX),-0.25,0.25));
+  }
   const gallSpeed = R.state==='refuse'?0:(8+R.pace*22);
   R.phase += 0.016*gallSpeed;
-  if(R.state==='refuse'){ cx.scale(-1,1); cx.scale(-1,1); } // face forward always
-  horse.draw(cx, R.phase, R.silk, false);
+  horse.draw(cx, R.phase, R.silk, false, jP);
   cx.restore();
 
-  // dust
-  if(R.speedPx>200 && !R.jumping && R.state!=='refuse'){
-    cx.fillStyle='rgba(180,160,120,.28)';
-    for(let k=0;k<3;k++){ const dx=hx-30-k*12-Math.random()*10, dy=ground-4-Math.random()*8;
+  // dust kicked up at the hooves
+  if(R.speedPx>220 && !R.jumping && R.state!=='refuse'){
+    cx.fillStyle='rgba(180,160,120,.26)';
+    for(let k=0;k<3;k++){ const dx=hx-26-k*13-Math.random()*10, dy=hbase-3-Math.random()*7;
       cx.beginPath(); cx.arc(dx,dy,4+Math.random()*4,0,7); cx.fill(); }
   }
   // rain
@@ -983,11 +1092,35 @@ function drawTakeoff(cx,R,f,ground){
   const okHalf=cleanHalf*1.9;
   const ideal=118*(0.8+R.pace*0.5);
   const cx0=worldX(R, f.x-ideal);
+  const gy=groundYAt(R, f.x-ideal, ground);
   // yellow band
-  cx.fillStyle='rgba(227,181,63,.28)'; cx.fillRect(cx0-okHalf, ground-3, okHalf*2, 8);
+  cx.fillStyle='rgba(227,181,63,.28)'; cx.fillRect(cx0-okHalf, gy-3, okHalf*2, 8);
   // green band
-  cx.fillStyle='rgba(95,174,90,.55)'; cx.fillRect(cx0-cleanHalf, ground-3, cleanHalf*2, 8);
-  cx.strokeStyle='rgba(95,174,90,.8)'; cx.lineWidth=2; cx.strokeRect(cx0-cleanHalf, ground-3, cleanHalf*2,8);
+  cx.fillStyle='rgba(95,174,90,.55)'; cx.fillRect(cx0-cleanHalf, gy-3, cleanHalf*2, 8);
+  cx.strokeStyle='rgba(95,174,90,.85)'; cx.lineWidth=2; cx.strokeRect(cx0-cleanHalf, gy-3, cleanHalf*2,8);
+}
+// roadside scenery — trees, bushes, crowd clusters, at their terrain height
+function drawScenery(cx,R,ground,W,far){
+  if(!R.scenery) return;
+  const par = far?0.55:1;            // far objects drift slower (parallax)
+  for(const o of R.scenery){
+    if(o.far!==far) continue;
+    const sx = (o.x - R.camX*par) ; if(sx<-80||sx>W+80) continue;
+    const gy = groundYAt(R, o.x, ground) + (far?-6:0);
+    const s=o.s*(far?0.7:1);
+    cx.save(); cx.translate(sx,gy); cx.scale(s,s); cx.globalAlpha=far?0.7:1;
+    if(o.type==='tree'){
+      cx.fillStyle=far?'#3f6b46':'#5a3c22'; cx.fillRect(-3,-28,6,28);
+      cx.fillStyle=far?'#4f7e52':'#4e7a3c'; cx.beginPath(); cx.arc(0,-34,15,0,7); cx.arc(-9,-26,11,0,7); cx.arc(9,-26,11,0,7); cx.fill();
+    } else if(o.type==='bush'){
+      cx.fillStyle=far?'#4a744a':'#517a38'; cx.beginPath(); cx.arc(0,-6,9,0,7); cx.arc(-8,-3,7,0,7); cx.arc(8,-3,7,0,7); cx.fill();
+    } else { // crowd cluster
+      const cols=['#d0563f','#4f86c0','#e3b53f','#e8e0d0','#7aa35a','#b46fb0'];
+      for(let i=0;i<7;i++){ cx.fillStyle=cols[i%cols.length]; const px=-16+i*5+(i%2?1:-1)*2, py=-6-(i%3)*3;
+        cx.beginPath(); cx.arc(px,py,3,0,7); cx.fill(); cx.fillStyle='#2c2016'; cx.beginPath(); cx.arc(px,py-3,2,0,7); cx.fill(); }
+    }
+    cx.restore();
+  }
 }
 function drawFence(cx,sx,ground,f,R){
   const ft=FENCE_TYPES[f.type]; const done=f.done;
