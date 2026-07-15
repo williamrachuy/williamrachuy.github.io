@@ -503,7 +503,9 @@ function scrStable(){
 function scrYard(intro){
   Audio_.startMusic('menu');
   const h=G.horse, bh=baseHorse();
-  const ev=EVENTS[Math.min(G.eventIdx,EVENTS.length-1)];
+  const maxU=Math.min(G.eventIdx,EVENTS.length-1);
+  if(G.selEvent==null || G.selEvent>maxU || G.selEvent<0) G.selEvent=maxU;
+  const sel=clamp(G.selEvent,0,maxU), ev=EVENTS[sel];
   const es=effStats();
   show(`<div class="screen on">
     <div class="topbar">
@@ -539,21 +541,25 @@ function scrYard(intro){
       </div>
 
       <div class="card" style="margin-top:12px">
-        <div class="row" style="justify-content:space-between;align-items:center">
-          <div><h3 class="cinzel">${San(ev.venue)}</h3>
-            <span class="stars">${starStr(ev.star)}</span></div>
-          <span class="pill">🏆 ${fmt(ev.purse)}</span>
+        <div class="row" style="justify-content:space-between;align-items:center;gap:8px">
+          <button class="iconbtn" id="ev-prev" ${sel<=0?'disabled':''} title="Lower level">◀</button>
+          <div class="center grow"><h3 class="cinzel">${San(ev.venue)}</h3>
+            <span class="stars">${starStr(ev.star)}</span>
+            <div class="faint" style="font-size:10px">${ev.region?San(ev.region):''}${sel<maxU?' · schooling run':''}</div></div>
+          <button class="iconbtn" id="ev-next" ${sel>=maxU?'disabled':''} title="Higher level">▶</button>
         </div>
-        <div class="row wrap muted" style="gap:14px;margin-top:8px;font-size:13px">
+        <div class="row wrap muted" style="gap:14px;margin-top:8px;font-size:13px;justify-content:center">
           <span class="muted">⛳ ${ev.fences} fences</span>
-          <span class="muted">📏 ${(ev.len/1000).toFixed(1)} km</span>
+          <span class="muted">🏆 ${fmt(ev.purse)}</span>
           <span class="muted">🎫 Entry ${ev.fee?fmt(ev.fee):'free'}</span>
         </div>
+        ${sel<maxU?`<div class="faint center" style="font-size:11px;margin-top:6px">A schooling run — earns prize money, but promotion only comes at your top level (${San(EVENTS[maxU].venue)}).</div>`:''}
         <div class="row" style="margin-top:12px">
-          <button class="btn grow" id="enter" ${G.money<ev.fee?'disabled':''}>${G.money<ev.fee?'Not enough for entry':'Enter Competition →'}</button>
+          <button class="btn grow" id="enter" ${G.money<ev.fee?'disabled':''}>${G.money<ev.fee?'Not enough — drop a level ◀':'Enter · '+(ev.fee?fmt(ev.fee):'free')+' →'}</button>
           <button class="btn sec" id="shop">Tack Room</button>
         </div>
-        ${G.eventIdx>=EVENTS.length?`<div class="faint center" style="margin-top:8px;font-size:12px">You've conquered the calendar. Events now run at 5* for glory & prize money.</div>`:''}
+        ${G.money<ev.fee?`<div class="faint center" style="margin-top:6px;font-size:11px;color:var(--gold)">Short on funds? Scroll ◀ to a cheaper event — the starter is free to enter.</div>`:''}
+        ${maxU>=EVENTS.length-1?`<div class="faint center" style="margin-top:8px;font-size:12px">You've conquered the calendar — every 5* is yours to hunt for glory & prize money.</div>`:''}
       </div>
 
       ${G.career.length?careerCard():''}
@@ -566,6 +572,8 @@ function scrYard(intro){
   $('#treat').onclick=()=>act(()=>{ if(spend(30)){ const boost = bh.quirk==='peppermint'?rint(12,16):rint(7,10); h.mood=clamp(h.mood+boost,0,100); Audio_.play('whinny'); flash(bh.quirk==='peppermint'?`${San(h.name)} adores you. 😍`:'Mood up! 😊'); } });
   $('#rest').onclick=()=>act(()=>{ h.mood=clamp(h.mood+6,0,100); h.fitness=clamp(h.fitness+2,0,100); Audio_.play('click'); flash('A quiet day off. 🌙'); });
   $('#shop').onclick=()=>{ Audio_.play('click'); scrShop(); };
+  $('#ev-prev').onclick=()=>{ if(sel>0){ G.selEvent=sel-1; Audio_.play('click'); save(); scrYard(); } };
+  $('#ev-next').onclick=()=>{ if(sel<maxU){ G.selEvent=sel+1; Audio_.play('click'); save(); scrYard(); } };
   $('#enter').onclick=()=>{ if(G.money<ev.fee) return; Audio_.play('bell'); G.money-=ev.fee; save(); scrBrief(ev); };
   function act(fn){ fn(); save(); scrYard(); }
 }
@@ -1369,7 +1377,7 @@ function scrResults(R){
   if(!R.fell && (G.bestPen==null || myPen<G.bestPen)) G.bestPen=myPen;
   // progression: a clear-ish round unlocks next event
   const advanced = !R.fell && myPen < 45 && G.eventIdx===ev.id && G.eventIdx<EVENTS.length-1;
-  if(advanced) G.eventIdx++;
+  if(advanced){ G.eventIdx++; G.selEvent=G.eventIdx; } else { G.selEvent=ev.id; }
   G.horse.mood=clamp(G.horse.mood + (place<=3?8:place<=6?2:-2),0,100);
   G.horse.fitness=clamp(G.horse.fitness-4,0,100); // running takes it out of them
   save();
@@ -1403,7 +1411,7 @@ function scrResults(R){
         <button class="btn sec" id="yard">To the Yard</button>
       </div>
     </div></div></div>`);
-  $('#again').onclick=()=>{ Audio_.play('bell'); const e=EVENTS[Math.min(G.eventIdx,EVENTS.length-1)]; if(G.money<e.fee){ scrYard(); return;} G.money-=e.fee; save(); scrBrief(e); };
+  $('#again').onclick=()=>{ const e=EVENTS[Math.min(ev.id,EVENTS.length-1)]; if(G.money<e.fee){ flash('Not enough for entry — drop a level in the yard.'); scrYard(); return;} Audio_.play('bell'); G.money-=e.fee; save(); scrBrief(e); };
   $('#yard').onclick=()=>{ Audio_.play('click'); scrYard(); };
 }
 const AI_NAMES=['Bramble Down','Iron Kestrel','Miss Marigold','Sir Prize','Copper Penny','Gale Force','Whistlejacket','Duke of Puddles','Nutmeg','Baywatch','Lady Larkspur','Thunderclause','Odds Bodkin','Fern Gully','Captain Carrot','Moonpie','Rowan Rex','Biscuit Tin','Errol','Tuppence'];
