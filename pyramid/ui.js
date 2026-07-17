@@ -408,6 +408,7 @@
     el.className = 'slot';
     var inner = buildCardEl(card, slot.which === 'royals');
     inner.dataset.nodeId = id;
+    inner.style.setProperty('--rot', cardRotation(slot) + 'deg');
     if (slot.suit === 'spades') inner.classList.add('own-house');
     var pivots = maps.cardPivots[id];
     if (pivots && pivots.length) {
@@ -424,6 +425,17 @@
     }
     el.appendChild(inner);
     return el;
+  }
+
+  // Orient each card along its pyramid face so the board reads radially (a
+  // pinwheel). Suits sit at the four poles and each radiates outward; the two
+  // flanking cards of a face splay toward its shared corners. Net result: every
+  // card lands on a 45-degree increment (0/45/90/.../315).
+  var SUIT_POLE = { clubs: 0, hearts: 90, spades: 180, diamonds: 270 };
+  function cardRotation(slot) {
+    var base = SUIT_POLE[slot.suit] || 0;
+    var fan = slot.pos === 'left' ? -45 : (slot.pos === 'right' ? 45 : 0);
+    return base + fan;
   }
 
   function cardAria(card, slot) {
