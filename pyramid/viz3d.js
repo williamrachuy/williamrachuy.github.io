@@ -127,13 +127,38 @@
     var ang = (i * Math.PI / 2) - Math.PI / 4;
     return { x: Math.cos(ang) * BASE_R, y: BASE_Y, z: Math.sin(ang) * BASE_R };
   }
-  var APEX_RAW = { x: 0, y: APEX_Y, z: 0 };
+  var SHARED_PEAK = { x: 0, y: APEX_Y, z: 0 };
 
   function lerp3(a, b, t) {
     return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
   }
 
-  function create(canvas) {
+  // A base corner sits at full extension only when its shared pair is coherent;
+  // an unmatched corner is pulled inward and lifted, pinching the two faces that
+  // meet there (so their planar area shrinks — the pyramid looks unfinished).
+  function cornerDeform(i, matched) {
+    var ang = (i * Math.PI / 2) - Math.PI / 4;
+    var R = matched ? BASE_R : BASE_R * 0.44;
+    var y = matched ? BASE_Y : BASE_Y + 0.20;
+    return { x: Math.cos(ang) * R, y: y, z: Math.sin(ang) * R };
+  }
+  // Each face's apex rides between a low "personal" tip over its own face and
+  // the single shared peak, driven by how well its centre agrees with its
+  // neighbours. All faces agreeing -> the four apexes merge into one clean peak.
+  function personalApex(i) {
+    var ang = (i * Math.PI / 2) - Math.PI / 2; // face bearing (bisector of its 2 corners)
+    var R = BASE_R * 0.50;
+    return { x: Math.cos(ang) * R, y: BASE_Y + (APEX_Y - BASE_Y) * 0.32, z: Math.sin(ang) * R };
+  }
+  function faceApex(i, agreement) {
+    return lerp3(personalApex(i), SHARED_PEAK, agreement);
+  }
+
+  function create(canvas, opts) {
+    opts = opts || {};
+    // minimal = title-screen showcase: no grid/caption, and the pyramid is
+    // forced to its ideal coherent form (a clean slowly-rotating solid).
+    var minimal = !!opts.minimal;
     var ctx = canvas.getContext('2d');
     var dpr = (global.devicePixelRatio || 1);
     var cssW = 200, cssH = 200;
@@ -178,7 +203,26 @@
       var state = latestState;
       var coherence = computeCoherence(state);
       var subj = state && state.board && state.board.subjects;
-      var fullyCoherent = coherence.peak && allCornersMatched(coherence.corners);
+
+      // Per-corner match + per-suit apex agreement drive the deformation.
+      var i, s, n;
+      var matched = [];       // matched[i] : is base corner i's pair coherent
+      var capMatch = {};      // capMatch['s-n'] : do the two centres agree
+      for (i = 0; i < 4; i++) {
+        s = SUITS[i]; n = nextSuit(s);
+        var ckey = s + '-' + n;
+        matched[i] = minimal ? true : !!(coherence.corners && coherence.corners[ckey]);
+        var cS = subj && subj[s] && subj[s].center;
+        var cN = subj && subj[n] && subj[n].center;
+        capMatch[ckey] = minimal ? true : isPair(cS, cN);
+      }
+      var agree = [];         // agree[i] : fraction of suit i's centre pairs that match
+      for (i = 0; i < 4; i++) {
+        var kPrev = SUITS[(i + 3) % 4] + '-' + SUITS[i];
+        var kNext = SUITS[i] + '-' + SUITS[(i + 1) % 4];
+        agree[i] = ((capMatch[kPrev] ? 1 : 0) + (capMatch[kNext] ? 1 : 0)) / 2;
+      }
+      var fullyCoherent = minimal || (coherence.peak && allCornersMatched(coherence.corners));
 
       var pulse = fullyCoherent ? (0.5 + 0.5 * Math.sin(t * 3.4)) : 0;
 
@@ -194,38 +238,39 @@
         ctx.fill();
       }
 
-      // ---- 3D vertices ----
+      // ---- deformed 3D vertices (each face owns its apex) ----
       var corners3 = [];
-      var i;
-      for (i = 0; i < 4; i++) corners3.push(transform(baseCornerRaw(i), spin));
-      var apex3 = transform(APEX_RAW, spin);
+      for (i = 0; i < 4; i++) corners3.push(transform(cornerDeform(i, matched[i]), spin));
+      var apex3 = [];
+      for (i = 0; i < 4; i++) apex3.push(transform(faceApex(i, agree[i]), spin));
 
       // ---- floor grid (subtle depth cue) ----
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(236,227,208,.10)';
-      var GRID_N = 4, GRID_EXT = 1.55;
-      ctx.beginPath();
-      for (i = -GRID_N; i <= GRID_N; i++) {
-        var gx = (i / GRID_N) * GRID_EXT;
-        var p1 = project(transform({ x: gx, y: BASE_Y, z: -GRID_EXT }, spin), cx, cy, scale);
-        var p2 = project(transform({ x: gx, y: BASE_Y, z: GRID_EXT }, spin), cx, cy, scale);
-        ctx.moveTo(p1.x, p1.y);
-        ctx.lineTo(p2.x, p2.y);
-        var q1 = project(transform({ x: -GRID_EXT, y: BASE_Y, z: gx }, spin), cx, cy, scale);
-        var q2 = project(transform({ x: GRID_EXT, y: BASE_Y, z: gx }, spin), cx, cy, scale);
-        ctx.moveTo(q1.x, q1.y);
-        ctx.lineTo(q2.x, q2.y);
+      if (!minimal) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(236,227,208,.10)';
+        var GRID_N = 4, GRID_EXT = 1.55;
+        ctx.beginPath();
+        for (i = -GRID_N; i <= GRID_N; i++) {
+          var gx = (i / GRID_N) * GRID_EXT;
+          var p1 = project(transform({ x: gx, y: BASE_Y, z: -GRID_EXT }, spin), cx, cy, scale);
+          var p2 = project(transform({ x: gx, y: BASE_Y, z: GRID_EXT }, spin), cx, cy, scale);
+          ctx.moveTo(p1.x, p1.y);
+          ctx.lineTo(p2.x, p2.y);
+          var q1 = project(transform({ x: -GRID_EXT, y: BASE_Y, z: gx }, spin), cx, cy, scale);
+          var q2 = project(transform({ x: GRID_EXT, y: BASE_Y, z: gx }, spin), cx, cy, scale);
+          ctx.moveTo(q1.x, q1.y);
+          ctx.lineTo(q2.x, q2.y);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
 
       // ---- faces: painter's algorithm (farthest first) ----
       var faces = [];
       for (i = 0; i < 4; i++) {
-        var suit = SUITS[i];
         var left3 = corners3[(i + 3) % 4];
         var right3 = corners3[i];
-        var avgZ = (left3.z + right3.z + apex3.z) / 3;
-        faces.push({ suit: suit, idx: i, left3: left3, right3: right3, avgZ: avgZ });
+        var a3 = apex3[i];
+        faces.push({ idx: i, left3: left3, right3: right3, apex3: a3, avgZ: (left3.z + right3.z + a3.z) / 3 });
       }
       faces.sort(function (a, b) { return b.avgZ - a.avgZ; });
 
@@ -234,10 +279,9 @@
         var face = faces[f];
         var pL = project(face.left3, cx, cy, scale);
         var pR = project(face.right3, cx, cy, scale);
-        var pA = project(apex3, cx, cy, scale);
-        var color = SUIT_COLORS[face.suit];
-
-        var fillAlpha = fullyCoherent ? (0.4 + pulse * 0.12) : 0.28;
+        var pA = project(face.apex3, cx, cy, scale);
+        var color = SUIT_COLORS[SUITS[face.idx]];
+        var fillAlpha = fullyCoherent ? (0.42 + pulse * 0.12) : 0.22;
         ctx.beginPath();
         ctx.moveTo(pL.x, pL.y);
         ctx.lineTo(pR.x, pR.y);
@@ -245,63 +289,37 @@
         ctx.closePath();
         ctx.fillStyle = hexToRgba(color, fillAlpha);
         ctx.fill();
-        ctx.lineWidth = fullyCoherent ? 1.6 : 1.1;
-        ctx.strokeStyle = fullyCoherent ? hexToRgba(GOLD, 0.75 + pulse * 0.2) : hexToRgba(color, 0.85);
+        ctx.lineWidth = fullyCoherent ? 1.7 : 1.1;
+        ctx.strokeStyle = fullyCoherent ? hexToRgba(GOLD, 0.78 + pulse * 0.2) : hexToRgba(color, 0.82);
         ctx.stroke();
+      }
 
-        // rank labels for this face, offset toward centroid to avoid overlap
-        if (subj && subj[face.suit]) {
-          var cData = subj[face.suit];
-          var centroid3 = {
-            x: (face.left3.x + face.right3.x + apex3.x) / 3,
-            y: (face.left3.y + face.right3.y + apex3.y) / 3,
-            z: (face.left3.z + face.right3.z + apex3.z) / 3
-          };
-          var leftLabel3 = lerp3(face.left3, centroid3, 0.32);
-          var rightLabel3 = lerp3(face.right3, centroid3, 0.32);
-          var apexLabel3 = lerp3(apex3, centroid3, 0.4);
-          drawLabel(ctx, project(leftLabel3, cx, cy, scale), rankText(cData.left), color);
-          drawLabel(ctx, project(rightLabel3, cx, cy, scale), rankText(cData.right), color);
-          drawLabel(ctx, project(apexLabel3, cx, cy, scale), rankText(cData.center), color);
+      // ---- nodes: base corners (gold when their pair agrees) + apex ----
+      for (i = 0; i < 4; i++) {
+        drawNode(ctx, project(corners3[i], cx, cy, scale), matched[i], pulse, 3.0);
+      }
+      if (fullyCoherent) {
+        drawNode(ctx, project(transform(SHARED_PEAK, spin), cx, cy, scale), true, pulse, 4.0);
+      } else {
+        // the four apex tips stay split until the centres agree
+        for (i = 0; i < 4; i++) {
+          drawNode(ctx, project(apex3[i], cx, cy, scale), agree[i] >= 1, pulse, 2.3);
         }
       }
 
-      // ---- base corner glows ----
-      for (i = 0; i < 4; i++) {
-        var s = SUITS[i];
-        var n = nextSuit(s);
-        var key = s + '-' + n;
-        var matched = !!(coherence.corners && coherence.corners[key]);
-        var p = project(corners3[i], cx, cy, scale);
-        drawNode(ctx, p, matched, pulse, 3.1);
+      // ---- caption / legend (hidden in the title-screen showcase) ----
+      if (!minimal) {
+        ctx.font = "600 9px 'Baloo 2', sans-serif";
+        ctx.fillStyle = INK_MUTED;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('THE PYRAMID', 6, 12);
+        ctx.font = "8px 'Baloo 2', sans-serif";
+        ctx.fillStyle = fullyCoherent ? hexToRgba(GOLD, 0.9) : 'rgba(236,227,208,.42)';
+        ctx.fillText(fullyCoherent ? 'coherent — the pyramid is whole' : 'align every corner & peak', 6, cssH - 6);
       }
 
-      // ---- peak glow ----
-      var apexP = project(apex3, cx, cy, scale);
-      drawNode(ctx, apexP, !!coherence.peak, pulse, 3.8);
-
-      // ---- caption / legend ----
-      ctx.font = "600 9px 'Baloo 2', sans-serif";
-      ctx.fillStyle = INK_MUTED;
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText('THE PYRAMID', 6, 12);
-      ctx.font = "8px 'Baloo 2', sans-serif";
-      ctx.fillStyle = fullyCoherent ? hexToRgba(GOLD, 0.9) : 'rgba(236,227,208,.42)';
-      ctx.fillText(fullyCoherent ? 'coherent — the pyramid is whole' : 'gold = corners aligned', 6, cssH - 6);
-
       ctx.restore();
-    }
-
-    function drawLabel(ctx2, p, text, color) {
-      ctx2.font = "600 8px 'Baloo 2', sans-serif";
-      ctx2.textAlign = 'center';
-      ctx2.textBaseline = 'middle';
-      ctx2.lineWidth = 2.2;
-      ctx2.strokeStyle = 'rgba(13,16,20,.78)';
-      ctx2.strokeText(text, p.x, p.y);
-      ctx2.fillStyle = INK;
-      ctx2.fillText(text, p.x, p.y);
     }
 
     function drawNode(ctx2, p, matched, pulse, r) {

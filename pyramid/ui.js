@@ -239,6 +239,7 @@
     app.screen = name;
     Object.keys(dom.screens).forEach(function (k) { dom.screens[k].hidden = (k !== name); });
     dom.vizDock.hidden = (name !== 'game');
+    if (name === 'title') ensureTitleViz();
     if (name === 'game') {
       ensureViz();
       startVizLoop();
@@ -434,6 +435,9 @@
   var SUIT_POLE = { clubs: 0, hearts: 90, spades: 180, diamonds: 270 };
   function cardRotation(slot) {
     var base = SUIT_POLE[slot.suit] || 0;
+    // Royals sit squarely at the cardinal angle (0/90/180/270). Only the
+    // subject cards splay +/-45deg toward their face's shared corners.
+    if (slot.which === 'royals') return base;
     var fan = slot.pos === 'left' ? -45 : (slot.pos === 'right' ? 45 : 0);
     return base + fan;
   }
@@ -782,6 +786,17 @@
     var dock = dom.vizCanvas.parentElement || dom.vizCanvas;
     var w = dock.clientWidth || 200, h = dock.clientHeight || 200;
     try { app.viz.setSize(w, h); } catch (e) {}
+  }
+  // The title-screen glyph: the same 3D pyramid, in minimal showcase mode
+  // (no grid/caption, forced coherent) — a slow rotating solid.
+  function ensureTitleViz() {
+    if (app.titleViz || !(PYR.Viz3D && PYR.Viz3D.create)) return;
+    var cv = document.getElementById('title-glyph');
+    if (!cv) return;
+    try { app.titleViz = PYR.Viz3D.create(cv, { minimal: true }); } catch (e) { app.titleViz = null; }
+    var szt = function () { if (app.titleViz) { try { app.titleViz.setSize(cv.clientWidth || 160, cv.clientHeight || 160); } catch (e) {} } };
+    szt();
+    window.addEventListener('resize', szt);
   }
   function ensureViz() {
     if (app.viz || !(PYR.Viz3D && PYR.Viz3D.create)) return;
