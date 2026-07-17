@@ -42,12 +42,14 @@ html { scroll-behavior: smooth; }
   --f-head:    'Cinzel', Georgia, serif;
   --f-body:    'Baloo 2', system-ui, sans-serif;
   --card-w:    clamp(26px, 5.6vw, 46px);
-  --card-h:    calc(var(--card-w) * 1.42);
+  --card-h:    calc(var(--card-w) * 1.23);
   --gem-w:     clamp(13px, 2.7vw, 22px);
-  /* Wider gaps than a flat board would need: cards are rotated 45-90deg, so
-     their diagonal footprint (~1.7x width) must clear neighbours. */
-  --slot-gap:  clamp(9px, 2.4vw, 22px);
-  --row-gap:   clamp(8px, 2vw, 20px);
+  /* The board is a diamond of stacked rows. To keep it an EQUILATERAL square
+     (not vertically stretched) the vertical row pitch must match the
+     horizontal slot pitch: a squarer card, tight row gaps, wider slot gaps.
+     Wide gaps also clear the 45-90deg rotated cards' diagonal footprint. */
+  --slot-gap:  clamp(10px, 2.5vw, 23px);
+  --row-gap:   clamp(2px, 0.7vw, 6px);
 }
 html, body {
   height: 100%;
