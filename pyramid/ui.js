@@ -128,7 +128,7 @@
     dom.turnBanner = $('turn-banner');
     dom.deckCount = $('deck-count');
     dom.btnDraw = $('btn-draw');
-    dom.btnBuy = $('btn-buy');
+    /* Buy Action removed (obsolete). */
     dom.btnPass = $('btn-pass');
     dom.vizDock = $('viz-dock');
     dom.vizCanvas = $('viz3d-canvas');
@@ -190,7 +190,6 @@
     toggleMotion.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMotion(!motionOn); } });
 
     dom.btnDraw.addEventListener('click', function () { humanAction({ type: 'draw' }); });
-    dom.btnBuy.addEventListener('click', function () { humanAction({ type: 'buyAction' }); });
     dom.btnPass.addEventListener('click', function () { humanAction({ type: 'pass' }); });
   }
 
@@ -229,7 +228,6 @@
       if (!dom.pauseOverlay.hidden) return;
       if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); humanAction({ type: 'pass' }); return; }
       if (e.key === 'd' || e.key === 'D') { humanAction({ type: 'draw' }); return; }
-      if (e.key === 'b' || e.key === 'B') { humanAction({ type: 'buyAction' }); return; }
       if (e.key === 'm' || e.key === 'M') { toggleMute(); return; }
     });
   }
@@ -239,6 +237,10 @@
     app.screen = name;
     Object.keys(dom.screens).forEach(function (k) { dom.screens[k].hidden = (k !== name); });
     dom.vizDock.hidden = (name !== 'game');
+    // The game screen has its own header (sound + menu); hide the shared topbar
+    // there so its home/sound buttons don't overlap or duplicate it.
+    var tb = document.querySelector('.topbar');
+    if (tb) tb.style.display = (name === 'game') ? 'none' : '';
     if (name === 'title') ensureTitleViz();
     if (name === 'game') {
       ensureViz();
@@ -527,7 +529,7 @@
           '<div class="house-stats">' +
           '<span class="stat-gold">Gems <b class="hp-gems">0</b></span>' +
           '<span>Score <b class="hp-score">0</b></span>' +
-          '<span class="hp-actions-wrap">Acts <b class="hp-actions">—</b></span>' +
+          '<span class="hp-actions-wrap">Actions <b class="hp-actions">—</b></span>' +
           '</div>';
         dom.housesCol.appendChild(panel);
       });
@@ -588,8 +590,6 @@
     var isHumanTurn = state.phase === 'playing' && state.currentHouse === 'spades';
     setBtn(dom.btnDraw, isHumanTurn && legal.some(function (a) { return a.type === 'draw'; }),
       isHumanTurn ? (state.houses.spades.hand.length >= 3 ? 'Hand is full (3)' : (state.deck.length === 0 ? 'Deck is empty' : 'Draw a card')) : 'Not your turn');
-    setBtn(dom.btnBuy, isHumanTurn && legal.some(function (a) { return a.type === 'buyAction'; }),
-      isHumanTurn ? (state.houses.spades.gems < 1 ? 'Need a gem to spend' : (state.houses.spades.buys >= 2 ? 'Max 2 buys this turn' : 'Spend a gem for an extra action')) : 'Not your turn');
     setBtn(dom.btnPass, isHumanTurn, isHumanTurn ? 'End your turn' : 'Not your turn');
   }
   function setBtn(btn, enabled, title) {

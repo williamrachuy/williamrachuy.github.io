@@ -310,17 +310,15 @@ a { color: inherit; }
 
 .game-layout {
   display: grid;
-  grid-template-columns: minmax(0,1fr) minmax(240px, 320px);
-  grid-template-areas:
-    "board houses"
-    "hand  log"
-    "actions actions";
-  gap: 10px;
-  align-items: start;
+  grid-template-columns: minmax(0,1fr) minmax(270px, 350px);
+  grid-template-areas: "board rail";
+  gap: 14px;
+  align-items: stretch;
   flex: 1;
 }
-.board-wrap { grid-area: board; display:flex; flex-direction: column; align-items: center; gap: 10px; position: relative; }
-.rail { grid-area: houses; display:flex; flex-direction: column; gap: 8px; min-height: 0; }
+.board-wrap { grid-area: board; display:flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; position: relative; }
+/* One ordered rail: hand -> action buttons -> house stats -> pyramid -> log */
+.rail { grid-area: rail; display:flex; flex-direction: column; gap: 10px; min-height: 0; }
 .houses-col { display:flex; flex-direction: column; gap: 8px; }
 .log-col { grid-area: log; display:flex; flex-direction: column; min-height: 0; }
 .hand-col { grid-area: hand; }
@@ -452,21 +450,11 @@ a { color: inherit; }
 .log-entry.is-new { animation: logIn 400ms ease-out; }
 @keyframes logIn { from { opacity:0; transform: translateY(-4px);} to { opacity:1; transform: none;} }
 
-/* Actions row */
+/* Actions row — sits between the hand and the house stats */
 .actions-row {
-  display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
-  padding: 8px;
-  border: 1px solid var(--hair);
-  border-radius: var(--radius-sm);
-  background: var(--panel);
+  display: flex; align-items: stretch; gap: 10px;
 }
-.act-btn {
-  position: relative;
-  display: flex; flex-direction: column; align-items: center; gap: 2px;
-  min-width: 84px;
-}
-.act-cost { font-size: 10px; color: var(--faint); }
-.act-btn .btn { width: 100%; }
+.actions-row .btn { flex: 1; }
 
 /* Viz3D dock */
 .viz-dock {
@@ -595,10 +583,7 @@ a { color: inherit; }
     grid-template-columns: 1fr;
     grid-template-areas:
       "board"
-      "houses"
-      "hand"
-      "log"
-      "actions";
+      "rail";
   }
   .houses-col { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .log-panel { max-height: 160px; }
@@ -688,38 +673,21 @@ a { color: inherit; }
       </div>
 
       <div class="rail">
-        <div class="houses-col" id="houses-col"></div>
-        <div class="viz-dock" id="viz-dock" hidden>
-          <canvas id="viz3d-canvas" width="220" height="220" aria-hidden="true"></canvas>
-        </div>
-      </div>
-
-      <div class="hand-col">
         <div class="hand-panel">
           <span class="hand-label">Your Hand</span>
           <div class="hand-cards" id="hand-cards"></div>
         </div>
-      </div>
-
-      <div class="log-col">
+        <div class="actions-row" id="actions-row">
+          <button class="btn" id="btn-draw">Draw</button>
+          <button class="btn" id="btn-pass">Pass</button>
+        </div>
+        <div class="houses-col" id="houses-col"></div>
+        <div class="viz-dock" id="viz-dock" hidden>
+          <canvas id="viz3d-canvas" width="220" height="220" aria-hidden="true"></canvas>
+        </div>
         <div class="log-panel">
           <div class="log-title">Table Talk</div>
           <div class="log-feed" id="log-feed" aria-live="polite"></div>
-        </div>
-      </div>
-
-      <div class="actions-row" id="actions-row">
-        <div class="act-btn">
-          <button class="btn" id="btn-draw">Draw</button>
-          <span class="act-cost">1 action</span>
-        </div>
-        <div class="act-btn">
-          <button class="btn" id="btn-buy">Buy Action</button>
-          <span class="act-cost">1 gem</span>
-        </div>
-        <div class="act-btn">
-          <button class="btn" id="btn-pass">Pass</button>
-          <span class="act-cost">free</span>
         </div>
       </div>
     </div>
