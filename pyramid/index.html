@@ -41,15 +41,17 @@ html { scroll-behavior: smooth; }
   --shadow:    0 12px 40px rgba(0,0,0,.5);
   --f-head:    'Cinzel', Georgia, serif;
   --f-body:    'Baloo 2', system-ui, sans-serif;
-  --card-w:    clamp(30px, 4.6vw, 62px);
-  --card-h:    calc(var(--card-w) * 1.23);
-  --gem-w:     clamp(15px, 2.3vw, 30px);
+  --card-w:    clamp(30px, 4.2vw, 58px);
+  /* Near-square cards tile flush in the rotated diamond lattice and keep the
+     45deg-rotated cards' footprint small enough not to overlap neighbours. */
+  --card-h:    calc(var(--card-w) * 1.08);
+  --gem-w:     clamp(15px, 2.2vw, 28px);
   /* The board is a diamond of stacked rows. To keep it an EQUILATERAL square
      (not vertically stretched) the vertical row pitch must match the
      horizontal slot pitch: a squarer card, tight row gaps, wider slot gaps.
      Wide gaps also clear the 45-90deg rotated cards' diagonal footprint. */
-  --slot-gap:  clamp(10px, 2.5vw, 23px);
-  --row-gap:   clamp(2px, 0.7vw, 6px);
+  --slot-gap:  clamp(11px, 2.4vw, 24px);
+  --row-gap:   clamp(5px, 1.1vw, 12px);
 }
 html, body {
   height: 100%;
@@ -324,13 +326,16 @@ a { color: inherit; }
 .hand-col { grid-area: hand; }
 .actions-row { grid-area: actions; }
 
-/* Board */
+/* Board — shrink-wraps the diamond with EQUAL padding so the side margins
+   match the top/bottom, and is centred in its column. */
 .board {
   background: var(--bg-deep);
   border: 1px solid var(--hair);
   border-radius: var(--radius);
-  padding: clamp(10px,2vw,22px) 6px;
-  width: 100%;
+  padding: clamp(18px, 2.6vw, 40px);
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
   box-shadow: inset 0 0 60px rgba(0,0,0,.5);
   position: relative;
   overflow: visible;
@@ -390,19 +395,23 @@ a { color: inherit; }
   transition: transform 160ms, box-shadow 160ms, background 160ms, border-color 160ms;
   position: relative;
 }
-.gem.pivotable { cursor: pointer; border-color: rgba(236,227,208,.28); }
+/* Empty slots are all identical at rest (no light/dark inconsistency); the
+   "pivotable" affordance only shows on hover. */
+.gem.pivotable { cursor: pointer; }
 .gem.pivotable:hover, .gem.pivotable:focus-visible { border-color: var(--gold-glow); background: rgba(227,181,63,.08); }
 .gem.armed {
   background: radial-gradient(circle at 35% 30%, #fce9ab, var(--gold) 55%, #a97a1f);
   border-color: var(--gold);
-  box-shadow: 0 0 14px 2px var(--gold-glow);
+  box-shadow: 0 0 5px 1px rgba(227,181,63,.35);
   cursor: pointer;
-  animation: gemPulse 1.6s ease-in-out infinite;
+  animation: gemPulse 2.4s ease-in-out infinite;
 }
-.gem.armed:hover, .gem.armed:focus-visible { transform: rotate(45deg) scale(1.18); }
-.gem.spent { background: rgba(227,181,63,.06); border-color: rgba(227,181,63,.2); }
-@keyframes gemPulse { 0%,100%{ box-shadow: 0 0 8px 1px var(--gold-glow);} 50%{ box-shadow: 0 0 18px 5px var(--gold-glow);} }
-.gem.peak-node { width: calc(var(--gem-w) * 1.25); height: calc(var(--gem-w) * 1.25); }
+.gem.armed:hover, .gem.armed:focus-visible { transform: rotate(45deg) scale(1.15); }
+.gem.spent { background: rgba(227,181,63,.05); border-color: rgba(227,181,63,.16); }
+/* Much softer pulse than before (was 8-18px); a quiet shimmer, not a beacon. */
+@keyframes gemPulse { 0%,100%{ box-shadow: 0 0 4px 1px rgba(227,181,63,.28);} 50%{ box-shadow: 0 0 8px 2px rgba(227,181,63,.4);} }
+/* All gems are the same size (the peak node used to be 1.25x). */
+.gem.peak-node { width: var(--gem-w); height: var(--gem-w); }
 
 /* Hand */
 .hand-panel {
