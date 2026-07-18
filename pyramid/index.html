@@ -719,13 +719,12 @@ a { color: inherit; }
 
       <div class="rules-block">
         <h3>Your Turn</h3>
-        <p>Turn order is Spades &rarr; Hearts &rarr; Clubs &rarr; Diamonds. Each turn you get <b>2 actions</b>:</p>
+        <p>Turn order is Spades &rarr; Hearts &rarr; Clubs &rarr; Diamonds. You gain <b>one gem at the start of each turn</b>, and every action is paid for with a gem:</p>
         <ul>
-          <li><b>Pivot</b> (1 action) &mdash; swap two adjacent cards at a legal node touching one of your own cards.</li>
-          <li><b>Draw</b> (1 action) &mdash; take a card from the deck into your hand (max 3).</li>
-          <li><b>Buy Action</b> (1 gem) &mdash; gain an extra action this turn, up to twice.</li>
-          <li><b>Claim</b> (free) &mdash; take an armed gem for score, any time it's available.</li>
-          <li><b>Pass</b> (free) &mdash; end your turn early.</li>
+          <li><b>Pivot</b> (1 gem) &mdash; swap two adjacent cards at a legal node touching one of your own cards.</li>
+          <li><b>Draw</b> (1 gem) &mdash; take a card from the deck into your hand (max 3).</li>
+          <li><b>Claim</b> (free) &mdash; harvest an armed gem for score. Its first harvest also gives you a gem.</li>
+          <li><b>Pass</b> (free) &mdash; end your turn.</li>
         </ul>
       </div>
 
@@ -745,7 +744,7 @@ a { color: inherit; }
         <h3>Royals &amp; Trump</h3>
         <p>Your <b>Champion</b> is the royal card in your center royal slot. Rock-paper-scissors: King beats Queen, Queen beats Jack, Jack beats King. Otherwise, suits trump in the cycle Spades &rarr; Hearts &rarr; Clubs &rarr; Diamonds &rarr; Spades, unless the royal RPS overrides it.</p>
         <ul>
-          <li>Claiming a rival's court gem costs 1 action &mdash; unless your Champion trumps theirs, then it's free.</li>
+          <li>Claiming a rival's court gem costs 1 gem &mdash; unless your Champion trumps theirs, then it's free.</li>
           <li>When a peak gem is claimed, any house whose Champion trumps the claimant's steals it (first in turn order wins). A dramatic duel.</li>
         </ul>
       </div>

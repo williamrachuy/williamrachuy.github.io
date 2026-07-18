@@ -529,7 +529,6 @@
           '<div class="house-stats">' +
           '<span class="stat-gold">Gems <b class="hp-gems">0</b></span>' +
           '<span>Score <b class="hp-score">0</b></span>' +
-          '<span class="hp-actions-wrap">Actions <b class="hp-actions">—</b></span>' +
           '</div>';
         dom.housesCol.appendChild(panel);
       });
@@ -542,7 +541,6 @@
       panel.querySelector('.hp-tag').textContent = house.isHuman ? SUIT_LABEL[suit] : (SUIT_LABEL[suit] + (house.personality ? ' · AI' : ''));
       panel.querySelector('.hp-gems').textContent = house.gems;
       panel.querySelector('.hp-score').textContent = house.score;
-      panel.querySelector('.hp-actions').textContent = (state.currentHouse === suit && state.phase === 'playing') ? String(house.actions) : '—';
     });
   }
 
@@ -582,7 +580,7 @@
       '<span class="turn-dot" style="--suit-color:' + SUIT_COLOR[suit] + '"></span>' +
       '<span class="t-name" style="--suit-color:' + SUIT_COLOR[suit] + '">' +
       (house.isHuman ? 'Your Turn' : (SUIT_LABEL[suit] + '’s Turn')) + '</span>' +
-      '<span class="t-actions">' + (state.phase === 'playing' ? house.actions + ' action' + (house.actions === 1 ? '' : 's') + ' left' : 'Game over') + '</span>';
+      '<span class="t-actions">' + (state.phase === 'playing' ? (house.gems + ' gem' + (house.gems === 1 ? '' : 's') + ' to spend') : 'Game over') + '</span>';
     dom.deckCount.textContent = state.deck.length;
   }
 

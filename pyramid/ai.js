@@ -363,16 +363,6 @@
         }
       }
 
-      var hasBuy = legal.some(function (a) {
-        return a.type === 'buyAction';
-      });
-      if (hasBuy) {
-        var buyNet = evaluateBuyAction(engine, state, suit, personality, diffCfg);
-        if (buyNet > -1e8) {
-          candidates.push({ action: { type: 'buyAction' }, score: buyNet });
-        }
-      }
-
       if (!candidates.length) {
         return validateOrPass(state, suit, { type: 'pass' }, legal);
       }

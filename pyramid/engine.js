@@ -227,11 +227,11 @@
         suit: houseSuit,
         name: isHuman ? 'You' : (aiNames[houseSuit] || defaultNames[houseSuit]),
         isHuman: isHuman,
-        gems: 0,
+        // The starting house (spades) begins with its turn-income gem so it
+        // can act on turn one; every other house gets theirs via endTurn.
+        gems: (houseSuit === SUITS[0]) ? 1 : 0,
         score: 0,
         hand: [],
-        actions: 2,
-        buys: 0,
         // Personality objects are the AI module's concern; the engine never
         // reads this field. Left null here — ai.js fills it in if it wants.
         personality: null
@@ -526,14 +526,14 @@
             var theirChamp = state.board.royals[key] && state.board.royals[key].center;
             cost = doesCardTrump(myChamp, theirChamp) ? 0 : 1;
           }
-          if (cost <= H.actions) {
+          if (cost <= H.gems) {
             actions.push({ type: 'claim', loc: loc, key: key });
           }
         }
       }
 
-      // --- Pivots + draw (need >=1 action) ---
-      if (H.actions >= 1) {
+      // --- Pivots + draw: every action is paid for with a gem ---
+      if (H.gems >= 1) {
         var pv = prevSuit(suit);
         var ownBaseCapKeys = [baseKey(suit), baseKey(pv)];
         for (var oi = 0; oi < ownBaseCapKeys.length; oi++) {
@@ -560,12 +560,7 @@
         }
       }
 
-      // --- Buy action (costs a gem, not an action) ---
-      if (H.gems >= 1 && H.buys < 2) {
-        actions.push({ type: 'buyAction' });
-      }
-
-      // --- Pass is always available ---
+      // --- Pass is always available (free) ---
       actions.push({ type: 'pass' });
     } catch (e) {
       return actions;
@@ -631,9 +626,10 @@
 
     var nextHouse = SUITS[(idx + 1) % 4];
     s.currentHouse = nextHouse;
+    // Turn income: each house receives one gem at the start of its turn.
+    // Gems are the sole action currency (pivots & draws each cost one).
     if (s.houses[nextHouse]) {
-      s.houses[nextHouse].actions = 2;
-      s.houses[nextHouse].buys = 0;
+      s.houses[nextHouse].gems = (s.houses[nextHouse].gems || 0) + 1;
     }
     if (nextHouse === SUITS[0]) s.round = (s.round || 0) + 1;
 
@@ -702,7 +698,7 @@
             value = GEM_VALUES.court; // 25, defended
           }
         }
-        if (cost > H.actions) return { state: s, events: [] }; // can't afford defended claim
+        if (cost > H.gems) return { state: s, events: [] }; // can't afford defended claim
 
         // DIMINISHING RETURNS. A node can be re-armed by breaking and re-making
         // its match, so a naive flat value lets a player farm one node forever.
@@ -716,7 +712,7 @@
 
         node.gem = false;
         node.spent = true;
-        H.actions -= cost;
+        H.gems -= cost;
 
         var recipient = house;
         events.push({ type: 'claim', house: house, loc: loc, key: key, value: value, cost: cost, claimIndex: priorClaims + 1 });
@@ -735,33 +731,33 @@
           }
         }
 
-        s.houses[recipient].gems += 1;
+        // A node yields a GEM only the first time it is harvested. Re-claims
+        // (after breaking and re-forming the match) still score — with the
+        // diminishing value above — but give no gem. Without this, claim(+1)
+        // and pivot(-1) net to zero and a house could act forever within one
+        // turn (the turn would never end, so the game never terminates).
+        var gemGain = (priorClaims === 0) ? 1 : 0;
+        s.houses[recipient].gems += gemGain;
         s.houses[recipient].score += value;
         // fall through to gem re-evaluation / pyramid check below
       } else if (action.type === 'pivot') {
-        if (H.actions < 1) return { state: s, events: [] };
+        if (H.gems < 1) return { state: s, events: [] };
         if (!canPivot(s, house, action.loc, action.key, action.sub, action.handIndex)) {
           return { state: s, events: [] };
         }
         if (!doPivot(s, action.loc, action.key, action.sub, action.handIndex)) {
           return { state: s, events: [] };
         }
-        H.actions -= 1;
+        H.gems -= 1;
         events.push({ type: 'pivot', house: house, loc: action.loc, key: action.key, sub: action.sub, handIndex: action.handIndex });
       } else if (action.type === 'draw') {
-        if (H.actions < 1) return { state: s, events: [] };
+        if (H.gems < 1) return { state: s, events: [] };
         if (!Array.isArray(H.hand) || H.hand.length >= 3) return { state: s, events: [] };
         if (!Array.isArray(s.deck) || s.deck.length === 0) return { state: s, events: [] };
         var card = s.deck.shift();
         H.hand.push(card);
-        H.actions -= 1;
-        events.push({ type: 'draw', house: house, card: card });
-      } else if (action.type === 'buyAction') {
-        if (!(H.gems >= 1) || !(H.buys < 2)) return { state: s, events: [] };
         H.gems -= 1;
-        H.buys = (H.buys || 0) + 1;
-        H.actions += 1;
-        events.push({ type: 'buy', house: house });
+        events.push({ type: 'draw', house: house, card: card });
       } else {
         return { state: s, events: [] }; // unknown action type -> no-op
       }
