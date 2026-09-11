@@ -41,8 +41,16 @@ export default {
       article.innerHTML = '';
 
       for (const b of doc.blocks) {
+        if (b.type === 'gap') {
+          const gap = document.createElement('div');
+          gap.className = 'fy-gap';
+          gap.setAttribute('aria-hidden', 'true');
+          article.appendChild(gap);
+          continue;
+        }
         if (b.type === 'hr') {
           const hr = document.createElement('hr');
+          if (b.loop === 2) hr.dataset.loop = '2';
           article.appendChild(hr);
           continue;
         }
@@ -59,6 +67,7 @@ export default {
           const ist = styleFor('image');
           im.style.marginTop = (base * ist.mt).toFixed(1) + 'px';
           im.style.marginBottom = (base * ist.mb).toFixed(1) + 'px';
+          if (b.loop === 2) im.dataset.loop = '2';
           article.appendChild(im);
           continue;
         }
@@ -75,6 +84,8 @@ export default {
         el.style.marginTop = (size * st.mt).toFixed(1) + 'px';
         el.style.marginBottom = (size * st.mb).toFixed(1) + 'px';
         if (st.indent) el.style.paddingLeft = (size * st.indent).toFixed(1) + 'px';
+
+        if (b.loop === 2) el.dataset.loop = '2';
 
         if (P.balance && (b.type === 'title' || b.type === 'h1' || b.type === 'subtitle')) {
           const font = fontString(size, st.weight, st.italic);
@@ -99,6 +110,16 @@ export default {
         render();
       },
       contentHeight() { return article.offsetHeight; },
+
+      // Foundry builds its own DOM instead of using the layout's coordinates,
+      // so the distance between one pass and the next has to come from that DOM
+      // rather than from the typeset blocks.
+      loopPeriod() {
+        const first = article.firstElementChild;
+        const second = article.querySelector('[data-loop="2"]');
+        if (!first || !second) return 0;
+        return second.offsetTop - first.offsetTop;
+      },
       frame() {},
       destroy() { article.remove(); }
     };

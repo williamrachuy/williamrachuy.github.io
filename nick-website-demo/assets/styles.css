@@ -35,7 +35,18 @@ body {
 
 /* ------------------------------------------------------------- stage */
 
-#stage { position: absolute; top: 0; left: 0; width: 100%; }
+/* Height is set per layout, to exactly the scrollable region. Clipping matters:
+   the DOM profiles hold two passes of the post, and without this their own
+   content extends the page past the loop point — you could then drag the
+   scrollbar beyond the wrap and land mid-article with a visible jump. The
+   canvas and the lens handle are position:fixed, so they escape this. */
+#stage {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  overflow: hidden;
+  overflow: clip;
+}
 #spacer { width: 100%; }
 
 .stage-canvas {
@@ -425,3 +436,6 @@ body {
   letter-spacing: 0.1em;
   color: rgba(232, 224, 209, 0.38);
 }
+
+/* The breath between one pass of a looping post and the next. */
+.fy-gap { height: 11em; }
