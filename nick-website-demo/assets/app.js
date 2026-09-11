@@ -21,11 +21,12 @@ import { resolveImages } from './images.js';
 import tidewater from './profiles/tidewater.js';
 import waterline from './profiles/waterline.js';
 import meniscus from './profiles/meniscus.js';
+import cipher from './profiles/cipher.js';
 import foundry from './profiles/foundry.js';
 import lantern from './profiles/lantern.js';
 import ledger from './profiles/ledger.js';
 
-const PROFILES = [tidewater, waterline, lantern, ledger, meniscus, foundry];
+const PROFILES = [tidewater, waterline, lantern, ledger, meniscus, cipher, foundry];
 const byId = Object.fromEntries(PROFILES.map(p => [p.id, p]));
 
 const stage = document.getElementById('stage');
