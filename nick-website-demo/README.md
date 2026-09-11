@@ -1,6 +1,6 @@
 # Reading profiles — demo
 
-A markdown post, rendered seven different ways. The point is to pick a house
+A markdown post, rendered eight different ways. The point is to pick a house
 style by feeling it on a phone rather than arguing about it in the abstract.
 
 Live: `/nick-website-demo/`
@@ -18,7 +18,7 @@ and the opening few lines, newest first — the same shape as `/blog` on this
 site. It is ordinary flowing text, selectable and searchable, because choosing
 what to read is a different job from reading it.
 
-**A post** is the reading experience, in one of the seven profiles below.
+**A post** is the reading experience, in one of the eight profiles below.
 
 The only difference between the two is `?post=` in the address, so every view is
 a real URL you can link to, bookmark, or reload, and the back button does what
@@ -59,7 +59,7 @@ Nothing far from the viewport is drawn.
 - Foundry is left alone on purpose. It is the control group: ordinary flowing
   text that stays selectable and findable, which virtualising would break.
 
-## The seven profiles
+## The eight profiles
 
 | id | name | what it does | cost |
 |---|---|---|---|
@@ -69,6 +69,7 @@ Nothing far from the viewport is drawn.
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |
 | `meniscus` | Meniscus | Nothing is composed and nothing composes itself. Every glyph drifts near where it belongs, small, dim and tilted, rocking slowly around its own angle. A tap drops a meniscus: inside it the type is pulled onto its true positions, unwinds to true vertical, and comes up to full size and full brightness — and it is the only thing holding it there. Each decays on a half-life and the words go back to drifting, so reading is something you keep doing. Menisci crowd each other — the more there are, the faster the older ones give out. | Canvas, per-glyph, plus a handful of distance checks. |
 | `cipher` | Cipher | Waterline's gradient spent on identity rather than position. Nothing moves; what changes is which character is drawn. Far from the line a glyph shows something else and keeps churning, and the closer it comes the more likely each turn lands on the character that belongs. `Correct on the line` is that probability at the line itself, so at 1 the line resolves clean and below it the text reads but flickers. `Churn` is how often a glyph reconsiders itself: about twice a second out in the noise at the default, and roughly every two and a half seconds on the line, where it is held rather than merely correct. Some fraction of changes release energy that runs off down that glyph's own line as a pulse — sparse enough that a line carries one or two currents at a time and you can watch one travel, rather than a wash. `Energy` sets how many and how bright; at 0 the field is just the gradient. Green, and set in Share Tech Mono throughout — the profile declares its own family and `typeset()` measures against it, so line breaking and every glyph position come out of that font's metrics rather than the serif's. The noise alphabet is half-width katakana (U+FF66-FF9D) with digits and Latin, drawn mirrored about half the time, after the film's. | Canvas, no physics. |
+| `marbles` | Marbles | The one light page: black type on paper with a few discs of coloured glass loose on top of it. Each carries the shell-shaped pressure field the first Meniscus had — no push at the centre, strongest at a ring partway out, nothing at the rim — so a word bends around the ring rather than being shoved off a point, and the ring is drawn where the push peaks so you can see the edge doing the work. Colour is a second field, strongest where the push is weakest: type under the middle keeps its shape and takes the marble's hue, type at the edge keeps its colour and gets moved. Nothing dims. They drift, they are pulled toward type by a density map of the page built at layout, and they can be picked up, dragged and thrown. | Canvas, plus one invisible grab element per marble. |
 | `foundry` | Foundry | No motion. Ordinary flowing text, selectable and copyable. | DOM. Free. |
 
 Tidewater is the one that was asked for, and Waterline is the same idea with the
@@ -105,7 +106,7 @@ Only `title` is required. The rest:
 | `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
 | `source` | Adds an "Original post" link for screen readers and search engines. |
 | `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
-| `profile` | Which of the seven renderings this post opens in. Readers can still switch. Overruled by `profiles.md` — see below. |
+| `profile` | Which of the eight renderings this post opens in. Readers can still switch. Overruled by `profiles.md` — see below. |
 
 The filename becomes the post's link. `overcoming-the-classics.md` is at
 `?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
@@ -345,7 +346,7 @@ Three things fall out of that:
 
 - **`prepareWithSegments` + `layoutWithLines`** give the committed lines and
   their real widths. Every profile builds on those coordinates — one typeset
-  pass, seven skins.
+  pass, eight skins.
 - **`measureLineStats` binary search** (`balancedWidth` in `typeset.js`) finds
   the narrowest width that still yields the same line count, which is how the
   title and subtitle come out balanced instead of dropping one orphan word.
@@ -381,7 +382,7 @@ assets/
   typeset.js             Pretext wrapper: blocks -> lines -> glyph positions
   styles.css
   profiles/
-    tidewater.js  lantern.js  ledger.js  foundry.js
+    tidewater.js  lantern.js  ledger.js  marbles.js  foundry.js
 posts/
   overcoming-the-classics.md      <- every .md in here is a post
   images/
@@ -427,7 +428,7 @@ from `params`.
 
 ## Notes on the implementation
 
-- **Accessibility.** All seven visual layers are `aria-hidden`. A real
+- **Accessibility.** All eight visual layers are `aria-hidden`. A real
   `<h1>/<p>` copy of the article lives in a visually-hidden div for screen
   readers, search engines, and JS-off. Tidewater's canvas text is not
   selectable; Lantern's and Foundry's is.

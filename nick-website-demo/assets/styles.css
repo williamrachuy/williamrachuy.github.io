@@ -98,6 +98,40 @@ body {
   background: radial-gradient(circle, rgba(214,186,124,0.35), rgba(214,186,124,0.06) 70%);
   border: 1px solid rgba(214,186,124,0.5);
 }
+/* ---------------------------------------------------- marbles profile */
+
+/* The one light profile. Set on <html> by the profile itself while it is
+   mounted, so the strip behind an overscroll is paper as well, and taken off
+   again on the way out. */
+.is-paper, .is-paper body {
+  color-scheme: light;
+  background: #fbfaf7;
+}
+.is-paper body { color: #15130f; }
+/* The vignette is a near-black fade at the top and bottom edges, and it sits
+   above the canvas. Left alone on a light page it is a smudge of soot across
+   the paper, so it fades to paper instead. */
+.is-paper #vignette {
+  background:
+    linear-gradient(180deg, rgba(251,250,247,0.92) 0%, rgba(251,250,247,0) 14%),
+    linear-gradient(0deg, rgba(251,250,247,0.92) 0%, rgba(251,250,247,0) 16%);
+}
+
+/* The grab target for one marble: invisible, and only as big as the still
+   middle of it. `touch-action: none` is the whole point — without it a drag
+   here is a page scroll and a marble can never be picked up on a phone — and
+   it is confined to this circle so a touch anywhere else still scrolls. */
+.marble-grip {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 5;
+  border-radius: 50%;
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+.marble-grip.is-held { cursor: grabbing; }
+
 .lens-handle.is-dragging { cursor: grabbing; }
 .lens-handle.is-dragging span { transform: scaleX(1.5); background: rgba(232,224,209,0.9); }
 .lens-handle[data-mode="circle"].is-dragging span { transform: scale(1.25); }
