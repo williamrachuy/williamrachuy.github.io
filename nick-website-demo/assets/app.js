@@ -151,6 +151,11 @@ function relayout() {
   // that silently never loops is not.
   state.period = Math.round(inst.loopPeriod ? inst.loopPeriod() : measurePeriod(state.layout));
 
+  // A profile that places anything of its own in document coordinates needs
+  // this: the post repeats every `period`, so anything anchored to the text has
+  // to repeat with it or it walks off screen the first time the scroll wraps.
+  if (inst.setPeriod) inst.setPeriod(state.period);
+
   // One period of travel, plus a screen so the last of it can be scrolled into
   // view. There is a definite top — the browser clamps at 0 — and the bottom
   // hands back to the top.
