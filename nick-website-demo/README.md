@@ -68,7 +68,7 @@ Nothing far from the viewport is drawn.
 | `lantern` | Lantern | Same reading-band idea at line granularity. Lines sit dim and offset, then settle and brighten inside the band. | DOM, ~60 elements. Cheap. |
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |
 | `meniscus` | Meniscus | Nothing is composed and nothing composes itself. Every glyph drifts near where it belongs, small, dim and tilted, rocking slowly around its own angle. A tap drops a meniscus: inside it the type is pulled onto its true positions, unwinds to true vertical, and comes up to full size and full brightness — and it is the only thing holding it there. Each decays on a half-life and the words go back to drifting, so reading is something you keep doing. Menisci crowd each other — the more there are, the faster the older ones give out. | Canvas, per-glyph, plus a handful of distance checks. |
-| `cipher` | Cipher | Waterline's gradient spent on identity rather than position. Nothing moves; what changes is which character is drawn. Far from the line a glyph shows something else and keeps churning, and the closer it comes the more likely each turn lands on the character that belongs — never certain, so text near the line reads but flickers. Changing a character releases energy that runs off down its own line as a pulse, which is most of what lights the text out in the dark. Green. The noise alphabet is half-width katakana (U+FF66-FF9D) with digits and Latin, drawn mirrored about half the time, after the film's. | Canvas, no physics. |
+| `cipher` | Cipher | Waterline's gradient spent on identity rather than position. Nothing moves; what changes is which character is drawn. Far from the line a glyph shows something else and keeps churning, and the closer it comes the more likely each turn lands on the character that belongs — never certain, so text near the line reads but flickers. Changing a character releases energy that runs off down its own line as a pulse, which is most of what lights the text out in the dark. Green, and set in Share Tech Mono throughout — the profile declares its own family and `typeset()` measures against it, so line breaking and every glyph position come out of that font's metrics rather than the serif's. The noise alphabet is half-width katakana (U+FF66-FF9D) with digits and Latin, drawn mirrored about half the time, after the film's. | Canvas, no physics. |
 | `foundry` | Foundry | No motion. Ordinary flowing text, selectable and copyable. | DOM. Free. |
 
 Tidewater is the one that was asked for, and Waterline is the same idea with the
@@ -257,6 +257,28 @@ it properly means measuring mixed fonts on a single line, which is what
 `@chenglou/pretext/rich-inline` is for. That is the honest next step; faking it
 by laying out each run separately would produce wrong line breaks.
 
+## A note on the Matrix font
+
+Cipher is set in **Share Tech Mono** (Carrois Type Design, SIL OFL 1.1),
+committed to `assets/fonts/` with its licence rather than hotlinked. It is a
+13.5 KB Latin subset.
+
+It is **not** the typeface from the film. That is a proprietary custom design by
+Simon Whiteley, and neither it nor any recreation of it is shipped here. What is
+reproduced is the documented technique: half-width katakana, mirrored, mixed
+with digits and Latin.
+
+Share Tech Mono has no katakana, so those come from whatever Japanese face the
+reader's system provides. Cipher measures for one at mount — against a
+private-use code point, which no font defines — and drops to Latin and digits
+alone if the widths match, because a page of notdef boxes is worse than a page
+with no katakana in it.
+
+A profile that wants its own face sets `fontFamily` on itself and `typeset()`
+measures with it. That matters more than it sounds: the same string is 190px in
+the serif and 270px in Share Tech Mono, so a profile that swapped the font only
+at draw time would put every character in the wrong place.
+
 ## `.nojekyll`
 
 GitHub Pages runs Jekyll by default, and Jekyll converts any `.md` file that has
@@ -297,6 +319,7 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 
 ```
 index.html
+assets/fonts/            Share Tech Mono (SIL OFL) + its licence; Cipher's face
 tools/
   fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
   localize_images.py     copies referenced pictures into posts/images/
