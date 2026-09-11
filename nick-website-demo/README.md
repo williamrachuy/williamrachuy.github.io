@@ -76,17 +76,17 @@ spaces and the links stay tidy.
 ### About the posts currently in here
 
 The five files in `posts/` are the five most recent TBH Press pieces, pulled
-from `https://tbhpress.substack.com/feed`. The front matter — title, subtitle,
-byline, date, canonical URL — is the real metadata from that feed.
+from `https://tbhpress.substack.com/feed`. Title, subtitle, byline, date and
+canonical URL are the real metadata from that feed, and each file carries the
+full text of the piece.
 
-The bodies are the **opening of each piece plus a link back to the original**,
-not the complete essays. They are Nick's to place on his own site; when he wants
-them here in full, he pastes the text into the file below the front matter and
-commits. No code changes, no configuration — the body of the file is simply
-what gets typeset.
+Nicholas Souza gave permission for his posts to be reproduced here, in a session
+on 2026-09-11. Every post keeps a `source:` line pointing at the original on
+TBH Press, which is where the canonical version lives.
 
-`overcoming-the-classics.md` is the exception and carries its full text; it was
-already in the demo as the original sample post.
+Substack's own furniture — subscribe buttons, share links, embedded players and
+image figures — is stripped on the way in. Images are dropped rather than
+rendered; the parser does not place them yet.
 
 ### Taking a post down
 

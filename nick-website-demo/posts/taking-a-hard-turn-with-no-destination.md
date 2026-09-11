@@ -7,11 +7,22 @@ date: 2026-03-27
 source: https://tbhpress.substack.com/p/taking-a-hard-turn-with-no-destination
 profile: tidewater
 ---
-
 Dear Reader,
 
 Contrary to the output of this newsletter, I have been writing a lot. In fact, I’ve been writing more than I ever have before. This trend feels fantastic, but an update seems necessary before any of that hits your feed.
 
 Last week, I was listening to [NYU writing professor Ocean Vuong](https://youtu.be/kn4r4CmWmUw?si=qlTbdWeZEQkR50G-), who lingered on the idea that we should write sentences that no one has ever read before. That goal has been sitting with me for a few days, because I have never attempted to do such a thing, much less achieve it.
 
-*Read the rest of this post at [TBH Press](https://tbhpress.substack.com/p/taking-a-hard-turn-with-no-destination).*
+My background in journalism got me started on this strange journey of writing as self expression, which wasn’t a bad place to start. In fact, it was the same for famed authors such as Hemingway, Márquez and Didion. Journalism teaches us the basics of narrative. The who, what, when, where and why of it all. However, it specifically teaches against what many would call *creative* writing. It has a strict style, an aversion to opinion, and it tries its best to make the author invisible to the reader. The same can be said for marketing, which is where I’ve earned a paycheck as of late.
+
+At a certain point, these writers took massive turns. They rejected established dogma and the demands of their profession to pursue something new. That pursuit is what allowed them to write sentences that no one has ever read before. Those sentences created stories that were closer to being from their soul than from their mind. These former journalists spurned a world filled with noisy media and content to eventually become literary titans. I have little interest in joining them all the way up there, but I know that I am ready to make that turn toward a destination unknown.
+
+Culture is in a weird place. Creatives are terrified of AI, new Harry Potter remakes, corporate consolidation in Hollywood, and the fact that very few people under 25 are reading books. For all this and more, a demoralization has crept over the entire artistic world. The good news *for me* is that I am not part of that world. I have a very small readership, my posts get little attention, and I am not employed by anyone willing to pay me for my creative work. I agree that the concerns of paid artists are real, but that demoralization doesn’t need to concern me, for I have nothing that is being taken from me. The safe, established methods of monetizing art are under attack, but I am just as free to dive deeper in pursuit of the new, like others before me.
+
+I know how it sounds, but really, this has come across as a relief! I no longer feel a need to play it safe. Why should I? So my work eventually sounds just like what Claude would write? These trends in the world have, in a way, unshackled me from the desire to optimize the measured writing that I learned in journalism school. What I have to offer as a different form of writer is completely unknown, and because of that, I know that AI companies don’t have access to it. I plan to outrun these modern concerns by experimenting with my flawed human mind, which an LLM can’t know anything about. It doesn’t exist in a creative writing class or a college syllabus, either. This realization means that I can do more, and feel comfort in knowing that what I create is authentic. I can neglect the need to comment on current events, or even read about them. I can write, quite literally, whatever I want.
+
+It has taken me almost 10 years to come to this understanding, but that is better than spending a lifetime in shallow waters. So, to whoever is out there reading this thing. First of all, thank you. Many of you are dear friends who have been very supportive over the years. Second of all, the writing you see from me may soon be quite different. Some of it will be strange, difficult or silly. Just know that I am where I want to be, and hopefully, you have some fun with it too.
+
+Sincerely,
+
+Nick
