@@ -8,6 +8,8 @@
 // The lens is draggable. Band mode reads while you scroll; circle mode is a
 // spotlight you move around with your thumb.
 
+import { imageOf } from '../images.js';
+
 const CORE_DIM = [74, 62, 38];      // very dark, desaturated gold
 const CORE_MID = [170, 143, 90];    // gold
 const CORE_LIT = [240, 232, 214];   // warm cream (matches the site wordmark)
@@ -83,6 +85,7 @@ export default {
     let padTop = 0;
     let lensPx = { x: 0.5, y: 0.36 };
     let dragging = false;
+    let imgs = [];           // pictures ride the same current as the glyphs
 
     const P = {};
     for (const p of this.params) P[p.key] = p.value;
@@ -182,6 +185,25 @@ export default {
         canvas.height = Math.round(vh * dpr);
         canvas.style.width = vw + 'px';
         canvas.style.height = vh + 'px';
+        // Pictures drift too. Each gets its own drift vector off the same
+        // generator, so a reload puts everything back exactly where it was.
+        const irnd = mulberry32(0x85ebca6b ^ layout.blocks.length);
+        imgs = layout.blocks
+          .filter(b => b.type === 'image')
+          .map(b => {
+            const ang = irnd() * Math.PI * 2;
+            const rad = 0.30 + irnd() * 0.5;
+            return {
+              el: imageOf(b), w: b.width, h: b.height,
+              tx: b.x + b.width / 2, ty: b.top + b.height / 2,
+              ox: Math.cos(ang) * rad, oy: Math.sin(ang) * rad * 0.7,
+              rot0: (irnd() - 0.5) * 0.5,
+              fq: 0.3 + irnd() * 0.5, ph: irnd() * 6.283,
+              cx: 0, cy: 0, cr: 0, placed: false
+            };
+          })
+          .filter(im => im.el);
+
         seed(G.n);
         // Start everything already adrift so the first paint is not a pop-in.
         for (let i = 0; i < G.n; i++) {
@@ -212,6 +234,32 @@ export default {
         while (lo < hi) { const m = (lo + hi) >> 1; if (G.y[m] < minY) lo = m + 1; else hi = m; }
 
         const tt = t * 0.001 * P.current;
+
+        // Pictures first, so drifting glyphs pass in front of them.
+        for (const im of imgs) {
+          const screenY = im.ty + padTop - scrollY;
+          if (screenY < -im.h - sc * 2 || screenY > vh + im.h + sc * 2) { im.placed = false; continue; }
+
+          const w = weight(im.cx || im.tx, screenY);
+          const inv = 1 - w;
+          const driftX = im.tx + inv * (im.ox * sc + Math.sin(tt * im.fq + im.ph) * 14);
+          const driftY = screenY + inv * (im.oy * sc + Math.cos(tt * im.fq * 0.8 + im.ph) * 10);
+          const driftR = inv * (im.rot0 + Math.sin(tt * im.fq * 0.6 + im.ph) * 0.12);
+
+          if (!im.placed) { im.cx = driftX; im.cy = driftY; im.cr = driftR; im.placed = true; }
+          const k = 1 - Math.exp(-(3.0 + 18 * w * w) * dt);
+          im.cx += (driftX - im.cx) * k;
+          im.cy += (driftY - im.cy) * k;
+          im.cr += (driftR - im.cr) * k;
+
+          ctx.globalAlpha = 0.26 + 0.74 * w;
+          const co = Math.cos(im.cr), si = Math.sin(im.cr);
+          ctx.setTransform(dpr * co, dpr * si, -dpr * si, dpr * co, dpr * im.cx, dpr * im.cy);
+          ctx.drawImage(im.el, -im.w / 2, -im.h / 2, im.w, im.h);
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.globalAlpha = 1;
+        }
+
         let curFont = '', curFill = '', identity = true;
 
         for (let i = lo; i < n; i++) {

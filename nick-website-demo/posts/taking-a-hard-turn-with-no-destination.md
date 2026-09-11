@@ -7,6 +7,9 @@ date: 2026-03-27
 source: https://tbhpress.substack.com/p/taking-a-hard-turn-with-no-destination
 profile: tidewater
 ---
+
+![](https://substackcdn.com/image/fetch/$s_!teI_!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2Fd9765d3f-89d0-44bb-953c-c529754535d2_4032x1522.jpeg)
+
 Dear Reader,
 
 Contrary to the output of this newsletter, I have been writing a lot. In fact, I’ve been writing more than I ever have before. This trend feels fantastic, but an update seems necessary before any of that hits your feed.

@@ -71,6 +71,14 @@ export function parseDocument(src) {
     const t = line.trim();
     if (!t) { flushPara(); continue; }
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { flushPara(); blocks.push({ type: 'hr', text: '' }); continue; }
+    // A line that is nothing but an image is a figure. An image inside a
+    // sentence stays flattened to its alt text, same as inline emphasis.
+    const img = /^!\[([^\]]*)\]\(\s*(\S+?)\s*\)$/.exec(t);
+    if (img) {
+      flushPara();
+      blocks.push({ type: 'image', text: img[1].trim(), src: img[2] });
+      continue;
+    }
     const h = /^(#{1,4})\s+(.*)$/.exec(t);
     if (h) { flushPara(); blocks.push({ type: 'h' + Math.min(3, h[1].length), text: flatten(h[2]) }); continue; }
     if (/^>\s?/.test(t)) {
@@ -90,7 +98,10 @@ export function parseDocument(src) {
   const bylineBits = [meta.author, meta.publication, formatDate(meta.date)].filter(Boolean);
   if (bylineBits.length) head.push({ type: 'meta', text: bylineBits.join('  ·  ') });
 
-  return { meta, blocks: head.concat(blocks.filter(b => b.text || b.type === 'hr')) };
+  // An image with no alt text is still a block; its emptiness is not a reason
+  // to drop it the way an empty paragraph would be.
+  const keep = b => b.text || b.type === 'hr' || b.type === 'image';
+  return { meta, blocks: head.concat(blocks.filter(keep)) };
 }
 
 // NOTE / known gap: inline emphasis mid-sentence is flattened, not styled.

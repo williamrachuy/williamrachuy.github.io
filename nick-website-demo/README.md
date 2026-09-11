@@ -84,9 +84,15 @@ Nicholas Souza gave permission for his posts to be reproduced here, in a session
 on 2026-09-11. Every post keeps a `source:` line pointing at the original on
 TBH Press, which is where the canonical version lives.
 
-Substack's own furniture — subscribe buttons, share links, embedded players and
-image figures — is stripped on the way in. Images are dropped rather than
-rendered; the parser does not place them yet.
+Substack's own furniture — subscribe buttons, share links, embedded players — is
+stripped on the way in. Photographs are kept, in the place they appear in the
+piece, and are still served from Substack's CDN rather than copied into this
+repo.
+
+**The pictures have no alt text.** Substack did not carry any, and describing
+someone else's photographs is not a thing to guess at. Write it in the square
+brackets — `![two chairs on a cliff](https://…)` — and it reaches screen
+readers, search engines, and anyone whose images fail to load.
 
 ### Taking a post down
 
@@ -138,6 +144,18 @@ can be deleted.
 wrapped entirely in a single pair of asterisks becomes an italic note block —
 that is how the editorial preamble and the `-Nick` sign-off are styled.
 
+**Pictures:** a line containing nothing but `![alt text](url)` becomes a figure.
+It can be any URL — Substack's CDN, somewhere else, or a file committed next to
+the post. Each profile renders it in its own idiom: Foundry sets it in the flow,
+Lantern lifts it out of the dark as it reaches the reading band, Ledger develops
+it downward under the write head, Tidewater lets it drift and rights it in the
+lens.
+
+A picture is never given more than 62% of the screen height, so a tall portrait
+cannot fill the viewport on its own. One that fails to load is skipped and the
+text closes over the gap. An image inside a sentence, rather than alone on its
+own line, is still flattened to its alt text.
+
 **Known gap:** inline emphasis mid-sentence is flattened to plain text. Styling
 it properly means measuring mixed fonts on a single line, which is what
 `@chenglou/pretext/rich-inline` is for. That is the honest next step; faking it
@@ -186,6 +204,7 @@ index.html
 assets/
   app.js                 routing, scroll clock, profile mounting, control panel
   feed.js                the landing page: one card per post
+  images.js              measures pictures before layout so nothing jumps
   posts.js               finds the posts; no manifest to maintain
   md.js                  front matter + block markdown
   typeset.js             Pretext wrapper: blocks -> lines -> glyph positions
@@ -249,6 +268,9 @@ from `params`.
 - Desktop-specific profiles. This is tuned for a phone; the cursor opens up
   hover and 2D pointer input that none of these use.
 - Inline emphasis (see above).
-- Images. Nick's posts have them; the parser drops them to alt text today.
+- Captions. A picture is a picture; there is nowhere to say what it is of.
+- Pictures are hotlinked from Substack's CDN. That is how they are served today
+  and it works, but it makes the posts depend on an account staying open.
+  Committing the files next to the posts would make this repo self-contained.
 - Tidewater has no scroll-position memory, so a very long post means a lot of
   glyph churn. Above roughly 15,000 characters it should page by section.

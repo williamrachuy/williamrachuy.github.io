@@ -46,6 +46,22 @@ export default {
           article.appendChild(hr);
           continue;
         }
+        if (b.type === 'image') {
+          if (b.broken || !b.iw) continue;
+          const im = document.createElement('img');
+          im.className = 'fy-img';
+          im.src = b.src;
+          im.alt = b.text || '';
+          // Intrinsic size gives the browser the aspect ratio up front, so the
+          // text below does not jump when the file arrives.
+          im.width = b.iw; im.height = b.ih;
+          im.loading = 'lazy'; im.decoding = 'async';
+          const ist = styleFor('image');
+          im.style.marginTop = (base * ist.mt).toFixed(1) + 'px';
+          im.style.marginBottom = (base * ist.mb).toFixed(1) + 'px';
+          article.appendChild(im);
+          continue;
+        }
         const st = styleFor(b.type);
         const el = document.createElement(TAG[b.type] || 'p');
         el.textContent = b.text;

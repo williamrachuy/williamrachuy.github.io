@@ -54,6 +54,22 @@ export default {
             frag.appendChild(rule);
             continue;
           }
+          if (blk.type === 'image') {
+            const im = document.createElement('img');
+            im.className = 'lt-img';
+            im.src = blk.src;
+            im.alt = '';                 // the layer is aria-hidden; #reader-text carries the alt
+            im.style.top = (blk.top + padTop) + 'px';
+            im.style.left = blk.x + 'px';
+            im.style.width = blk.width + 'px';
+            im.style.height = blk.height + 'px';
+            im.decoding = 'async';
+            frag.appendChild(im);
+            // A picture settles on its own centre, so a tall one is not still
+            // dim at the top while its bottom edge has already passed the band.
+            items.push({ el: im, top: blk.top + padTop + blk.height / 2, cur: 0, img: true });
+            continue;
+          }
           for (const ln of blk.lines) {
             const el = document.createElement('span');
             el.className = 'lt-line';
@@ -95,6 +111,12 @@ export default {
       const o = P.floor + (1 - P.floor) * w;
       it.el.style.opacity = o.toFixed(3);
       it.el.style.transform = `translate3d(0, ${((1 - w) * P.lift).toFixed(2)}px, 0)`;
+      if (it.img) {
+        // Text goes from gold to cream; a photograph has its own colours, so it
+        // comes up out of the dark instead.
+        it.el.style.filter = `brightness(${(0.34 + 0.66 * w).toFixed(3)}) saturate(${(0.55 + 0.45 * w).toFixed(3)})`;
+        return;
+      }
       // Dim lines stay gold; lit lines go cream.
       it.el.style.color = w > 0.5
         ? `rgb(${(170 + 70 * (w - 0.5) * 2) | 0},${(143 + 89 * (w - 0.5) * 2) | 0},${(90 + 124 * (w - 0.5) * 2) | 0})`

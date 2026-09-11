@@ -16,6 +16,7 @@
 import { typeset, loadEngine, engineName } from './typeset.js';
 import { discoverPosts, findPost } from './posts.js';
 import { renderFeed } from './feed.js';
+import { resolveImages } from './images.js';
 
 import tidewater from './profiles/tidewater.js';
 import foundry from './profiles/foundry.js';
@@ -70,6 +71,16 @@ function renderReaderText(doc) {
   srOnly.innerHTML = '';
   for (const b of doc.blocks) {
     if (b.type === 'hr') { srOnly.appendChild(document.createElement('hr')); continue; }
+    if (b.type === 'image') {
+      if (b.broken) continue;
+      // The canvas profiles draw pictures with no text alternative of their
+      // own, so this mirror is the only one a screen reader ever gets.
+      const im = document.createElement('img');
+      im.src = b.src;
+      im.alt = b.text || '';
+      srOnly.appendChild(im);
+      continue;
+    }
     const tag = b.type === 'title' ? 'h1' : b.type.startsWith('h') ? 'h2' : 'p';
     const el = document.createElement(tag);
     el.textContent = b.text;
@@ -88,7 +99,7 @@ function renderReaderText(doc) {
 function relayout() {
   const { vw, vh, dpr } = readViewport();
   state.vw = vw; state.vh = vh; state.dpr = dpr;
-  state.layout = typeset(state.doc, vw);
+  state.layout = typeset(state.doc, vw, vh);
 
   const viewport = { vw, vh, dpr };
   const inst = state.inst;
@@ -249,8 +260,14 @@ function showFeed(push) {
   if (push) history.pushState({ view: 'feed' }, '', './');
 }
 
-function showPost(post, push) {
+// Guards against a reader tapping through several posts faster than their
+// pictures arrive: only the newest request is allowed to mount.
+let openToken = 0;
+
+async function showPost(post, push) {
   if (!post) return;
+  const token = ++openToken;
+
   feedEl.hidden = true;
   feedEl.innerHTML = '';
   controlsEl.hidden = false;
@@ -262,15 +279,38 @@ function showPost(post, push) {
   document.title = (state.doc.meta.title || 'Demo') + ' — TBH Press';
   window.scrollTo(0, 0);
 
+  // The address is correct before the pictures are, so a reload during the wait
+  // lands back on the same post.
+  const slugUrl = '?post=' + encodeURIComponent(post.slug);
+  if (push) history.pushState({ view: 'post', slug: post.slug }, '', slugUrl);
+
+  // Every picture has to be measured before the first typeset, or the text
+  // below one would jump when it lands. Cached after the first visit, so this
+  // only ever costs on the way in.
+  const pending = state.doc.blocks.some(b => b.type === 'image' && !b.img && !b.broken);
+  const bootEl = document.getElementById('boot');
+  if (pending) { bootEl.textContent = 'Developing the pictures…'; bootEl.hidden = false; }
+  const { late } = await resolveImages(state.doc);
+  if (token !== openToken) return;          // reader moved on; abandon this one
+  bootEl.hidden = true;
+
   const declared = state.doc.meta.profile;
   const wanted = byId[declared] ? declared : (state.profile ? state.profile.id : 'tidewater');
   mountProfile(reduced ? 'foundry' : wanted, false);
 
-  const url = '?post=' + encodeURIComponent(post.slug) + '&profile=' + state.profile.id;
-  if (push) history.pushState({ view: 'post', slug: post.slug }, '', url);
-  else history.replaceState({ view: 'post', slug: post.slug }, '', url);
+  const url = slugUrl + '&profile=' + state.profile.id;
+  history.replaceState({ view: 'post', slug: post.slug }, '', url);
 
   if (!state.running) { state.running = true; last = 0; requestAnimationFrame(tick); }
+
+  // A picture too slow for the first paint gets one re-layout when it arrives,
+  // holding the reader's place in the post rather than their pixel offset.
+  if (late) late.then(changed => {
+    if (!changed || token !== openToken || !state.inst) return;
+    const ratio = spacer.offsetHeight ? window.scrollY / spacer.offsetHeight : 0;
+    relayout();
+    window.scrollTo(0, Math.round(ratio * spacer.offsetHeight));
+  });
 }
 
 // Switching posts from the control panel replaces rather than stacks — the

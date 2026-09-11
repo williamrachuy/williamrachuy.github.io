@@ -385,3 +385,31 @@ body {
 @media (hover: hover) {
   #back-to-feed:hover { border-color: rgba(214,186,124,0.4); color: var(--cream); }
 }
+
+/* --------------------------------------------------------------- pictures */
+
+/* Foundry: a picture in the flow, like any other block. */
+.fy-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  /* The layout reserves at most this much, so a portrait cannot take the
+     whole screen and leave nothing to read alongside it. */
+  max-height: 62dvh;
+  object-fit: contain;
+  object-position: center;
+  background: rgba(214, 186, 124, 0.04);
+}
+
+/* Lantern: positioned to the coordinates the layout computed, and lit by the
+   reading band rather than by the browser. */
+.lt-img {
+  position: absolute;
+  display: block;
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(214, 186, 124, 0.04);
+  will-change: opacity, transform, filter;
+  transform: translateZ(0);
+}
