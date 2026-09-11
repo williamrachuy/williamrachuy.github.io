@@ -9,6 +9,11 @@
 // you ship if the audience is on five-year-old Android hardware.
 
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+
+// How far beyond the viewport a line stays in the document. Enough that nothing
+// pops in at the edge of a fast scroll, small enough that a long post keeps
+// only a screenful or two live at a time.
+const CULL = 300;
 const smooth = t => t * t * (3 - 2 * t);
 
 export default {
@@ -67,7 +72,7 @@ export default {
             frag.appendChild(im);
             // A picture settles on its own centre, so a tall one is not still
             // dim at the top while its bottom edge has already passed the band.
-            items.push({ el: im, top: blk.top + padTop + blk.height / 2, cur: 0, img: true });
+            items.push({ el: im, top: blk.top + padTop + blk.height / 2, cur: 0, img: true, on: true });
             continue;
           }
           for (const ln of blk.lines) {
@@ -79,7 +84,7 @@ export default {
             el.style.font = blk.font;
             el.style.lineHeight = blk.lineHeight + 'px';
             frag.appendChild(el);
-            items.push({ el, top: ln.top + padTop + blk.lineHeight / 2, cur: 0 });
+            items.push({ el, top: ln.top + padTop + blk.lineHeight / 2, cur: 0, on: true });
           }
         }
         layer.appendChild(frag);
@@ -93,10 +98,16 @@ export default {
         for (let i = 0; i < items.length; i++) {
           const it = items[i];
           const sy = it.top - scrollY;
-          if (sy < -160 || sy > vh + 160) {
-            if (it.cur > 0.002) { it.cur = 0; apply(it, 0); }
+          if (sy < -CULL || sy > vh + CULL) {
+            // Out of range: take it out of the document entirely rather than
+            // leaving it to be laid out and composited every frame. A looping
+            // post holds two passes, so most of these are always off screen.
+            // Only touched on the crossing, never per frame, because toggling
+            // display is what costs — reading a boolean is not.
+            if (it.on) { it.el.style.display = 'none'; it.on = false; it.cur = 0; }
             continue;
           }
+          if (!it.on) { it.el.style.display = ''; it.on = true; }
           const d = Math.abs(sy - cyPx);
           const w = smooth(clamp01(1 - (d - core) / fall));
           it.cur += (w - it.cur) * k;

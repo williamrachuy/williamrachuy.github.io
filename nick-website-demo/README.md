@@ -25,6 +25,40 @@ a real URL you can link to, bookmark, or reload, and the back button does what
 it should. Cards are real `<a href>` links, so the feed is navigable even before
 the script runs.
 
+## Looping
+
+A post has a definite top — the browser clamps at zero, and above the first line
+there is only the top pad. Reach the bottom and it hands straight back to the
+top and keeps going.
+
+It works by laying the post out **twice**, one pass after the other with a gap
+between. With both passes present, the view at `scrollY` and the view at
+`scrollY + period` are the same picture, so jumping the scroll position back by
+exactly one period cannot be seen. That is the entire mechanism, and it means no
+profile has to know looping exists: each one renders a long document and culls
+it by y as it already did.
+
+Only the tail is duplicated. `state.doc` stays the post as written, so the
+accessible mirror, the page title and the card feed never stutter.
+
+The period is measured, not summed — margin collapsing and skipped broken images
+both move things around, and the two passes are laid out identically so the
+offset between them is exact by construction. It is then rounded, because the
+spacer is sized in whole pixels: leaving it fractional makes `scrollY >= period`
+compare 5493 against 5493.4, and the wrap never fires at all.
+
+### What is rendered
+
+Nothing far from the viewport is drawn.
+
+- The canvas profiles binary-search the glyph array for the visible span and
+  stop at the far edge, so doubling the post does not double per-frame work.
+- Lantern takes a line out of the document entirely once it is more than 300px
+  beyond the viewport, and puts it back on the way in. On the longest post that
+  is 23 to 43 live lines out of 378.
+- Foundry is left alone on purpose. It is the control group: ordinary flowing
+  text that stays selectable and findable, which virtualising would break.
+
 ## The four profiles
 
 | id | name | what it does | cost |

@@ -39,7 +39,9 @@ const controlsEl = document.getElementById('controls');
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const state = {
-  doc: null,
+  doc: null,          // the post as written — what the screen-reader mirror uses
+  loopDoc: null,      // the same post twice, which is what actually gets typeset
+  period: 0,          // scroll distance from one pass of the post to the next
   layout: null,
   profile: null,
   inst: null,
@@ -48,6 +50,35 @@ const state = {
   scrollY: 0,
   running: false
 };
+
+// ------------------------------------------------------------------ looping
+
+// A post is laid out twice, one copy after the other, separated by a gap.
+//
+// That is the whole looping mechanism. With two copies present, the view at
+// scrollY and the view at scrollY + period are the same picture, so jumping the
+// scroll position back by exactly one period is invisible — and it means none
+// of the five profiles has to know that looping exists. They each render one
+// long document and cull it by y as they already did.
+//
+// Only the tail is duplicated, never the reader's copy: `state.doc` stays the
+// post as written, so the accessible mirror and the page title do not stutter.
+const LOOP_GAP = { type: 'gap', text: '' };
+
+function loopedDoc(doc) {
+  const again = doc.blocks.map(b => Object.assign({}, b, { loop: 2 }));
+  return { meta: doc.meta, blocks: doc.blocks.concat([LOOP_GAP], again) };
+}
+
+// Distance between corresponding blocks in the two copies. Measured rather than
+// summed, because margin collapsing and skipped broken images both move things
+// around; the two copies are laid out identically, so the offset between them
+// is exact by construction.
+function measurePeriod(layout) {
+  const second = layout.blocks.find(b => b.loop === 2);
+  if (!second || !layout.blocks.length) return 0;
+  return second.top - layout.blocks[0].top;
+}
 
 // ---------------------------------------------------------------- viewport
 
@@ -100,17 +131,36 @@ function renderReaderText(doc) {
 function relayout() {
   const { vw, vh, dpr } = readViewport();
   state.vw = vw; state.vh = vh; state.dpr = dpr;
-  state.layout = typeset(state.doc, vw, vh);
+  state.loopDoc = loopedDoc(state.doc);
+  state.layout = typeset(state.loopDoc, vw, vh);
 
   const viewport = { vw, vh, dpr };
   const inst = state.inst;
   state.pad.top = inst.topPad ? inst.topPad(viewport) : vh * 0.3;
   state.pad.bottom = inst.bottomPad ? inst.bottomPad(viewport) : vh * 0.5;
 
-  inst.setLayout(state.layout, viewport, state.pad, state.doc);
+  inst.setLayout(state.layout, viewport, state.pad, state.loopDoc);
 
+  // Foundry lays out its own DOM rather than using these coordinates, so it
+  // measures its own period; everyone else takes it from the layout.
+  // Rounded deliberately. The spacer is sized in whole pixels, so the furthest
+  // the browser will scroll is a whole number; leaving a fractional period here
+  // makes `scrollY >= period` compare 5493 against 5493.4 and the wrap can
+  // never fire at all. Half a pixel of error at the seam is invisible; a loop
+  // that silently never loops is not.
+  state.period = Math.round(inst.loopPeriod ? inst.loopPeriod() : measurePeriod(state.layout));
+
+  // One period of travel, plus a screen so the last of it can be scrolled into
+  // view. There is a definite top — the browser clamps at 0 — and the bottom
+  // hands back to the top.
   const contentH = inst.contentHeight ? inst.contentHeight() : state.layout.height;
-  spacer.style.height = Math.round(state.pad.top + contentH + state.pad.bottom) + 'px';
+  const height = state.period > 0 ? state.period + vh
+                                  : state.pad.top + contentH + state.pad.bottom;
+  spacer.style.height = Math.round(height) + 'px';
+  // The DOM profiles lay their two passes out in document coordinates inside
+  // the stage; bounding it to the same region keeps the page exactly one period
+  // tall rather than two.
+  stage.style.height = Math.round(height) + 'px';
 }
 
 function mountProfile(id, keepScroll) {
@@ -356,7 +406,16 @@ function tick(now) {
   if (!state.running) return;
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
   last = now;
-  const y = window.scrollY || document.documentElement.scrollTop || 0;
+  let y = window.scrollY || document.documentElement.scrollTop || 0;
+
+  // Hand the bottom back to the top. Both copies are on screen either side of
+  // this point, so the jump lands on an identical picture and cannot be seen.
+  // Done here rather than in the scroll handler so it happens once per frame
+  // and never re-enters mid-event.
+  if (state.period > 0 && y >= state.period) {
+    y -= state.period;
+    window.scrollTo(0, y);
+  }
   state.scrollY = y;
   if (state.inst) state.inst.frame(now, dt, y);
   requestAnimationFrame(tick);
