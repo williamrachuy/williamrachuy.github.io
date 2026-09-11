@@ -1,0 +1,318 @@
+// waterline.js — Profile 5
+//
+// Tidewater's idea with the window taken out of it.
+//
+// Tidewater holds a band in which every glyph is fully resolved, so there is a
+// rectangle of perfect text moving down the page. Here there is exactly one
+// line of pixels where the type is truly on its mark, and nothing else is ever
+// quite settled. Above and below it a feather falls away, and everything in
+// that feather is caught mid-snap.
+//
+// The feather is a speed, not a shape. A glyph's distance from the line sets
+// how fast it converges on where it belongs: on the line, instantly; at the
+// edge of the feather, barely at all. So widening the feather does not widen
+// the area of correct text — it gives glyphs longer to arrive, which makes them
+// look settled sooner as they rise toward the line.
+//
+// Distance also takes size. A glyph at the far edge is drawn at `farSize` of
+// its real size and its line contracts toward the centre of the measure, so
+// text recedes as it leaves the line rather than merely dimming.
+
+import { imageOf } from '../images.js';
+
+const DIM = [70, 59, 36];
+const MID = [168, 141, 89];
+const LIT = [242, 234, 216];
+const BUCKETS = 32;
+
+const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
+const smooth = t => t * t * (3 - 2 * t);
+
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Colour is quantised so the fill style changes a few dozen times a frame
+// instead of once per glyph.
+const RAMP = (() => {
+  const out = new Array(BUCKETS);
+  for (let i = 0; i < BUCKETS; i++) {
+    const t = i / (BUCKETS - 1);
+    let r, g, b;
+    if (t < 0.5) {
+      const k = t / 0.5;
+      r = DIM[0] + (MID[0] - DIM[0]) * k;
+      g = DIM[1] + (MID[1] - DIM[1]) * k;
+      b = DIM[2] + (MID[2] - DIM[2]) * k;
+    } else {
+      const k = (t - 0.5) / 0.5;
+      r = MID[0] + (LIT[0] - MID[0]) * k;
+      g = MID[1] + (LIT[1] - MID[1]) * k;
+      b = MID[2] + (LIT[2] - MID[2]) * k;
+    }
+    out[i] = `rgba(${r | 0},${g | 0},${b | 0},${(0.34 + 0.66 * t).toFixed(3)})`;
+  }
+  return out;
+})();
+
+export default {
+  id: 'waterline',
+  name: 'Waterline',
+  blurb: 'One pixel line of true alignment. Everything else is mid-snap.',
+  params: [
+    { key: 'lineY', label: 'Focus line', type: 'range', min: 0.10, max: 0.85, step: 0.01, value: 0.42 },
+    { key: 'feather', label: 'Feather', type: 'range', min: 0.05, max: 0.70, step: 0.01, value: 0.26 },
+    { key: 'farSize', label: 'Far size', type: 'range', min: 0.3, max: 1, step: 0.05, value: 0.5 },
+    { key: 'scatter', label: 'Scatter', type: 'range', min: 0, max: 200, step: 5, value: 64 },
+    { key: 'drift', label: 'Drift', type: 'range', min: 0, max: 2, step: 0.05, value: 0.85 },
+    { key: 'showLine', label: 'Show the line', type: 'bool', value: true }
+  ],
+
+  create(host) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'stage-canvas';
+    canvas.setAttribute('aria-hidden', 'true');
+    host.appendChild(canvas);
+
+    const handle = document.createElement('div');
+    handle.className = 'lens-handle';
+    handle.dataset.mode = 'band';
+    handle.setAttribute('role', 'slider');
+    handle.setAttribute('aria-label', 'Focus line position');
+    handle.innerHTML = '<span></span>';
+    host.appendChild(handle);
+
+    const ctx = canvas.getContext('2d', { alpha: true });
+
+    const P = {};
+    for (const p of this.params) P[p.key] = p.value;
+
+    let G = null;
+    let cx = null, cy = null;              // where each glyph currently is
+    let ox = null, oy = null, fq = null, ph = null;
+    let imgs = [];
+    let dpr = 1, vw = 0, vh = 0, padTop = 0;
+    let measureCx = 0;                     // horizontal centre of the measure
+    let lineY = 0.42;
+    let dragging = false;
+
+    function seed(n) {
+      const rnd = mulberry32(0x2545f491 ^ n);
+      cx = new Float32Array(n); cy = new Float32Array(n);
+      ox = new Float32Array(n); oy = new Float32Array(n);
+      fq = new Float32Array(n); ph = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const ang = rnd() * Math.PI * 2;
+        const rad = 0.3 + rnd() * 0.7;
+        ox[i] = Math.cos(ang) * rad * 1.3;
+        oy[i] = Math.sin(ang) * rad * 0.8;
+        fq[i] = 0.35 + rnd() * 0.9;
+        ph[i] = rnd() * 6.283;
+      }
+    }
+
+    // The whole profile in one function: 1 on the line, easing to 0 at the edge
+    // of the feather, and never flat anywhere in between.
+    function weightAt(screenY) {
+      const featherPx = Math.max(8, P.feather * vh);
+      return smooth(1 - clamp01(Math.abs(screenY - lineY * vh) / featherPx));
+    }
+
+    function placeHandle() {
+      handle.style.top = (lineY * vh) + 'px';
+      handle.style.left = '';
+    }
+
+    const onDown = e => {
+      dragging = true;
+      handle.setPointerCapture(e.pointerId);
+      handle.classList.add('is-dragging');
+      e.preventDefault();
+    };
+    const onMove = e => {
+      if (!dragging) return;
+      const r = host.getBoundingClientRect();
+      lineY = clamp01((e.clientY - r.top) / vh);
+      P.lineY = lineY;
+      placeHandle();
+      host.dispatchEvent(new CustomEvent('paramsync', { detail: { lensY: P.lineY } }));
+      e.preventDefault();
+    };
+    const onUp = e => {
+      dragging = false;
+      handle.classList.remove('is-dragging');
+      try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+    };
+    handle.addEventListener('pointerdown', onDown);
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onUp);
+
+    return {
+      params: P,
+      setParam(k, v) {
+        P[k] = v;
+        if (k === 'lineY') lineY = v;
+        placeHandle();
+      },
+      topPad(viewport) { return viewport.vh * 0.34; },
+      bottomPad(viewport) { return viewport.vh * 0.6; },
+
+      setLayout(layout, viewport, pad) {
+        G = layout.glyphs;
+        vw = viewport.vw; vh = viewport.vh; dpr = viewport.dpr; padTop = pad.top;
+        lineY = P.lineY;
+        measureCx = layout.left + layout.width / 2;
+
+        canvas.width = Math.round(vw * dpr);
+        canvas.height = Math.round(vh * dpr);
+        canvas.style.width = vw + 'px';
+        canvas.style.height = vh + 'px';
+
+        const irnd = mulberry32(0x27d4eb2f ^ layout.blocks.length);
+        imgs = layout.blocks
+          .filter(b => b.type === 'image')
+          .map(b => {
+            const ang = irnd() * Math.PI * 2;
+            return {
+              el: imageOf(b), w: b.width, h: b.height,
+              tx: b.x + b.width / 2, ty: b.top + b.height / 2,
+              ox: Math.cos(ang) * 0.4, oy: Math.sin(ang) * 0.3,
+              cx: 0, cy: 0, placed: false
+            };
+          })
+          .filter(im => im.el);
+
+        seed(G.n);
+        for (let i = 0; i < G.n; i++) {
+          cx[i] = G.x[i] + ox[i] * P.scatter;
+          cy[i] = G.y[i] + padTop + oy[i] * P.scatter;
+        }
+        placeHandle();
+      },
+
+      frame(t, dt, scrollY) {
+        if (!G) return;
+        const n = G.n;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.textBaseline = 'alphabetic';
+
+        if (P.showLine) drawLine(ctx);
+
+        const sc = P.scatter;
+        const span = Math.max(sc * 1.6, 220);
+        const minY = scrollY - padTop - span;
+        const maxY = scrollY - padTop + vh + span;
+
+        let lo = 0, hi = n;
+        while (lo < hi) { const m = (lo + hi) >> 1; if (G.y[m] < minY) lo = m + 1; else hi = m; }
+
+        const tt = t * 0.001 * P.drift;
+        const far = P.farSize;
+
+        for (const im of imgs) drawImage(im, dt, scrollY, tt);
+
+        let curFill = '', identity = true;
+        for (let i = lo; i < n; i++) {
+          const ty = G.y[i];
+          if (ty > maxY) break;
+
+          const screenY = ty + padTop - scrollY;
+          // Weight comes from where the glyph BELONGS, not where it has drifted
+          // to. Reading it from the current position feeds back on itself — a
+          // glyph pushed off the line then snaps slower, so it never comes back,
+          // and the sharpest text ends up somewhere other than the line.
+          const w = weightAt(screenY);
+          const inv = 1 - w;
+
+          // Size falls away from the line, and the line it sits on contracts
+          // toward the centre of the measure, so a receding line stays a line
+          // instead of spreading into loose letters.
+          const s = far + (1 - far) * w;
+          const goalX = measureCx + (G.x[i] - measureCx) * s
+                      + inv * (ox[i] * sc + Math.sin(tt * fq[i] + ph[i]) * 11);
+          const goalY = screenY + inv * (oy[i] * sc + Math.cos(tt * fq[i] * 0.8 + ph[i]) * 8);
+
+          // The feather is the speed. Cubed so the pull ramps hard in the last
+          // stretch: on the line a glyph is effectively pinned, at the edge of
+          // the feather it barely moves at all.
+          const rate = 0.8 + 46 * w * w * w;
+          const k = 1 - Math.exp(-rate * dt);
+          cx[i] += (goalX - cx[i]) * k;
+          cy[i] += (goalY - cy[i]) * k;
+
+          if (cy[i] < -60 || cy[i] > vh + 60) continue;
+
+          const fill = RAMP[(w * (BUCKETS - 1)) | 0];
+          if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
+          ctx.font = G.font[i];
+
+          if (s > 0.995) {
+            if (!identity) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); identity = true; }
+            ctx.fillText(G.ch[i], cx[i], cy[i]);
+          } else {
+            ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * cx[i], dpr * cy[i]);
+            identity = false;
+            ctx.fillText(G.ch[i], 0, 0);
+          }
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+      },
+
+      destroy() {
+        handle.removeEventListener('pointerdown', onDown);
+        handle.removeEventListener('pointermove', onMove);
+        handle.removeEventListener('pointerup', onUp);
+        handle.removeEventListener('pointercancel', onUp);
+        canvas.remove();
+        handle.remove();
+      }
+    };
+
+    function drawImage(im, dt, scrollY, tt) {
+      const screenY = im.ty + padTop - scrollY;
+      if (screenY < -im.h - 200 || screenY > vh + im.h + 200) { im.placed = false; return; }
+
+      const w = weightAt(screenY);
+      const inv = 1 - w;
+      const s = P.farSize + (1 - P.farSize) * w;
+      const goalX = measureCx + (im.tx - measureCx) * s + inv * im.ox * P.scatter;
+      const goalY = screenY + inv * im.oy * P.scatter;
+
+      if (!im.placed) { im.cx = goalX; im.cy = goalY; im.placed = true; }
+      const k = 1 - Math.exp(-(0.8 + 34 * w * w * w) * dt);
+      im.cx += (goalX - im.cx) * k;
+      im.cy += (goalY - im.cy) * k;
+
+      ctx.globalAlpha = 0.24 + 0.76 * w;
+      ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * im.cx, dpr * im.cy);
+      ctx.drawImage(im.el, -im.w / 2, -im.h / 2, im.w, im.h);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.globalAlpha = 1;
+    }
+
+    // One pixel of true alignment, with the feather it commands shown faintly
+    // either side of it so the mechanism is visible.
+    function drawLine(c) {
+      const y = Math.round(lineY * vh) + 0.5;
+      const featherPx = Math.max(8, P.feather * vh);
+
+      const g = c.createLinearGradient(0, y - featherPx, 0, y + featherPx);
+      g.addColorStop(0, 'rgba(214,186,124,0)');
+      g.addColorStop(0.5, 'rgba(214,186,124,0.055)');
+      g.addColorStop(1, 'rgba(214,186,124,0)');
+      c.fillStyle = g;
+      c.fillRect(0, y - featherPx, vw, featherPx * 2);
+
+      c.fillStyle = 'rgba(226,206,158,0.55)';
+      c.fillRect(0, y - 0.5, vw, 1);
+    }
+  }
+};
