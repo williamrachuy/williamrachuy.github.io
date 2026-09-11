@@ -58,8 +58,13 @@ function katakanaUsable(ctx, font) {
   return Math.abs(kana - missing) > 0.25 && kana > 0.5;
 }
 
-const MONO = 'ui-monospace, SFMono-Regular, Menlo, "Hiragino Kaku Gothic ProN", ' +
-             '"Yu Gothic", Meiryo, "Noto Sans JP", monospace';
+// Share Tech Mono carries every Western character; half-width katakana are not
+// in it and fall through to whatever Japanese face the reader has. Declared on
+// the profile so typeset() measures against it — line breaking and every glyph
+// x come out of these metrics, so getting this wrong does not merely look
+// different, it puts every character in the wrong place.
+const FAMILY = '"Share Tech Mono", ui-monospace, SFMono-Regular, Menlo, ' +
+               '"Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, "Noto Sans JP", monospace';
 
 // Matrix green: near-black at rest, signal green through the middle, and almost
 // white where a pulse is passing.
@@ -98,6 +103,8 @@ const TAU = 0.42;        // seconds to decay to 1/e
 export default {
   id: 'cipher',
   name: 'Cipher',
+  fontFamily: FAMILY,
+  fontPreload: '"Share Tech Mono"',
   blurb: 'The line decides what each character is. Changing one sends current down the row.',
   params: [
     { key: 'lineY', label: 'Focus line', type: 'range', min: 0.10, max: 0.85, step: 0.01, value: 0.44 },
@@ -140,14 +147,6 @@ export default {
     let lineY = 0.44;
     let dragging = false;
     let rnd = mulberry32(0x1b873593);
-    const monoFonts = new Map();
-
-    function monoFont(size) {
-      const px = Math.round(size);
-      let f = monoFonts.get(px);
-      if (!f) { f = px + 'px ' + MONO; monoFonts.set(px, f); }
-      return f;
-    }
 
     function reachOf() { return Math.max(8, P.feather * vh); }
 
@@ -227,7 +226,7 @@ export default {
         canvas.style.width = vw + 'px';
         canvas.style.height = vh + 'px';
 
-        POOL = katakanaUsable(ctx, monoFont(16))
+        POOL = katakanaUsable(ctx, '16px ' + FAMILY)
           ? KATAKANA.concat(LATIN)
           : LATIN;
 
@@ -315,14 +314,15 @@ export default {
           const fill = `rgba(${r},${g},${bl},${a.toFixed(3)})`;
           if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
 
+          // True character and substitute are the same face now, so there is
+          // one font switch per block rather than one per character.
+          const f = G.font[i];
+          if (f !== curFont) { ctx.font = f; curFont = f; }
+
           const s = shown[i];
           if (s < 0) {
-            const f = G.font[i];
-            if (f !== curFont) { ctx.font = f; curFont = f; }
             ctx.fillText(G.ch[i], G.x[i], sy);
           } else {
-            const f = monoFont(G.size[i]);
-            if (f !== curFont) { ctx.font = f; curFont = f; }
             if (mirror[i]) {
               // Back to front, the way the film's typeface was drawn.
               ctx.setTransform(-dpr, 0, 0, dpr, dpr * (G.x[i] + G.size[i] * 0.6), 0);

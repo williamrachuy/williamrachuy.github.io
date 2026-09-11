@@ -134,7 +134,7 @@ function relayout() {
   const { vw, vh, dpr } = readViewport();
   state.vw = vw; state.vh = vh; state.dpr = dpr;
   state.loopDoc = loopedDoc(state.doc);
-  state.layout = typeset(state.loopDoc, vw, vh);
+  state.layout = typeset(state.loopDoc, vw, vh, state.profile && state.profile.fontFamily);
 
   const viewport = { vw, vh, dpr };
   const inst = state.inst;
@@ -470,8 +470,17 @@ window.addEventListener('resize', () => {
   statusEl.textContent = engineName() === 'pretext' ? 'pretext' : 'fallback';
   statusEl.dataset.mode = engineName();
 
-  // Fonts must be resolved before we measure anything.
-  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) {} }
+  // Fonts must be resolved before we measure anything. A profile that brings
+  // its own face has to be loaded too, and explicitly: a face nothing has drawn
+  // with yet is not fetched, so the first typeset would measure the fallback and
+  // every glyph position would be wrong until something forced a relayout.
+  if (document.fonts && document.fonts.ready) {
+    try {
+      await Promise.all(PROFILES.filter(p => p.fontPreload)
+        .map(p => document.fonts.load('16px ' + p.fontPreload).catch(() => {})));
+      await document.fonts.ready;
+    } catch (_) {}
+  }
 
   postList = await postsReady;
 

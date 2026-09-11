@@ -439,3 +439,14 @@ body {
 
 /* The breath between one pass of a looping post and the next. */
 .fy-gap { height: 11em; }
+
+/* Share Tech Mono, SIL OFL 1.1 — see assets/fonts/OFL.txt. Latin subset only;
+   Cipher uses it for every Western character it draws. Not the film's typeface,
+   which is proprietary and is not shipped here. */
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('fonts/share-tech-mono-latin.woff2') format('woff2');
+}

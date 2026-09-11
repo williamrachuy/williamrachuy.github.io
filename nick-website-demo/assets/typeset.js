@@ -66,8 +66,8 @@ const STYLE = {
 
 export function styleFor(type) { return STYLE[type] || STYLE.p; }
 
-export function fontString(px, weight, italic) {
-  return `${italic ? 'italic ' : ''}${weight} ${px}px ${FAMILY}`;
+export function fontString(px, weight, italic, family) {
+  return `${italic ? 'italic ' : ''}${weight} ${px}px ${family || FAMILY}`;
 }
 
 // Base body size scales gently with the viewport. Clamped so a 320px phone
@@ -176,7 +176,7 @@ export function balancedWidth(text, font, maxWidth) {
 // in view to say where you are.
 const IMAGE_MAX_VH = 0.62;
 
-export function typeset(doc, viewportW, viewportH) {
+export function typeset(doc, viewportW, viewportH, family) {
   const base = baseSize(viewportW);
   const width = measureWidth(viewportW);
   const left = Math.round((viewportW - width) / 2);
@@ -193,7 +193,7 @@ export function typeset(doc, viewportW, viewportH) {
     const st = styleFor(b.type);
     const size = Math.round(base * st.size * 100) / 100;
     const lh = Math.round(size * st.lh * 100) / 100;
-    const font = fontString(size, st.weight, st.italic);
+    const font = fontString(size, st.weight, st.italic, family);
     const indent = (st.indent || 0) * size;
     const colW = width - indent;
 
