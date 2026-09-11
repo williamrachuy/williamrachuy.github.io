@@ -17,6 +17,7 @@ import { typeset, loadEngine, engineName } from './typeset.js';
 import { discoverPosts, findPost, ensureDoc } from './posts.js';
 import { renderFeed } from './feed.js';
 import { resolveImages } from './images.js';
+import { loadAssignments, profileFor } from './assign.js';
 
 import tidewater from './profiles/tidewater.js';
 import waterline from './profiles/waterline.js';
@@ -28,6 +29,7 @@ import ledger from './profiles/ledger.js';
 
 const PROFILES = [tidewater, waterline, lantern, ledger, meniscus, cipher, foundry];
 const byId = Object.fromEntries(PROFILES.map(p => [p.id, p]));
+const isKnownProfile = id => !!byId[id];
 
 const stage = document.getElementById('stage');
 const spacer = document.getElementById('spacer');
@@ -50,7 +52,8 @@ const state = {
   pad: { top: 0, bottom: 0 },
   vw: 0, vh: 0, dpr: 1,
   scrollY: 0,
-  running: false
+  running: false,
+  assign: null        // profiles.md, once it has been read
 };
 
 // ------------------------------------------------------------------ looping
@@ -188,7 +191,8 @@ function mountProfile(id, keepScroll) {
 // ------------------------------------------------------------ control panel
 
 let postList = [];
-let currentPost = '';
+let currentPost = '';       // the post's file, which is what the picker lists by
+let currentSlug = '';       // and its slug, which is what the address is keyed by
 
 function buildControls() {
   panel.innerHTML = '';
@@ -200,7 +204,16 @@ function buildControls() {
     b.type = 'button';
     b.className = 'chip' + (p.id === state.profile.id ? ' on' : '');
     b.textContent = p.name;
-    b.addEventListener('click', () => mountProfile(p.id, true));
+    b.addEventListener('click', () => {
+      mountProfile(p.id, true);
+      // The address bar is where a chosen profile lives — it is what makes the
+      // rendering shareable, what a reload comes back to, and what switching
+      // posts below carries across. Leaving it saying something else would make
+      // all three lie.
+      history.replaceState(history.state, '',
+        '?post=' + encodeURIComponent(currentSlug) + '&profile=' + p.id);
+      buildControls();
+    });
     chips.appendChild(b);
   }
   panel.appendChild(chips);
@@ -209,6 +222,19 @@ function buildControls() {
   blurb.className = 'blurb';
   blurb.textContent = state.profile.blurb;
   panel.appendChild(blurb);
+
+  // Picking a profile here changes this rendering and nothing else. Show the
+  // one line that would make it the way the post is published, so finding that
+  // out does not mean reading any documentation.
+  const here = postList.find(p => p.file === currentPost);
+  if (here) {
+    const hint = document.createElement('p');
+    hint.className = 'assign-hint';
+    const code = document.createElement('code');
+    code.textContent = (here.title || here.slug) + ': ' + state.profile.id;
+    hint.append('To publish it this way, put ', code, ' in profiles.md');
+    panel.appendChild(hint);
+  }
 
   if (postList.length > 1) {
     const row = document.createElement('label');
@@ -332,6 +358,7 @@ async function showPost(post, push, forceProfile) {
   backEl.hidden = false;
 
   currentPost = post.file;
+  currentSlug = post.slug;
   document.title = (post.title || 'Demo') + ' — TBH Press';
   window.scrollTo(0, 0);
 
@@ -365,10 +392,12 @@ async function showPost(post, push, forceProfile) {
   if (token !== openToken) return;          // reader moved on; abandon this one
   bootEl.hidden = true;
 
-  // ?profile= in the address wins over the post's own preference, so a given
-  // rendering of a given post stays shareable as one link.
-  const declared = (forceProfile && byId[forceProfile]) ? forceProfile : state.doc.meta.profile;
-  const wanted = byId[declared] ? declared : (state.profile ? state.profile.id : 'tidewater');
+  // ?profile= in the address wins over anything the author wrote down, so a
+  // given rendering of a given post stays shareable as one link. Everything
+  // below it is the authored cascade, in assign.js.
+  const wanted = (forceProfile && byId[forceProfile])
+    ? forceProfile
+    : profileFor(post, state.doc, state.assign, isKnownProfile);
   mountProfile(reduced ? 'foundry' : wanted, false);
 
   const url = slugUrl + '&profile=' + state.profile.id;
@@ -390,7 +419,10 @@ async function showPost(post, push, forceProfile) {
 // back button should return to the feed, not walk back through every post the
 // reader sampled.
 function switchPost(file) {
-  showPost(findPost(postList, file), false);
+  // Mid-comparison, a reader who picked a profile meant it, and it should
+  // survive changing posts. Arriving fresh from the feed does not carry one,
+  // so that route still shows each post the way the author set it.
+  showPost(findPost(postList, file), false, new URLSearchParams(location.search).get('profile'));
 }
 
 // The address bar is the state, so back/forward just re-read it.
@@ -465,6 +497,7 @@ window.addEventListener('resize', () => {
   // overlap. Discovery costs a directory listing the reader never waits on
   // alone.
   const postsReady = discoverPosts();
+  const assignReady = loadAssignments(isKnownProfile);
 
   await loadEngine();
   statusEl.textContent = engineName() === 'pretext' ? 'pretext' : 'fallback';
@@ -483,6 +516,7 @@ window.addEventListener('resize', () => {
   }
 
   postList = await postsReady;
+  state.assign = await assignReady;
 
   document.getElementById('boot').hidden = true;
 
