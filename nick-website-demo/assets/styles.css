@@ -342,6 +342,54 @@ body {
            calc(48px + env(safe-area-inset-bottom, 0px));
 }
 
+/* Title on the left, a code to point a phone at on the right; on a narrow
+   screen the code drops underneath and stays at the top of the page, which is
+   the only place it is any use. */
+.feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px 28px;
+  margin: 0 0 30px;
+}
+.feed-intro { flex: 1 1 19rem; min-width: 0; }
+
+.feed-qr {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.feed-qr img {
+  display: block;
+  /* 123 is 41 modules and quiet zone at exactly 3px each: at a whole number of
+     pixels per module the edges land on the grid and stay crisp. */
+  width: 123px;
+  height: 123px;
+  border-radius: 8px;
+}
+.feed-qr span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font: 500 11px/1.3 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 224, 209, 0.3);
+}
+.feed-qr b {
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  color: rgba(214, 186, 124, 0.72);
+}
+@media (min-width: 560px) {
+  /* Beside the title there is room to stack the caption under the code, which
+     reads better than a label hanging off its side. */
+  .feed-qr { flex-direction: column; align-items: flex-end; gap: 9px; }
+  .feed-qr span { align-items: flex-end; text-align: right; }
+}
+
 .feed-head h1 {
   margin: 0 0 10px;
   font: 400 clamp(30px, 7vw, 46px)/1.05 var(--serif);
@@ -349,7 +397,7 @@ body {
   color: var(--cream);
 }
 .feed-note {
-  margin: 0 0 30px;
+  margin: 0;
   max-width: 34rem;
   font: 400 clamp(14px, 2.1vw, 16px)/1.6 var(--ui);
   color: rgba(232, 224, 209, 0.52);
