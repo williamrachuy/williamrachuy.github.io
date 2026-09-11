@@ -1,5 +1,9 @@
 // app.js — orchestration.
 //
+// Two views. The feed is the landing page, a card per post; a post is the
+// reading experience. `?post=` in the URL is the only difference between them,
+// so every view is a real address you can link to, bookmark, or reload.
+//
 // Responsibilities, kept deliberately narrow:
 //   1. load a markdown post + the Pretext engine
 //   2. typeset once per width change
@@ -9,8 +13,10 @@
 //
 // Profiles know nothing about markdown, scrolling, or the control panel.
 
-import { parseDocument } from './md.js';
 import { typeset, loadEngine, engineName } from './typeset.js';
+import { discoverPosts, findPost, ensureDoc } from './posts.js';
+import { renderFeed } from './feed.js';
+import { resolveImages } from './images.js';
 
 import tidewater from './profiles/tidewater.js';
 import foundry from './profiles/foundry.js';
@@ -25,6 +31,9 @@ const spacer = document.getElementById('spacer');
 const srOnly = document.getElementById('reader-text');
 const panel = document.getElementById('panel');
 const statusEl = document.getElementById('engine-status');
+const feedEl = document.getElementById('feed');
+const backEl = document.getElementById('back-to-feed');
+const controlsEl = document.getElementById('controls');
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -52,21 +61,9 @@ function readViewport() {
 
 // ----------------------------------------------------------------- loading
 
-async function loadManifest() {
-  try {
-    const r = await fetch('posts/manifest.json', { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    return (await r.json()).posts || [];
-  } catch (_) {
-    return [{ file: 'overcoming-the-classics.md', title: 'Overcoming the Classics' }];
-  }
-}
-
-async function loadPost(file) {
-  const r = await fetch('posts/' + file, { cache: 'no-cache' });
-  if (!r.ok) throw new Error('Could not load posts/' + file + ' (' + r.status + ')');
-  return parseDocument(await r.text());
-}
+// Posts arrive from posts.js already fetched and parsed — the listing has to
+// read every post's front matter to know its title and date anyway, so there is
+// nothing left to load when the reader switches between them.
 
 // ------------------------------------------------------- accessible mirror
 
@@ -74,6 +71,16 @@ function renderReaderText(doc) {
   srOnly.innerHTML = '';
   for (const b of doc.blocks) {
     if (b.type === 'hr') { srOnly.appendChild(document.createElement('hr')); continue; }
+    if (b.type === 'image') {
+      if (b.broken) continue;
+      // The canvas profiles draw pictures with no text alternative of their
+      // own, so this mirror is the only one a screen reader ever gets.
+      const im = document.createElement('img');
+      im.src = b.src;
+      im.alt = b.text || '';
+      srOnly.appendChild(im);
+      continue;
+    }
     const tag = b.type === 'title' ? 'h1' : b.type.startsWith('h') ? 'h2' : 'p';
     const el = document.createElement(tag);
     el.textContent = b.text;
@@ -92,7 +99,7 @@ function renderReaderText(doc) {
 function relayout() {
   const { vw, vh, dpr } = readViewport();
   state.vw = vw; state.vh = vh; state.dpr = dpr;
-  state.layout = typeset(state.doc, vw);
+  state.layout = typeset(state.doc, vw, vh);
 
   const viewport = { vw, vh, dpr };
   const inst = state.inst;
@@ -152,7 +159,8 @@ function buildControls() {
     const sel = document.createElement('select');
     for (const p of postList) {
       const o = document.createElement('option');
-      o.value = p.file; o.textContent = p.title || p.file;
+      o.value = p.file;
+      o.textContent = p.date ? p.title + '  ·  ' + p.date : p.title;
       if (p.file === currentPost) o.selected = true;
       sel.appendChild(o);
     }
@@ -222,16 +230,123 @@ stage.addEventListener('paramsync', e => {
   }
 });
 
-async function switchPost(file) {
-  currentPost = file;
-  state.doc = await loadPost(file);
-  renderReaderText(state.doc);
-  document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
-  window.scrollTo(0, 0);
-  const wanted = byId[state.doc.meta.profile] ? state.doc.meta.profile : state.profile.id;
-  mountProfile(reduced ? 'foundry' : wanted, false);
-  history.replaceState(null, '', '?post=' + encodeURIComponent(file) + '&profile=' + state.profile.id);
+// --------------------------------------------------------------- routing
+
+const SITE_TITLE = 'TBH Press — reading profiles';
+
+// Everything the reader view owns, torn down. A profile holds a canvas and a
+// few thousand glyph positions; leaving one mounted behind the feed would keep
+// the rAF clock warm for a view that never animates.
+function teardownReader() {
+  state.running = false;
+  if (state.inst) { state.inst.destroy(); state.inst = null; }
+  state.profile = null;
+  state.doc = null;
+  srOnly.innerHTML = '';
+  spacer.style.height = '0px';
+  delete document.body.dataset.profile;
 }
+
+function showFeed(push) {
+  teardownReader();
+  controlsEl.hidden = true;
+  controlsEl.classList.remove('open');
+  document.getElementById('panel-toggle').setAttribute('aria-expanded', 'false');
+  backEl.hidden = true;
+  feedEl.hidden = false;
+  document.title = SITE_TITLE;
+  renderFeed(feedEl, postList, post => showPost(post, true));
+  window.scrollTo(0, 0);
+  if (push) history.pushState({ view: 'feed' }, '', './');
+}
+
+// Guards against a reader tapping through several posts faster than their
+// pictures arrive: only the newest request is allowed to mount.
+let openToken = 0;
+
+async function showPost(post, push, forceProfile) {
+  if (!post) return;
+  const token = ++openToken;
+
+  feedEl.hidden = true;
+  feedEl.innerHTML = '';
+  controlsEl.hidden = false;
+  backEl.hidden = false;
+
+  currentPost = post.file;
+  document.title = (post.title || 'Demo') + ' — TBH Press';
+  window.scrollTo(0, 0);
+
+  // The address is correct before the post is, so a reload during the wait
+  // lands back on the same one.
+  const slugUrl = '?post=' + encodeURIComponent(post.slug);
+  if (push) history.pushState({ view: 'post', slug: post.slug }, '', slugUrl);
+
+  // A local post already carries its text. One from the Substack snapshot is
+  // metadata until here, and fetches its body now.
+  const bootEl = document.getElementById('boot');
+  if (!post.doc) { bootEl.textContent = 'Setting the type…'; bootEl.hidden = false; }
+  try {
+    state.doc = await ensureDoc(post);
+  } catch (err) {
+    if (token !== openToken) return;
+    bootEl.hidden = true;
+    document.getElementById('fatal').hidden = false;
+    document.getElementById('fatal').textContent = err.message;
+    return;
+  }
+  if (token !== openToken) return;
+  renderReaderText(state.doc);
+
+  // Every picture has to be measured before the first typeset, or the text
+  // below one would jump when it lands. Cached after the first visit, so this
+  // only ever costs on the way in.
+  const pending = state.doc.blocks.some(b => b.type === 'image' && !b.img && !b.broken);
+  if (pending) { bootEl.textContent = 'Developing the pictures…'; bootEl.hidden = false; }
+  const { late } = await resolveImages(state.doc);
+  if (token !== openToken) return;          // reader moved on; abandon this one
+  bootEl.hidden = true;
+
+  // ?profile= in the address wins over the post's own preference, so a given
+  // rendering of a given post stays shareable as one link.
+  const declared = (forceProfile && byId[forceProfile]) ? forceProfile : state.doc.meta.profile;
+  const wanted = byId[declared] ? declared : (state.profile ? state.profile.id : 'tidewater');
+  mountProfile(reduced ? 'foundry' : wanted, false);
+
+  const url = slugUrl + '&profile=' + state.profile.id;
+  history.replaceState({ view: 'post', slug: post.slug }, '', url);
+
+  if (!state.running) { state.running = true; last = 0; requestAnimationFrame(tick); }
+
+  // A picture too slow for the first paint gets one re-layout when it arrives,
+  // holding the reader's place in the post rather than their pixel offset.
+  if (late) late.then(changed => {
+    if (!changed || token !== openToken || !state.inst) return;
+    const ratio = spacer.offsetHeight ? window.scrollY / spacer.offsetHeight : 0;
+    relayout();
+    window.scrollTo(0, Math.round(ratio * spacer.offsetHeight));
+  });
+}
+
+// Switching posts from the control panel replaces rather than stacks — the
+// back button should return to the feed, not walk back through every post the
+// reader sampled.
+function switchPost(file) {
+  showPost(findPost(postList, file), false);
+}
+
+// The address bar is the state, so back/forward just re-read it.
+window.addEventListener('popstate', () => {
+  const qs = new URLSearchParams(location.search);
+  const post = findPost(postList, qs.get('post'));
+  if (post) showPost(post, false, qs.get('profile')); else showFeed(false);
+});
+
+backEl.addEventListener('click', e => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  showFeed(true);
+});
 
 // ------------------------------------------------------------------- clock
 
@@ -248,6 +363,7 @@ function tick(now) {
 
 window.addEventListener('scroll', () => {
   state.scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  if (!state.inst) return;
   // On a phone the panel eats most of the screen. Scrolling means you are done
   // with it.
   const shell = document.getElementById('controls');
@@ -264,6 +380,7 @@ let lastW = 0;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
+    if (!state.inst) return;               // the feed reflows on its own
     const { vw } = readViewport();
     // Height-only changes are the mobile URL bar. Ignore them.
     if (Math.abs(vw - lastW) < 2) return;
@@ -277,6 +394,11 @@ window.addEventListener('resize', () => {
 // ------------------------------------------------------------------- boot
 
 (async function boot() {
+  // Finding the posts and loading the type engine are independent, so they
+  // overlap. Discovery costs a directory listing the reader never waits on
+  // alone.
+  const postsReady = discoverPosts();
+
   await loadEngine();
   statusEl.textContent = engineName() === 'pretext' ? 'pretext' : 'fallback';
   statusEl.dataset.mode = engineName();
@@ -284,29 +406,26 @@ window.addEventListener('resize', () => {
   // Fonts must be resolved before we measure anything.
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) {} }
 
-  postList = await loadManifest();
-  const qs = new URLSearchParams(location.search);
-  currentPost = qs.get('post') || (postList[0] && postList[0].file) || 'overcoming-the-classics.md';
+  postList = await postsReady;
 
-  try {
-    state.doc = await loadPost(currentPost);
-  } catch (err) {
+  document.getElementById('boot').hidden = true;
+
+  if (!postList.length) {
     document.getElementById('fatal').hidden = false;
     document.getElementById('fatal').textContent =
-      err.message + ' — if you opened this file directly from disk, serve it instead (python3 -m http.server).';
+      'No posts found in posts/. Add a .md file there — if you opened this page ' +
+      'directly from disk, serve it instead (python3 -m http.server).';
     return;
   }
 
-  renderReaderText(state.doc);
-  document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
-
-  const wanted = qs.get('profile') || state.doc.meta.profile || 'tidewater';
   lastW = readViewport().vw;
-  mountProfile(reduced ? 'foundry' : (byId[wanted] ? wanted : 'tidewater'), false);
-  document.getElementById('boot').hidden = true;
 
-  state.running = true;
-  requestAnimationFrame(tick);
+  // ?post= opens that post; anything else is the feed.
+  const qs = new URLSearchParams(location.search);
+  const post = findPost(postList, qs.get('post'));
+  if (!post) { showFeed(false); return; }
+
+  showPost(post, false, qs.get('profile'));
 })();
 
 // --------------------------------------------------------------- panel UI

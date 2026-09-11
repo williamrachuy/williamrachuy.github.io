@@ -57,7 +57,8 @@ const STYLE = {
   p:          { size: 1.00, weight: 400, italic: false, lh: 1.62, align: 'left',   mt: 0.0,  mb: 1.02 },
   note:       { size: 0.96, weight: 400, italic: true,  lh: 1.58, align: 'left',   mt: 0.0,  mb: 1.02 },
   blockquote: { size: 0.98, weight: 400, italic: true,  lh: 1.54, align: 'left',   mt: 0.35, mb: 1.05, indent: 0.9 },
-  hr:         { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 1.05, mb: 1.35 }
+  hr:         { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 1.05, mb: 1.35 },
+  image:      { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 0.75, mb: 1.15 }
 };
 
 export function styleFor(type) { return STYLE[type] || STYLE.p; }
@@ -167,7 +168,12 @@ export function balancedWidth(text, font, maxWidth) {
  * GlyphSet is a struct-of-arrays. Canvas profiles iterate it directly; DOM
  * profiles ignore it and use block.lines.
  */
-export function typeset(doc, viewportW) {
+// A picture is allowed this much of the screen. Past it a portrait would fill
+// the viewport on its own, and scrolling past one becomes a chore with no text
+// in view to say where you are.
+const IMAGE_MAX_VH = 0.62;
+
+export function typeset(doc, viewportW, viewportH) {
   const base = baseSize(viewportW);
   const width = measureWidth(viewportW);
   const left = Math.round((viewportW - width) / 2);
@@ -177,6 +183,10 @@ export function typeset(doc, viewportW) {
   let prevMb = 0;
 
   for (const b of doc.blocks) {
+    // A picture that never loaded reserves nothing at all — not even the
+    // margins it would have sat between.
+    if (b.type === 'image' && (b.broken || !b.iw || !b.ih)) continue;
+
     const st = styleFor(b.type);
     const size = Math.round(base * st.size * 100) / 100;
     const lh = Math.round(size * st.lh * 100) / 100;
@@ -186,6 +196,23 @@ export function typeset(doc, viewportW) {
 
     // Collapse adjacent margins the way CSS would.
     y += Math.max(prevMb, st.mt * size);
+
+    if (b.type === 'image') {
+      const ratio = b.ih / b.iw;
+      let w = colW;
+      let h = w * ratio;
+      const maxH = (viewportH || 800) * IMAGE_MAX_VH;
+      if (h > maxH) { h = maxH; w = h / ratio; }
+
+      blocks.push({
+        type: 'image', align: 'center', x: left + (width - w) / 2, top: y,
+        width: w, height: h, src: b.src, alt: b.text,
+        lineHeight: h, font, size, italic: false, weight: st.weight, lines: []
+      });
+      y += h;
+      prevMb = st.mb * size;
+      continue;
+    }
 
     if (b.type === 'hr') {
       blocks.push({ type: 'hr', align: 'center', x: left, top: y, lineHeight: 1, font, size, lines: [],

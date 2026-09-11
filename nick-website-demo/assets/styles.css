@@ -269,3 +269,159 @@ body {
   #controls { left: auto; right: 0; width: 360px; border-bottom-left-radius: 14px; overflow: hidden; }
   #panel { max-height: 78dvh; }
 }
+
+/* ----------------------------------------------------------------- feed */
+/* The landing page. Same card shape as /blog, in this demo's palette. */
+
+#feed {
+  position: relative;
+  z-index: 20;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: calc(64px + env(safe-area-inset-top, 0px)) 18px
+           calc(48px + env(safe-area-inset-bottom, 0px));
+}
+
+.feed-head h1 {
+  margin: 0 0 10px;
+  font: 400 clamp(30px, 7vw, 46px)/1.05 var(--serif);
+  letter-spacing: -0.01em;
+  color: var(--cream);
+}
+.feed-note {
+  margin: 0 0 30px;
+  max-width: 34rem;
+  font: 400 clamp(14px, 2.1vw, 16px)/1.6 var(--ui);
+  color: rgba(232, 224, 209, 0.52);
+}
+
+.posts { display: grid; gap: 14px; }
+
+.post-card {
+  display: block;
+  padding: clamp(16px, 3.4vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(214,186,124,0.035), rgba(255,255,255,0.016));
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+/* Hover is a desktop idea. On a touch screen it sticks after the tap. */
+@media (hover: hover) {
+  .post-card:hover {
+    border-color: rgba(214, 186, 124, 0.34);
+    background: linear-gradient(180deg, rgba(214,186,124,0.07), rgba(255,255,255,0.03));
+    transform: translateY(-1px);
+  }
+}
+.post-card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.post-card .date {
+  margin-bottom: 9px;
+  font: 500 11px/1 var(--ui);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(214, 186, 124, 0.62);
+}
+.post-card h2 {
+  margin: 0 0 7px;
+  font: 400 clamp(21px, 3.8vw, 29px)/1.14 var(--serif);
+  color: rgba(232, 224, 209, 0.94);
+}
+.post-card .subtitle {
+  margin: 0 0 11px;
+  font: italic 400 clamp(14px, 2.1vw, 17px)/1.42 var(--serif);
+  color: rgba(232, 224, 209, 0.6);
+}
+.post-card .excerpt {
+  font: 400 clamp(13.5px, 1.9vw, 15px)/1.6 var(--ui);
+  color: rgba(232, 224, 209, 0.46);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-empty {
+  padding: 56px 20px;
+  text-align: center;
+  color: rgba(232, 224, 209, 0.5);
+}
+.feed-empty .icon { font-size: 38px; opacity: 0.35; margin-bottom: 10px; }
+.feed-empty p { margin: 0; font-style: italic; }
+
+.feed-foot {
+  margin: 26px 0 0;
+  font: 500 11px/1 var(--ui);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(232, 224, 209, 0.28);
+}
+
+/* Back out of a post. Bottom-left keeps it clear of the controls bar at the
+   top and within thumb reach on a phone. */
+#back-to-feed {
+  position: fixed;
+  z-index: 45;
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 9px 14px;
+  border-radius: 19px;
+  border: 1px solid rgba(214, 186, 124, 0.22);
+  background: rgba(8, 9, 13, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(232, 224, 209, 0.72);
+  font: 500 12px/1 var(--ui);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  #back-to-feed:hover { border-color: rgba(214,186,124,0.4); color: var(--cream); }
+}
+
+/* --------------------------------------------------------------- pictures */
+
+/* Foundry: a picture in the flow, like any other block. */
+.fy-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  /* The layout reserves at most this much, so a portrait cannot take the
+     whole screen and leave nothing to read alongside it. */
+  max-height: 62dvh;
+  object-fit: contain;
+  object-position: center;
+  background: rgba(214, 186, 124, 0.04);
+}
+
+/* Lantern: positioned to the coordinates the layout computed, and lit by the
+   reading band rather than by the browser. */
+.lt-img {
+  position: absolute;
+  display: block;
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(214, 186, 124, 0.04);
+  will-change: opacity, transform, filter;
+  transform: translateZ(0);
+}
+
+/* Which pipeline a card came down. Quiet on purpose — it is a fact about the
+   plumbing, not about the writing. */
+.post-card .origin {
+  margin-left: 10px;
+  padding: 2px 7px;
+  border: 1px solid rgba(214, 186, 124, 0.22);
+  border-radius: 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: rgba(232, 224, 209, 0.38);
+}

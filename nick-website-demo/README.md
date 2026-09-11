@@ -5,8 +5,25 @@ style by feeling it on a phone rather than arguing about it in the abstract.
 
 Live: `/nick-website-demo/`
 
-- `?post=some-file.md` loads a specific post
+- `/nick-website-demo/` is the feed — one card per post, newest first
+- `?post=overcoming-the-classics` opens that post
 - `?profile=tidewater` overrides the post's default profile
+
+To publish, put a markdown file in `posts/` and commit it. There is no step two.
+
+## The two views
+
+**The feed** is the landing page: a card per post showing date, title, subtitle
+and the opening few lines, newest first — the same shape as `/blog` on this
+site. It is ordinary flowing text, selectable and searchable, because choosing
+what to read is a different job from reading it.
+
+**A post** is the reading experience, in one of the four profiles below.
+
+The only difference between the two is `?post=` in the address, so every view is
+a real URL you can link to, bookmark, or reload, and the back button does what
+it should. Cards are real `<a href>` links, so the feed is navigable even before
+the script runs.
 
 ## The four profiles
 
@@ -21,11 +38,11 @@ Tidewater is the one that was asked for. Foundry is the control group — it
 exists so the other three have something to be judged against, and so there is
 somewhere sane to fall back to.
 
-## Adding a post
+## Publishing a post
 
-1. Drop a `.md` file in `posts/`.
-2. Add it to `posts/manifest.json`.
-3. Put front matter at the top of the markdown:
+Write a markdown file. Put it in `posts/`. Commit it. That is the entire
+process — there is no index to update, no list to register it in, no folder to
+create for it, and no build step to run. The page finds the file on its own.
 
 ```markdown
 ---
@@ -41,8 +58,116 @@ profile: tidewater
 Body text starts here.
 ```
 
-`profile:` is the default rendering for that post. Readers can still switch from
-the demo panel. Everything except `title` is optional.
+Only `title` is required. The rest:
+
+| field | what it does if you include it |
+|---|---|
+| `subtitle` | Second line under the title, in italic. Also the card's second line. |
+| `author`, `publication` | Byline, joined with a dot. |
+| `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
+| `source` | Adds an "Original post" link for screen readers and search engines. |
+| `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
+| `profile` | Which of the four renderings this post opens in. Readers can still switch. |
+
+The filename becomes the post's link. `overcoming-the-classics.md` is at
+`?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
+spaces and the links stay tidy.
+
+### About the posts currently in here
+
+Everything on the site is TBH Press, from `https://tbhpress.substack.com/feed`.
+The five `.md` files in `posts/` are the five most recent pieces, held locally
+so they can be hand-edited; the rest of the archive arrives through the Substack
+snapshot described below. Title, subtitle, byline, date and canonical URL are
+the real metadata from that feed either way.
+
+Nicholas Souza gave permission for his posts to be reproduced here, in a session
+on 2026-09-11. Every post keeps a `source:` line pointing at the original on
+TBH Press, which is where the canonical version lives.
+
+Substack's own furniture — subscribe buttons, share links, embedded players — is
+stripped on the way in. Photographs are kept, in the place they appear in the
+piece, and are still served from Substack's CDN rather than copied into this
+repo.
+
+**The pictures have no alt text.** Substack did not carry any, and describing
+someone else's photographs is not a thing to guess at. Write it in the square
+brackets — `![two chairs on a cliff](https://…)` — and it reaches screen
+readers, search engines, and anyone whose images fail to load.
+
+### Taking a post down
+
+Rename it from `something.md` to `something.md.offline`. It stops being a post
+immediately, and the text is still sitting right there when you want it back.
+Renaming it to `.md` republishes it. (This is the same trick `/blog` uses.)
+
+To be clear about what that does and does not do: the post stops being listed
+and stops being reachable as a post, but the file is still in a public
+repository, so it is unpublished rather than private. Anything you would not
+want read should not be committed at all.
+
+### Where the posts come from
+
+The feed has two sources and merges them at page load.
+
+**Local markdown** — the `.md` files in `posts/`, discovered by asking GitHub
+what is in that directory. There is no manifest, because a manifest is a second
+thing to keep in sync and the first time it falls out of sync the post silently
+vanishes. Title and date come out of each file's front matter. This is the same
+mechanism `/blog` on this site uses.
+
+**The Substack snapshot** — `posts/substack/`, a copy of the publication's RSS
+feed. Substack sends no `Access-Control-Allow-Origin` header on either its RSS
+feed or its JSON API, so a browser on this domain **cannot** read it directly;
+the fetch has to happen somewhere other than the reader's browser. It happens at
+build time, in `.github/workflows/pages.yml`, and the page then loads a
+same-origin file.
+
+Where the same piece appears in both, **the local file wins**, matched on the
+canonical URL in its `source:` line. That is what makes dropping a `.md` file
+into `posts/` an override: edit a post, add alt text, trim it, and your version
+is what ships, while everything you have not touched keeps flowing in from
+Substack on its own.
+
+Refreshing the snapshot is a scheduled job, so it happens whether or not anyone
+pushes:
+
+```yaml
+schedule:
+  - cron: '17 */6 * * *'     # four times a day
+```
+
+The fetch step is `continue-on-error: true`, and the snapshot is committed to
+the repo as well. A Substack outage during a deploy therefore falls back to the
+last good copy rather than emptying the site's feed. If the snapshot is missing
+altogether — a fresh checkout, a build where the fetch failed every time — the
+feed quietly falls back to local markdown only.
+
+To refresh it by hand, or to preview before pushing:
+
+```sh
+python3 tools/fetch-substack.py                        # defaults to TBH Press
+python3 tools/fetch-substack.py --feed URL --limit 40  # any Substack
+```
+
+It writes `posts/substack/index.json` — every post's metadata and card blurb —
+plus one small `<slug>.json` per body. The split is deliberate: the whole
+archive in one file is about 47 KB gzipped and the landing page needs none of
+the bodies to draw its cards, while the index alone is about 2 KB. A body is
+fetched only when that post is opened.
+
+**If you would rather it were live to the second,** the fetch needs a proxy that
+adds the CORS header — a ~15-line Cloudflare Worker, the same shape as the relay
+behind `/combo`. Point `SUBSTACK_INDEX` in `assets/posts.js` at it and the rest
+of the page does not change. The trade is a second origin to keep running, and a
+network round trip in front of the first paint.
+
+### A note on the `.md.offline` trick and Substack
+
+Renaming a local file to `.md.offline` removes *the local override*, not the
+post. If that piece is also in the Substack feed, it comes straight back on the
+next refresh — as the Substack copy. To keep a piece off the site entirely,
+unpublish it on Substack, or drop `--limit` low enough to exclude it.
 
 ### Supported markdown
 
@@ -50,24 +175,31 @@ the demo panel. Everything except `title` is optional.
 wrapped entirely in a single pair of asterisks becomes an italic note block —
 that is how the editorial preamble and the `-Nick` sign-off are styled.
 
+**Pictures:** a line containing nothing but `![alt text](url)` becomes a figure.
+It can be any URL — Substack's CDN, somewhere else, or a file committed next to
+the post. Each profile renders it in its own idiom: Foundry sets it in the flow,
+Lantern lifts it out of the dark as it reaches the reading band, Ledger develops
+it downward under the write head, Tidewater lets it drift and rights it in the
+lens.
+
+A picture is never given more than 62% of the screen height, so a tall portrait
+cannot fill the viewport on its own. One that fails to load is skipped and the
+text closes over the gap. An image inside a sentence, rather than alone on its
+own line, is still flattened to its alt text.
+
 **Known gap:** inline emphasis mid-sentence is flattened to plain text. Styling
 it properly means measuring mixed fonts on a single line, which is what
 `@chenglou/pretext/rich-inline` is for. That is the honest next step; faking it
 by laying out each run separately would produce wrong line breaks.
 
-## ⚠️ `.nojekyll` is required
+## `.nojekyll`
 
 GitHub Pages runs Jekyll by default, and Jekyll converts any `.md` file that has
-YAML front matter into `.html`. That would turn `posts/overcoming-the-classics.md`
-into a 404 at runtime.
+YAML front matter into `.html` — which would turn every post into a 404 at
+runtime. The empty `.nojekyll` file at the **repository root** turns that off.
 
-Copy the `.nojekyll` file to the **repository root** (not this folder). It is
-empty; its presence is the whole signal. The site is hand-written static HTML
-with no Jekyll templating, so disabling Jekyll costs nothing.
-
-If you would rather not touch the repo root, the alternative is to drop front
-matter entirely and move `profile` into `manifest.json` — Jekyll passes through
-markdown that has no front matter.
+It is already there. This note exists so nobody deletes it wondering what it was
+for.
 
 ## How Pretext is used
 
@@ -100,16 +232,24 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 
 ```
 index.html
+tools/
+  fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
 assets/
-  app.js                 loading, scroll clock, profile mounting, control panel
+  app.js                 routing, scroll clock, profile mounting, control panel
+  feed.js                the landing page: one card per post
+  posts.js               merges local markdown with the Substack snapshot
+  images.js              measures pictures before layout so nothing jumps
+  posts.js               finds the posts; no manifest to maintain
   md.js                  front matter + block markdown
   typeset.js             Pretext wrapper: blocks -> lines -> glyph positions
   styles.css
   profiles/
     tidewater.js  lantern.js  ledger.js  foundry.js
 posts/
-  manifest.json
-  overcoming-the-classics.md
+  overcoming-the-classics.md      <- every .md in here is a post
+  substack/
+    index.json                    <- build-time snapshot of the RSS feed
+    <slug>.json                   <- one body each, fetched on open
 ```
 
 `app.js` owns scrolling and time. Profiles know nothing about markdown, URLs, or
@@ -165,6 +305,11 @@ from `params`.
 - Desktop-specific profiles. This is tuned for a phone; the cursor opens up
   hover and 2D pointer input that none of these use.
 - Inline emphasis (see above).
-- Images. Nick's posts have them; the parser drops them to alt text today.
+- Captions. A picture is a picture; there is nowhere to say what it is of.
+- A live Substack read. The snapshot refreshes on a schedule, not on page load;
+  making it current to the second needs a CORS proxy (see above).
+- Pictures are hotlinked from Substack's CDN. That is how they are served today
+  and it works, but it makes the posts depend on an account staying open.
+  Committing the files next to the posts would make this repo self-contained.
 - Tidewater has no scroll-position memory, so a very long post means a lot of
   glyph churn. Above roughly 15,000 characters it should page by section.

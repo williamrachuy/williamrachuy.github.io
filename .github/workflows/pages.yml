@@ -4,6 +4,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Substack sends no CORS headers, so the browser cannot read the feed
+  # directly and it is pulled in here instead. This keeps /nick-website-demo
+  # current without anyone pushing a commit.
+  schedule:
+    - cron: '17 */6 * * *'
 
 permissions:
   contents: read
@@ -23,6 +28,12 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Refresh the Substack snapshot
+        # Best effort: on failure the snapshot already committed to the repo is
+        # served instead, so a Substack outage cannot empty the demo's feed.
+        continue-on-error: true
+        run: python3 nick-website-demo/tools/fetch-substack.py
 
       - name: Prepare site artifact
         env:

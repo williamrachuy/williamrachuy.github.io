@@ -8,6 +8,8 @@
 // Same glyph data as Tidewater; completely different motion vocabulary. That is
 // the point of separating layout from profile — one typeset pass, many skins.
 
+import { imageOf } from '../images.js';
+
 const INK = [236, 228, 210];
 const GHOST = [58, 50, 34];
 
@@ -35,6 +37,7 @@ export default {
     for (const p of this.params) P[p.key] = p.value;
 
     let G = null, ink = null, lineKey = null, lineLen = null, glyphIdx = null;
+    let imgs = [];
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
 
     return {
@@ -48,6 +51,12 @@ export default {
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
+        // Pictures are not glyphs, so they get their own small list and their
+        // own latch. Same write head, same rule: once developed, it stays.
+        imgs = layout.blocks
+          .filter(b => b.type === 'image')
+          .map(b => ({ x: b.x, top: b.top, w: b.width, h: b.height, el: imageOf(b), ink: 0 }))
+          .filter(b => b.el);
         vw = viewport.vw; vh = viewport.vh; dpr = viewport.dpr; padTop = pad.top;
         canvas.width = Math.round(vw * dpr);
         canvas.height = Math.round(vh * dpr);
@@ -123,6 +132,40 @@ export default {
           // Freshly written glyphs land from slightly above.
           const drop = (1 - a) * (1 - a) * 5;
           ctx.fillText(G.ch[i], G.x[i], sy - drop);
+        }
+
+        // Pictures develop downward from the head, like a print in a tray.
+        for (const im of imgs) {
+          const sy = im.top + padTop - scrollY;
+          if (sy > vh + 40 || sy + im.h < -40) continue;
+
+          const target = sy <= head ? 1 : 0;
+          if (target === 1) im.ink = Math.min(1, im.ink + rate * 0.55);
+          else if (P.rewind) im.ink = Math.max(0, im.ink - rate);
+
+          if (P.ghost && im.ink < 1) {
+            ctx.globalAlpha = 0.12;
+            ctx.drawImage(im.el, im.x, sy, im.w, im.h);
+            ctx.globalAlpha = 1;
+          }
+          if (im.ink > 0.002) {
+            const revealed = im.h * im.ink;
+            ctx.save();
+            ctx.beginPath();
+            ctx.rect(im.x, sy, im.w, revealed);
+            ctx.clip();
+            ctx.drawImage(im.el, im.x, sy, im.w, im.h);
+            ctx.restore();
+            // A soft edge where the developer has reached, so the reveal does
+            // not read as a hard crop.
+            if (im.ink < 1) {
+              const edge = ctx.createLinearGradient(0, sy + revealed - 26, 0, sy + revealed);
+              edge.addColorStop(0, 'rgba(214,186,124,0)');
+              edge.addColorStop(1, 'rgba(214,186,124,0.20)');
+              ctx.fillStyle = edge;
+              ctx.fillRect(im.x, sy + revealed - 26, im.w, 26);
+            }
+          }
         }
 
         // Write head indicator.

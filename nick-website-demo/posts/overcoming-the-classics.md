@@ -25,3 +25,5 @@ It has proven much easier to create an industry focused on avoiding the classics
 We were not taught the classics because they are holy scripture. We were taught the classics in order to surpass them. Previous generations understood this better than we do. We should not care if some of us hope to surpass them morally, while others hope to do so rhetorically. Hell, maybe we could simply hope to create something more interesting. It doesn’t matter how we surpass them, only that we try. That trying is impossible if we do not first understand what has come before.
 
 That is certainly what I hope to do in my writing. But I reject the tantalizing shortcut that comes from delegitimizing the classics in order to say that surpassing them has no value. Or that I have surpassed them already. I want to overcome them while they maintain their legitimacy. For that is the greater challenge, and that holds the greater reward.
+
+![](https://substackcdn.com/image/fetch/$s_!V5ut!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F861f631a-6b99-43de-a1d4-0904e5e156c5_1023x1436.jpeg)
