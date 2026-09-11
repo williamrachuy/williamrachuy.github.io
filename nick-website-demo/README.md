@@ -29,7 +29,7 @@ the script runs.
 
 | id | name | what it does | cost |
 |---|---|---|---|
-| `waterline` | Waterline | One line of pixels where the type is truly on its mark; a feather above and below where everything is caught mid-snap. The feather is a speed, not a shape — widening it does not widen the area of correct text, it gives glyphs longer to arrive. Distance also takes size, down to `farSize`. | Canvas, per-glyph physics. |
+| `waterline` | Waterline | One line of pixels where the type is truly on its mark; a feather above and below where everything is caught mid-snap. The feather is a speed, not a shape — widening it does not widen the area of correct text, it gives glyphs longer to arrive. Distance also takes size, down to `farSize`. `falloff` sets how concentrated the gradient is near the line; `balance` splits the feather's reach between the approach and the departure, for a slow roll on against a sharp roll off or the reverse. | Canvas, per-glyph physics. |
 | `tidewater` | Tidewater | Every glyph drifts, rotated and dark, until a draggable focus lens pulls it back onto its line and brightens it. Past the lens it lets go again. | Canvas, per-glyph physics. Heaviest. |
 | `lantern` | Lantern | Same reading-band idea at line granularity. Lines sit dim and offset, then settle and brighten inside the band. | DOM, ~60 elements. Cheap. |
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |

@@ -26,7 +26,6 @@ const LIT = [242, 234, 216];
 const BUCKETS = 32;
 
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
-const smooth = t => t * t * (3 - 2 * t);
 
 function mulberry32(a) {
   return function () {
@@ -66,7 +65,9 @@ export default {
   blurb: 'One pixel line of true alignment. Everything else is mid-snap.',
   params: [
     { key: 'lineY', label: 'Focus line', type: 'range', min: 0.10, max: 0.85, step: 0.01, value: 0.42 },
-    { key: 'feather', label: 'Feather', type: 'range', min: 0.05, max: 0.70, step: 0.01, value: 0.26 },
+    { key: 'feather', label: 'Feather width', type: 'range', min: 0.05, max: 0.70, step: 0.01, value: 0.30 },
+    { key: 'falloff', label: 'Falloff', type: 'range', min: 0.4, max: 4, step: 0.1, value: 2.2 },
+    { key: 'balance', label: 'On / off balance', type: 'range', min: 0.15, max: 0.85, step: 0.05, value: 0.5 },
     { key: 'farSize', label: 'Far size', type: 'range', min: 0.3, max: 1, step: 0.05, value: 0.5 },
     { key: 'scatter', label: 'Scatter', type: 'range', min: 0, max: 200, step: 5, value: 64 },
     { key: 'drift', label: 'Drift', type: 'range', min: 0, max: 2, step: 0.05, value: 0.85 },
@@ -116,11 +117,26 @@ export default {
       }
     }
 
-    // The whole profile in one function: 1 on the line, easing to 0 at the edge
-    // of the feather, and never flat anywhere in between.
+    // How far the feather reaches on each side of the line. `balance` splits
+    // the total between the approach (below the line, text coming up toward it)
+    // and the departure (above it). At 0.5 they are equal; pushed either way it
+    // gives a long slow roll on against a short sharp roll off, or the reverse.
+    function reachBelow() { return Math.max(8, P.feather * vh) * 2 * P.balance; }
+    function reachAbove() { return Math.max(8, P.feather * vh) * 2 * (1 - P.balance); }
+
+    // 1 on the line, 0 at the edge of the feather, and nowhere flat in between.
+    //
+    // The curve is t^falloff rather than a smoothstep. A smoothstep is lazy at
+    // both ends and steepest in the middle, which is backwards here: it spends
+    // its resolution halfway out and leaves the line itself looking much like
+    // its neighbours. Raising the exponent holds glyphs unresolved further out
+    // and concentrates the whole change close to the line, which is where it
+    // reads. Below 1 it does the opposite and spreads the gradient out.
     function weightAt(screenY) {
-      const featherPx = Math.max(8, P.feather * vh);
-      return smooth(1 - clamp01(Math.abs(screenY - lineY * vh) / featherPx));
+      const dy = screenY - lineY * vh;
+      const reach = dy >= 0 ? reachBelow() : reachAbove();
+      const t = 1 - clamp01(Math.abs(dy) / Math.max(1, reach));
+      return Math.pow(t, P.falloff);
     }
 
     function placeHandle() {
@@ -240,10 +256,14 @@ export default {
                       + inv * (ox[i] * sc + Math.sin(tt * fq[i] + ph[i]) * 11);
           const goalY = screenY + inv * (oy[i] * sc + Math.cos(tt * fq[i] * 0.8 + ph[i]) * 8);
 
-          // The feather is the speed. Cubed so the pull ramps hard in the last
-          // stretch: on the line a glyph is effectively pinned, at the edge of
-          // the feather it barely moves at all.
-          const rate = 0.8 + 46 * w * w * w;
+          // The feather is the speed: pinned on the line, barely moving at the
+          // outer edge. Linear in w, not cubed — w is already t^falloff, and
+          // cubing it on top compounds to t^(3*falloff), which at a high
+          // falloff is zero everywhere but a hair from the line. Glyphs then
+          // cannot converge in the time they have, and the focus line never
+          // assembles. `falloff` is the one control over how concentrated this
+          // is; it does not need help.
+          const rate = 0.8 + 46 * w;
           const k = 1 - Math.exp(-rate * dt);
           cx[i] += (goalX - cx[i]) * k;
           cy[i] += (goalY - cy[i]) * k;
@@ -287,7 +307,7 @@ export default {
       const goalY = screenY + inv * im.oy * P.scatter;
 
       if (!im.placed) { im.cx = goalX; im.cy = goalY; im.placed = true; }
-      const k = 1 - Math.exp(-(0.8 + 34 * w * w * w) * dt);
+      const k = 1 - Math.exp(-(0.8 + 34 * w) * dt);
       im.cx += (goalX - im.cx) * k;
       im.cy += (goalY - im.cy) * k;
 
@@ -302,14 +322,19 @@ export default {
     // either side of it so the mechanism is visible.
     function drawLine(c) {
       const y = Math.round(lineY * vh) + 0.5;
-      const featherPx = Math.max(8, P.feather * vh);
+      const up = reachAbove(), down = reachBelow();
 
-      const g = c.createLinearGradient(0, y - featherPx, 0, y + featherPx);
-      g.addColorStop(0, 'rgba(214,186,124,0)');
-      g.addColorStop(0.5, 'rgba(214,186,124,0.055)');
-      g.addColorStop(1, 'rgba(214,186,124,0)');
+      // Sampled rather than a two-stop gradient, so the glow traces the actual
+      // falloff curve — asymmetry and exponent both visible in the shape.
+      const g = c.createLinearGradient(0, y - up, 0, y + down);
+      const total = up + down;
+      for (let i = 0; i <= 16; i++) {
+        const stop = i / 16;
+        const w = weightAt(y - up + stop * total);
+        g.addColorStop(stop, 'rgba(214,186,124,' + (0.075 * w).toFixed(4) + ')');
+      }
       c.fillStyle = g;
-      c.fillRect(0, y - featherPx, vw, featherPx * 2);
+      c.fillRect(0, y - up, vw, total);
 
       c.fillStyle = 'rgba(226,206,158,0.55)';
       c.fillRect(0, y - 0.5, vw, 1);
