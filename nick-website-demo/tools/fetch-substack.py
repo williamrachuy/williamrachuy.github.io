@@ -52,9 +52,10 @@ RETRIES = 3
 CE = '{http://purl.org/rss/1.0/modules/content/}encoded'
 DC_CREATOR = '{http://purl.org/dc/elements/1.1/}creator'
 
-# The four reading profiles, handed out in rotation so a browse through the
-# feed shows all of them rather than whichever one came first.
-PROFILES = ['tidewater', 'lantern', 'ledger', 'foundry']
+# Nothing here decides how a post reads. These posts have no file an author can
+# write `profile:` into, which is exactly what profiles.md is for; handing them
+# one in rotation from here would put a machine's choice above the author's and
+# leave them no way to see where it came from.
 
 # Substack's own furniture, not the writing.
 CTA = re.compile(r'^\s*\[?(subscribe now|share|leave a comment|share this post|'
@@ -138,7 +139,7 @@ def fetch(feed_url, limit):
 
     publication = strip_tags(channel.findtext('title')) or 'Substack'
     posts = []
-    for i, item in enumerate(channel.findall('item')[:limit]):
+    for item in channel.findall('item')[:limit]:
         link = (item.findtext('link') or '').strip()
         if not link:
             continue
@@ -158,7 +159,6 @@ def fetch(feed_url, limit):
             'publication': publication,
             'date': date,
             'source': link,
-            'profile': PROFILES[i % len(PROFILES)],
             'body': body,
         })
 

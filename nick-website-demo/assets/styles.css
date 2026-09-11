@@ -244,6 +244,21 @@ body {
   font: 400 13px var(--ui);
 }
 
+.assign-hint {
+  margin: -6px 0 12px;
+  font: 400 11.5px/1.6 var(--ui);
+  color: rgba(232,224,209,0.34);
+}
+.assign-hint code {
+  font: 400 11px/1.5 ui-monospace, Menlo, monospace;
+  color: rgba(214,186,124,0.72);
+  background: rgba(255,255,255,0.05);
+  border-radius: 5px;
+  padding: 1px 5px;
+  /* A long title must not push the panel wider than the screen. */
+  overflow-wrap: anywhere;
+}
+
 .foot {
   margin: 14px 0 0;
   font: 400 11px/1.5 ui-monospace, Menlo, monospace;

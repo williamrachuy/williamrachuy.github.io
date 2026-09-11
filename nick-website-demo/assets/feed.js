@@ -77,8 +77,8 @@ export function renderFeed(host, posts, onOpen) {
   head.innerHTML =
     '<h1>TBH Press</h1>' +
     '<p class="feed-note">Words from the edge of your algorithm. ' +
-    'Pick a post — each one opens in one of four reading styles, and you can ' +
-    'switch between them from the panel at the top.</p>';
+    'Pick a post — each one opens in the reading style it was set in, and you ' +
+    'can switch between all seven from the panel at the top.</p>';
   host.appendChild(head);
 
   if (!posts.length) {

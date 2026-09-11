@@ -105,11 +105,57 @@ Only `title` is required. The rest:
 | `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
 | `source` | Adds an "Original post" link for screen readers and search engines. |
 | `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
-| `profile` | Which of the seven renderings this post opens in. Readers can still switch. |
+| `profile` | Which of the seven renderings this post opens in. Readers can still switch. Overruled by `profiles.md` — see below. |
 
 The filename becomes the post's link. `overcoming-the-classics.md` is at
 `?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
 spaces and the links stay tidy.
+
+### Which profile a post is set in
+
+Three places can say, and the most specific one that does wins:
+
+| | where | applies to |
+|---|---|---|
+| 1 | nothing said anywhere — **Foundry** | every post |
+| 2 | `profile:` in the post's front matter | posts that have a `.md` file |
+| 3 | a line in **`profiles.md`** | any post, and it beats 2 |
+
+Rule 3 exists because of rule 2's limit. A post that comes in from Substack has
+no file here to write `profile:` into, so without somewhere outside the post to
+say, half the feed could never be set at all. `profiles.md` sits next to
+`index.html` and is one line per post:
+
+```
+How Nodes Can Fix Broken Networks: cipher
+montana-and-wyoming-travel-log: tidewater
+```
+
+Either name works — the post's title as it appears on its card, or the short
+name from its web address — and capitals, spaces and punctuation are ignored on
+both sides, so a title copied off the page matches whatever it happens to
+contain. A line naming a profile that does not exist is reported in the console
+and otherwise ignored, rather than silently doing nothing.
+
+One line re-skins everything, over both of the rules above:
+
+```
+everything: cipher
+```
+
+A named line still beats it, so `everything:` is a background you can put
+exceptions on rather than a switch that cancels the file.
+
+Since this is the only place a Substack post's profile can be set,
+`fetch-substack.py` does not assign one. It used to hand them out in rotation so
+a browse showed some variety; that put a script's choice above the author's, in
+a spot with nothing to point at when you wanted to change it. The variety now
+comes from `profiles.md`, where it can be edited.
+
+Above all three sits `?profile=` in the address, which is what the demo's chips
+write. That is a preview, not a decision: it makes one particular rendering
+shareable as a link, and it is never written back to any file. Picking a profile
+in the panel shows the line that would make it permanent.
 
 ### About the posts currently in here
 
@@ -319,12 +365,14 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 
 ```
 index.html
+profiles.md              which profile each post is set in; beats front matter
 assets/fonts/            Share Tech Mono (SIL OFL) + its licence; Cipher's face
 tools/
   fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
   localize_images.py     copies referenced pictures into posts/images/
 assets/
   app.js                 routing, scroll clock, profile mounting, control panel
+  assign.js              reads profiles.md and resolves which profile a post gets
   feed.js                the landing page: one card per post
   posts.js               merges local markdown with the Substack snapshot
   images.js              measures pictures before layout so nothing jumps
