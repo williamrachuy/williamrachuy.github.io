@@ -78,6 +78,7 @@ export default {
     { key: 'restSize', label: 'Resting size', type: 'range', min: 0.3, max: 1, step: 0.05, value: 0.55 },
     { key: 'scatter', label: 'Scatter', type: 'range', min: 0, max: 180, step: 5, value: 72 },
     { key: 'drift', label: 'Drift', type: 'range', min: 0, max: 1.5, step: 0.05, value: 0.5 },
+    { key: 'spin', label: 'Tumble', type: 'range', min: 0, max: 1.2, step: 0.05, value: 0.55 },
     { key: 'ring', label: 'Show the menisci', type: 'bool', value: true }
   ],
 
@@ -92,8 +93,9 @@ export default {
     for (const p of this.params) P[p.key] = p.value;
 
     let G = null;
-    let cx = null, cy = null;                  // where each glyph is right now
+    let cx = null, cy = null, cr = null;        // where each glyph is, and how it lies
     let ox = null, oy = null, fq = null, ph = null;
+    let rot0 = null, rfq = null, rph = null;
     let imgs = [];
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
     let period = 0;
@@ -103,9 +105,10 @@ export default {
 
     function seed(n) {
       const rnd = mulberry32(0x7f4a7c15 ^ n);
-      cx = new Float32Array(n); cy = new Float32Array(n);
+      cx = new Float32Array(n); cy = new Float32Array(n); cr = new Float32Array(n);
       ox = new Float32Array(n); oy = new Float32Array(n);
       fq = new Float32Array(n * 2); ph = new Float32Array(n * 2);
+      rot0 = new Float32Array(n); rfq = new Float32Array(n); rph = new Float32Array(n);
       for (let i = 0; i < n; i++) {
         const ang = rnd() * Math.PI * 2;
         const rad = 0.35 + rnd() * 0.65;
@@ -116,6 +119,12 @@ export default {
         fq[i * 2 + 1] = 0.04 + rnd() * 0.13;
         ph[i * 2] = rnd() * 6.283;
         ph[i * 2 + 1] = rnd() * 6.283;
+        // How a glyph lies when nothing is holding it, and how slowly it rocks
+        // around that. Bounded rather than a free spin: a letter that turns all
+        // the way over stops reading as a letter.
+        rot0[i] = (rnd() - 0.5) * 2;
+        rfq[i] = 0.02 + rnd() * 0.07;
+        rph[i] = rnd() * 6.283;
       }
     }
 
@@ -215,6 +224,7 @@ export default {
         for (let i = 0; i < G.n; i++) {
           cx[i] = G.x[i] + ox[i] * P.scatter;
           cy[i] = G.y[i] + padTop + oy[i] * P.scatter;
+          cr[i] = rot0[i] * P.spin;
         }
 
         imgs = layout.blocks
@@ -291,10 +301,20 @@ export default {
           const goalX = G.x[i] + inv * (ox[i] * sc + wanderX);
           const goalY = ty + padTop + inv * (oy[i] * sc + wanderY);
 
+          // The angle a glyph lies at with nothing holding it, scaled by how
+          // ungathered it is. Written this way rather than as an angle that
+          // keeps accumulating: an accumulating angle has to catch up when a
+          // meniscus lets go, which reads as the letter suddenly spinning.
+          // Here it simply unwinds to true vertical as it is drawn in, and
+          // leans back out as it is released.
+          const goalR = inv * P.spin *
+            (rot0[i] + Math.sin(tt * rfq[i] * 6.283 + rph[i]) * 0.5);
+
           const rate = 1.1 + 3.4 * w;
           const k = 1 - Math.exp(-rate * dt);
           cx[i] += (goalX - cx[i]) * k;
           cy[i] += (goalY - cy[i]) * k;
+          cr[i] += (goalR - cr[i]) * k;
 
           const sy = cy[i] - scrollY;
           if (sy < -50 || sy > vh + 50) continue;
@@ -304,11 +324,15 @@ export default {
           ctx.font = G.font[i];
 
           const s = rest + (1 - rest) * w;
-          if (s > 0.995) {
+          const r = cr[i];
+          // Upright and full size is the common case once a meniscus has hold,
+          // and it is the one worth keeping off the transform path.
+          if (s > 0.995 && r > -0.004 && r < 0.004) {
             if (!identity) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); identity = true; }
             ctx.fillText(G.ch[i], cx[i], sy);
           } else {
-            ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * cx[i], dpr * sy);
+            const co = Math.cos(r) * s, si = Math.sin(r) * s;
+            ctx.setTransform(dpr * co, dpr * si, -dpr * si, dpr * co, dpr * cx[i], dpr * sy);
             identity = false;
             ctx.fillText(G.ch[i], 0, 0);
           }
