@@ -1,6 +1,6 @@
 # Reading profiles — demo
 
-A markdown post, rendered four different ways. The point is to pick a house
+A markdown post, rendered six different ways. The point is to pick a house
 style by feeling it on a phone rather than arguing about it in the abstract.
 
 Live: `/nick-website-demo/`
@@ -18,7 +18,7 @@ and the opening few lines, newest first — the same shape as `/blog` on this
 site. It is ordinary flowing text, selectable and searchable, because choosing
 what to read is a different job from reading it.
 
-**A post** is the reading experience, in one of the four profiles below.
+**A post** is the reading experience, in one of the six profiles below.
 
 The only difference between the two is `?post=` in the address, so every view is
 a real URL you can link to, bookmark, or reload, and the back button does what
@@ -59,7 +59,7 @@ Nothing far from the viewport is drawn.
 - Foundry is left alone on purpose. It is the control group: ordinary flowing
   text that stays selectable and findable, which virtualising would break.
 
-## The four profiles
+## The six profiles
 
 | id | name | what it does | cost |
 |---|---|---|---|
@@ -67,12 +67,13 @@ Nothing far from the viewport is drawn.
 | `tidewater` | Tidewater | Every glyph drifts, rotated and dark, until a draggable focus lens pulls it back onto its line and brightens it. Past the lens it lets go again. | Canvas, per-glyph physics. Heaviest. |
 | `lantern` | Lantern | Same reading-band idea at line granularity. Lines sit dim and offset, then settle and brighten inside the band. | DOM, ~60 elements. Cheap. |
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |
-| `meniscus` | Meniscus | The inverse of the others: the type is set properly and stays readable, and circles surface on it. Each carries a pressure field that pushes glyphs from its centre, hardest in the middle and nothing at the rim, so words bulge around it. Overlapping circles add, then the sum is capped well under a line height — a budge, not a shove. | Canvas, a few circles against the visible glyphs. |
+| `meniscus` | Meniscus | The inverse of the others: the type is set properly and stays readable, and circles surface on it. Each carries a pressure field. `shell` picks its shape: at 0 a swell, hardest at the centre and fading to the rim; above 0 a shell peaking at that fraction of the radius and falling to nothing at both the centre and the rim, so the middle is still and the displacement lives in a ring — text pressed aside by a wall rather than swelling off a point. Overlapping circles add, then the sum is capped well under a line height — a budge, not a shove. | Canvas, a few circles against the visible glyphs. |
 | `foundry` | Foundry | No motion. Ordinary flowing text, selectable and copyable. | DOM. Free. |
 
-Tidewater is the one that was asked for. Foundry is the control group — it
-exists so the other three have something to be judged against, and so there is
-somewhere sane to fall back to.
+Tidewater is the one that was asked for, and Waterline is the same idea with the
+window taken out of it. Foundry is the control group — it exists so the other
+five have something to be judged against, and so there is somewhere sane to fall
+back to.
 
 ## Publishing a post
 
@@ -103,7 +104,7 @@ Only `title` is required. The rest:
 | `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
 | `source` | Adds an "Original post" link for screen readers and search engines. |
 | `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
-| `profile` | Which of the four renderings this post opens in. Readers can still switch. |
+| `profile` | Which of the six renderings this post opens in. Readers can still switch. |
 
 The filename becomes the post's link. `overcoming-the-classics.md` is at
 `?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
@@ -275,7 +276,7 @@ Three things fall out of that:
 
 - **`prepareWithSegments` + `layoutWithLines`** give the committed lines and
   their real widths. Every profile builds on those coordinates — one typeset
-  pass, four skins.
+  pass, six skins.
 - **`measureLineStats` binary search** (`balancedWidth` in `typeset.js`) finds
   the narrowest width that still yields the same line count, which is how the
   title and subtitle come out balanced instead of dropping one orphan word.
@@ -354,7 +355,7 @@ from `params`.
 
 ## Notes on the implementation
 
-- **Accessibility.** All four visual layers are `aria-hidden`. A real
+- **Accessibility.** All six visual layers are `aria-hidden`. A real
   `<h1>/<p>` copy of the article lives in a visually-hidden div for screen
   readers, search engines, and JS-off. Tidewater's canvas text is not
   selectable; Lantern's and Foundry's is.

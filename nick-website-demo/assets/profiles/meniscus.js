@@ -39,6 +39,7 @@ export default {
     { key: 'rate', label: 'How often', type: 'range', min: 0.1, max: 3, step: 0.1, value: 0.9 },
     { key: 'size', label: 'Circle size', type: 'range', min: 0.15, max: 1, step: 0.05, value: 0.45 },
     { key: 'pressure', label: 'Pressure', type: 'range', min: 0, max: 90, step: 2, value: 34 },
+    { key: 'shell', label: 'Shell', type: 'range', min: 0, max: 0.9, step: 0.05, value: 0.55 },
     { key: 'life', label: 'Lifetime', type: 'range', min: 1, max: 9, step: 0.5, value: 3.5 },
     { key: 'ring', label: 'Show the circles', type: 'bool', value: true }
   ],
@@ -62,13 +63,30 @@ export default {
     let nextSpawn = 0;
     let rnd = mulberry32(0x9e3779b9);
 
-    // Pressure from one circle at distance d. Zero at the rim and rising toward
-    // the middle, so the field has an edge you can see the text follow. The
-    // exponent keeps the shoulder soft: a hard kernel makes glyphs snap across
-    // the boundary as the circle grows.
+    // Pressure from one circle at distance d, as a family of two shapes.
+    //
+    // `shell` at 0 is a swell: hardest at the centre, falling to nothing at the
+    // rim. Text right under the middle gets shoved most.
+    //
+    // Above 0 it becomes a shell, peaking at that fraction of the radius and
+    // falling to nothing at BOTH the centre and the rim. The middle of the
+    // circle is then still, and the displacement lives in a ring — the text
+    // reads as being pressed aside by a wall rather than swelling off a point.
+    //
+    // Smoothstepped on each side, so there is no crease at the peak and no snap
+    // at the boundary as a circle grows through a line.
     function kernel(d, r) {
       if (d >= r) return 0;
-      const t = 1 - d / r;
+      const u = d / r;
+      const p = P.shell;
+      let t;
+      if (p <= 0.001) {
+        t = 1 - u;                       // swell: peak at the centre
+      } else if (u < p) {
+        t = u / p;                       // rising out of the still middle
+      } else {
+        t = (1 - u) / (1 - p);           // falling away to the rim
+      }
       return t * t * (3 - 2 * t);
     }
 
@@ -247,6 +265,13 @@ export default {
         ctx.strokeStyle = `rgba(226,206,158,${(0.22 * e).toFixed(4)})`;
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.arc(c.x, sy, r, 0, 6.2832); ctx.stroke();
+
+        // Where the pressure peaks. Drawn only when there is a shell to show;
+        // at shell 0 the peak is the centre and a ring there would be a lie.
+        if (P.shell > 0.001) {
+          ctx.strokeStyle = `rgba(226,206,158,${(0.10 * e).toFixed(4)})`;
+          ctx.beginPath(); ctx.arc(c.x, sy, r * P.shell, 0, 6.2832); ctx.stroke();
+        }
       }
     }
   }
