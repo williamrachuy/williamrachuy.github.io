@@ -99,7 +99,15 @@ const BASE_RAMP = (() => {
 // How far a pulse runs along its line, how fast, and how long a glyph holds it.
 const TRAIL = 16;
 const STEP = 0.028;      // seconds per glyph — about 570 glyphs a second
-const TAU = 0.55;        // seconds to decay to 1/e
+const TAU = 0.26;        // seconds to decay to 1/e
+
+// Only a fraction of turnovers set a pulse off, at the top of the Energy
+// slider. Every one of them doing it sounds right and is not: a line of sixty
+// glyphs turning over twice a second is a hundred-odd emissions a second, each
+// taking TRAIL * STEP to run its course, so the pulses overlap into a wash and
+// the line is uniformly lit. At this rate a line carries one or two currents at
+// a time and you can watch one travel.
+const EMIT_MAX = 0.07;
 
 // How long a glyph waits before reconsidering itself, in seconds: brisk out in
 // the dark, nearly still on the line. Stated as time rather than as a rate so
@@ -129,7 +137,7 @@ export default {
     { key: 'falloff', label: 'Falloff', type: 'range', min: 0.4, max: 4, step: 0.1, value: 1.8 },
     { key: 'churn', label: 'Churn', type: 'range', min: 0.25, max: 2, step: 0.05, value: 1 },
     { key: 'lock', label: 'Correct on the line', type: 'range', min: 0.3, max: 1, step: 0.01, value: 0.95 },
-    { key: 'energy', label: 'Energy', type: 'range', min: 0, max: 1.5, step: 0.05, value: 0.85 },
+    { key: 'energy', label: 'Energy', type: 'range', min: 0, max: 1, step: 0.05, value: 0.45 },
     { key: 'showLine', label: 'Show the line', type: 'bool', value: true }
   ],
 
@@ -280,6 +288,11 @@ export default {
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.textBaseline = 'alphabetic';
 
+        // Density rises with the slider, brightness more slowly, so turning it
+        // up reads as more current rather than as more glare. Both terms are at
+        // most 1, which is why the fill below needs no clamp.
+        const eAmp = Math.sqrt(P.energy);
+
         if (P.showLine) drawLine();
 
         for (const im of imgs) {
@@ -319,9 +332,10 @@ export default {
             shown[i] = correct ? -1 : (rnd() * POOL.length) | 0;
             if (shown[i] !== was) {
               mirror[i] = rnd() < 0.5 ? 1 : 0;
-              // Only an actual change releases anything. Re-picking the same
-              // character is not an event.
-              if (P.energy > 0) emit(i, nowSec);
+              // Only an actual change releases anything, and only some of them:
+              // re-picking the same character is not an event, and neither is
+              // most of what is left.
+              if (rnd() < P.energy * EMIT_MAX) emit(i, nowSec);
             }
             // Churn slows to a crawl as a glyph approaches the line, which is
             // what makes text near it feel held rather than merely correct.
@@ -329,7 +343,7 @@ export default {
             nextAt[i] = nowSec + base * (0.6 + rnd() * 0.9) / P.churn;
           }
 
-          const e = P.energy > 0 ? Math.min(1, energyAt(i, nowSec) * P.energy) : 0;
+          const e = eAmp > 0 ? energyAt(i, nowSec) * eAmp : 0;
           const c = BASE_RAMP[(w * (BUCKETS - 1)) | 0];
           // Energy pushes the colour toward white-green and lifts the alpha, so
           // a pulse is visible even out where the base is almost nothing.
