@@ -12,23 +12,18 @@ import { formatDate } from './md.js';
 
 const squash = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
-// The card blurb: the post's own `excerpt:` if it has one, otherwise the start
-// of the post. Body paragraphs only — a pull quote or a sign-off is a bad
-// summary of what the piece is about.
+// The card blurb, already worked out by whichever source the post came from —
+// the opening prose, never a pull quote or a sign-off.
 //
 // A newsletter subtitle is often lifted from the opening line ("Dear Reader,"),
-// which would print the same words twice on one card. Skip past any paragraph
-// the subtitle already said.
+// which would print the same words twice on one card. Drop the blurb when the
+// subtitle has already said it.
 function excerptOf(post) {
-  if (post.doc.meta.excerpt) return post.doc.meta.excerpt;
-  const sub = squash(post.doc.meta.subtitle);
-  for (const b of post.doc.blocks) {
-    if (b.type !== 'p') continue;
-    const t = squash(b.text);
-    if (sub && (t === sub || sub.startsWith(t) || t.startsWith(sub))) continue;
-    return b.text;
-  }
-  return '';
+  const sub = squash(post.subtitle);
+  const ex = squash(post.excerpt);
+  if (!ex) return '';
+  if (sub && (ex === sub || sub.startsWith(ex) || ex.startsWith(sub))) return '';
+  return post.excerpt;
 }
 
 function card(post) {
@@ -39,6 +34,14 @@ function card(post) {
   const date = document.createElement('div');
   date.className = 'date';
   date.textContent = formatDate(post.date);
+  // Which pipeline this card came down. Both are live at once, and without
+  // this there is no way to see that from the outside.
+  if (post.origin === 'substack') {
+    const tag = document.createElement('span');
+    tag.className = 'origin';
+    tag.textContent = 'via Substack';
+    date.appendChild(tag);
+  }
 
   const h2 = document.createElement('h2');
   h2.textContent = post.title;
@@ -46,10 +49,10 @@ function card(post) {
   a.appendChild(date);
   a.appendChild(h2);
 
-  if (post.doc.meta.subtitle) {
+  if (post.subtitle) {
     const sub = document.createElement('div');
     sub.className = 'subtitle';
-    sub.textContent = post.doc.meta.subtitle;
+    sub.textContent = post.subtitle;
     a.appendChild(sub);
   }
 

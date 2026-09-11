@@ -19,6 +19,13 @@
 
 import { parseDocument } from './md.js';
 
+// The Substack side of the feed, written at build time by
+// tools/fetch-substack.py. Substack sends no CORS headers, so the browser
+// cannot read the publication directly; this is a same-origin snapshot of it.
+// Absent (a plain checkout, or a build where the fetch failed) simply means the
+// feed is local markdown only.
+const SUBSTACK_INDEX = 'posts/substack/index.json';
+
 // Only ever consulted if BOTH listing routes fail — a rate-limited API on a
 // host with no directory index. Without it the page would have nothing at all
 // to show, which is a worse answer than showing the post that ships with it.
@@ -128,33 +135,118 @@ async function listFiles() {
 
 // ------------------------------------------------------------------ load
 
-// Posts are a few KB each and fetching them now means switching between them
-// later costs nothing. Front matter is the only source of titles and dates —
-// nothing about a post is recorded anywhere outside the post itself.
-export async function discoverPosts() {
+// Two canonical URLs for the same piece differ only in punctuation more often
+// than not, so compare them loosely.
+function canonical(url) {
+  return (url || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+}
+
+// Local posts are a few KB each and fetching them now means switching between
+// them later costs nothing. Front matter is the only source of titles and
+// dates — nothing about a local post is recorded outside the post itself.
+async function localPosts() {
   const names = await listFiles();
   const loaded = await Promise.all(names.map(async file => {
     try {
       const r = await fetch('posts/' + file, { cache: 'no-cache' });
       if (!r.ok) return null;
       const doc = parseDocument(await r.text());
+      const firstPara = doc.blocks.find(b => b.type === 'p');
       return {
+        origin: 'local',
         file,
         slug: file.replace(/\.md$/, ''),
         title: doc.meta.title || file.replace(/\.md$/, '').replace(/[-_]/g, ' '),
+        subtitle: doc.meta.subtitle || '',
+        excerpt: doc.meta.excerpt || (firstPara ? firstPara.text : ''),
         date: doc.meta.date || '',
+        source: doc.meta.source || '',
         doc
       };
     } catch (_) { return null; }
   }));
+  return loaded.filter(Boolean);
+}
 
-  // Newest first, by the `date:` in front matter. ISO dates sort correctly as
-  // strings. Undated posts fall to the bottom rather than disappearing.
-  return loaded.filter(Boolean).sort((a, b) => {
+// The Substack side arrives as metadata only. A body is a separate small file,
+// fetched when the reader actually opens that post — the landing page needs
+// none of them to draw its cards, and the whole archive inlined would be some
+// twenty times the payload for a page that shows titles.
+async function substackPosts() {
+  let index;
+  try {
+    const r = await fetch(SUBSTACK_INDEX, { cache: 'no-cache' });
+    if (!r.ok) throw new Error(String(r.status));
+    index = await r.json();
+  } catch (err) {
+    console.info('[posts] no Substack snapshot (' + err.message + '); local markdown only');
+    return [];
+  }
+
+  return (index.posts || []).map(p => ({
+    origin: 'substack',
+    file: 'substack/' + p.slug,
+    slug: p.slug,
+    title: p.title || p.slug,
+    subtitle: p.subtitle || '',
+    excerpt: p.excerpt || '',
+    date: p.date || '',
+    source: p.source || '',
+    publication: index.publication || p.publication || '',
+    meta: p,
+    doc: null
+  }));
+}
+
+// Fills in a Substack post's body the first time it is opened. Local posts
+// already carry theirs.
+export async function ensureDoc(post) {
+  if (post.doc) return post.doc;
+  const r = await fetch('posts/substack/' + encodeURIComponent(post.slug) + '.json', { cache: 'no-cache' });
+  if (!r.ok) throw new Error('Could not load ' + post.slug + ' (' + r.status + ')');
+  const { body } = await r.json();
+
+  // Rebuild the front matter the markdown parser expects, so a post from the
+  // feed and a post from a file go through exactly the same path from here on.
+  const m = post.meta || {};
+  const fm = ['---'];
+  for (const [k, v] of [['title', m.title], ['subtitle', m.subtitle], ['author', m.author],
+                        ['publication', m.publication], ['date', m.date],
+                        ['source', m.source], ['profile', m.profile]]) {
+    if (v) fm.push(k + ': ' + String(v).replace(/\n/g, ' '));
+  }
+  fm.push('---', '');
+  post.doc = parseDocument(fm.join('\n') + body);
+  return post.doc;
+}
+
+/**
+ * The feed: local markdown and the Substack snapshot, merged.
+ *
+ * Both are fetched together at page load. Where the same piece appears in both,
+ * the local file wins — that is what makes dropping a .md file into posts/ an
+ * override, so anything hand-edited here survives the next feed refresh while
+ * everything else keeps flowing in from Substack on its own.
+ */
+export async function discoverPosts() {
+  const [local, remote] = await Promise.all([localPosts(), substackPosts()]);
+
+  const claimed = new Set();
+  for (const p of local) {
+    if (p.source) claimed.add(canonical(p.source));
+    claimed.add('slug:' + p.slug);
+  }
+  const merged = local.concat(
+    remote.filter(p => !claimed.has(canonical(p.source)) && !claimed.has('slug:' + p.slug)));
+
+  // Newest first, by the `date:` in front matter or the feed's publish date.
+  // ISO dates sort correctly as strings. Undated posts fall to the bottom
+  // rather than disappearing.
+  return merged.sort((a, b) => {
     if (a.date && b.date) return b.date.localeCompare(a.date);
     if (a.date) return -1;
     if (b.date) return 1;
-    return a.file.localeCompare(b.file);
+    return a.slug.localeCompare(b.slug);
   });
 }
 
@@ -163,5 +255,7 @@ export async function discoverPosts() {
 export function findPost(posts, wanted) {
   if (!wanted) return null;
   const w = decodeURIComponent(wanted);
-  return posts.find(p => p.file === w) || posts.find(p => p.slug === w.replace(/\.md$/, '')) || null;
+  return posts.find(p => p.file === w)
+      || posts.find(p => p.slug === w.replace(/\.md$/, ''))
+      || null;
 }

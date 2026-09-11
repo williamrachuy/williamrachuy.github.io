@@ -14,7 +14,7 @@
 // Profiles know nothing about markdown, scrolling, or the control panel.
 
 import { typeset, loadEngine, engineName } from './typeset.js';
-import { discoverPosts, findPost } from './posts.js';
+import { discoverPosts, findPost, ensureDoc } from './posts.js';
 import { renderFeed } from './feed.js';
 import { resolveImages } from './images.js';
 
@@ -264,7 +264,7 @@ function showFeed(push) {
 // pictures arrive: only the newest request is allowed to mount.
 let openToken = 0;
 
-async function showPost(post, push) {
+async function showPost(post, push, forceProfile) {
   if (!post) return;
   const token = ++openToken;
 
@@ -274,27 +274,42 @@ async function showPost(post, push) {
   backEl.hidden = false;
 
   currentPost = post.file;
-  state.doc = post.doc;
-  renderReaderText(state.doc);
-  document.title = (state.doc.meta.title || 'Demo') + ' — TBH Press';
+  document.title = (post.title || 'Demo') + ' — TBH Press';
   window.scrollTo(0, 0);
 
-  // The address is correct before the pictures are, so a reload during the wait
-  // lands back on the same post.
+  // The address is correct before the post is, so a reload during the wait
+  // lands back on the same one.
   const slugUrl = '?post=' + encodeURIComponent(post.slug);
   if (push) history.pushState({ view: 'post', slug: post.slug }, '', slugUrl);
+
+  // A local post already carries its text. One from the Substack snapshot is
+  // metadata until here, and fetches its body now.
+  const bootEl = document.getElementById('boot');
+  if (!post.doc) { bootEl.textContent = 'Setting the type…'; bootEl.hidden = false; }
+  try {
+    state.doc = await ensureDoc(post);
+  } catch (err) {
+    if (token !== openToken) return;
+    bootEl.hidden = true;
+    document.getElementById('fatal').hidden = false;
+    document.getElementById('fatal').textContent = err.message;
+    return;
+  }
+  if (token !== openToken) return;
+  renderReaderText(state.doc);
 
   // Every picture has to be measured before the first typeset, or the text
   // below one would jump when it lands. Cached after the first visit, so this
   // only ever costs on the way in.
   const pending = state.doc.blocks.some(b => b.type === 'image' && !b.img && !b.broken);
-  const bootEl = document.getElementById('boot');
   if (pending) { bootEl.textContent = 'Developing the pictures…'; bootEl.hidden = false; }
   const { late } = await resolveImages(state.doc);
   if (token !== openToken) return;          // reader moved on; abandon this one
   bootEl.hidden = true;
 
-  const declared = state.doc.meta.profile;
+  // ?profile= in the address wins over the post's own preference, so a given
+  // rendering of a given post stays shareable as one link.
+  const declared = (forceProfile && byId[forceProfile]) ? forceProfile : state.doc.meta.profile;
   const wanted = byId[declared] ? declared : (state.profile ? state.profile.id : 'tidewater');
   mountProfile(reduced ? 'foundry' : wanted, false);
 
@@ -322,8 +337,9 @@ function switchPost(file) {
 
 // The address bar is the state, so back/forward just re-read it.
 window.addEventListener('popstate', () => {
-  const post = findPost(postList, new URLSearchParams(location.search).get('post'));
-  if (post) showPost(post, false); else showFeed(false);
+  const qs = new URLSearchParams(location.search);
+  const post = findPost(postList, qs.get('post'));
+  if (post) showPost(post, false, qs.get('profile')); else showFeed(false);
 });
 
 backEl.addEventListener('click', e => {
@@ -409,11 +425,7 @@ window.addEventListener('resize', () => {
   const post = findPost(postList, qs.get('post'));
   if (!post) { showFeed(false); return; }
 
-  // ?profile= overrides what the post asks for, so a particular rendering of a
-  // particular post stays shareable as one link.
-  const forced = qs.get('profile');
-  if (byId[forced]) post.doc.meta.profile = forced;
-  showPost(post, false);
+  showPost(post, false, qs.get('profile'));
 })();
 
 // --------------------------------------------------------------- panel UI

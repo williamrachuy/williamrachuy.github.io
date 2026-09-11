@@ -75,10 +75,11 @@ spaces and the links stay tidy.
 
 ### About the posts currently in here
 
-The five files in `posts/` are the five most recent TBH Press pieces, pulled
-from `https://tbhpress.substack.com/feed`. Title, subtitle, byline, date and
-canonical URL are the real metadata from that feed, and each file carries the
-full text of the piece.
+Everything on the site is TBH Press, from `https://tbhpress.substack.com/feed`.
+The five `.md` files in `posts/` are the five most recent pieces, held locally
+so they can be hand-edited; the rest of the archive arrives through the Substack
+snapshot described below. Title, subtitle, byline, date and canonical URL are
+the real metadata from that feed either way.
 
 Nicholas Souza gave permission for his posts to be reproduced here, in a session
 on 2026-09-11. Every post keeps a `source:` line pointing at the original on
@@ -105,38 +106,68 @@ and stops being reachable as a post, but the file is still in a public
 repository, so it is unpublished rather than private. Anything you would not
 want read should not be committed at all.
 
-### How it finds the posts
+### Where the posts come from
 
-There is no manifest because a manifest is a second thing to keep in sync, and
-the first time it falls out of sync the post silently vanishes. Instead the page
-asks GitHub what is in `posts/` — the same mechanism `/blog` on this site uses —
-and reads the title and date out of each file's front matter.
+The feed has two sources and merges them at page load.
 
-Two consequences worth knowing:
+**Local markdown** — the `.md` files in `posts/`, discovered by asking GitHub
+what is in that directory. There is no manifest, because a manifest is a second
+thing to keep in sync and the first time it falls out of sync the post silently
+vanishes. Title and date come out of each file's front matter. This is the same
+mechanism `/blog` on this site uses.
 
-- **A post goes live when GitHub Pages finishes deploying it**, usually under a
-  minute after the commit. Nothing else has to happen.
-- **The listing comes from the GitHub API, which allows 60 requests an hour per
-  visitor IP.** A reader who blows through that keeps working — the list is
-  cached in their browser — but the very first visit from a rate-limited IP will
-  only find the one post named in `LAST_RESORT` at the top of `assets/posts.js`.
-  In practice this is a non-issue for a personal blog; it would matter if a post
-  hit the front page of somewhere.
+**The Substack snapshot** — `posts/substack/`, a copy of the publication's RSS
+feed. Substack sends no `Access-Control-Allow-Origin` header on either its RSS
+feed or its JSON API, so a browser on this domain **cannot** read it directly;
+the fetch has to happen somewhere other than the reader's browser. It happens at
+build time, in `.github/workflows/pages.yml`, and the page then loads a
+same-origin file.
 
-Previewing locally works the same way without touching GitHub. Run
-`python3 -m http.server` in the site root and open
-`http://localhost:8000/nick-website-demo/` — the page reads the directory
-listing the server prints, so you see exactly what you are about to publish.
+Where the same piece appears in both, **the local file wins**, matched on the
+canonical URL in its `source:` line. That is what makes dropping a `.md` file
+into `posts/` an override: edit a post, add alt text, trim it, and your version
+is what ships, while everything you have not touched keeps flowing in from
+Substack on its own.
 
-**If you move this to your own domain or repo,** change the one line in
-`index.html` that names the repository:
+Refreshing the snapshot is a scheduled job, so it happens whether or not anyone
+pushes:
 
-```html
-<meta name="github-repo" content="williamrachuy/williamrachuy.github.io">
+```yaml
+schedule:
+  - cron: '17 */6 * * *'     # four times a day
 ```
 
-On a `username.github.io` address the page works that out by itself and the tag
-can be deleted.
+The fetch step is `continue-on-error: true`, and the snapshot is committed to
+the repo as well. A Substack outage during a deploy therefore falls back to the
+last good copy rather than emptying the site's feed. If the snapshot is missing
+altogether — a fresh checkout, a build where the fetch failed every time — the
+feed quietly falls back to local markdown only.
+
+To refresh it by hand, or to preview before pushing:
+
+```sh
+python3 tools/fetch-substack.py                        # defaults to TBH Press
+python3 tools/fetch-substack.py --feed URL --limit 40  # any Substack
+```
+
+It writes `posts/substack/index.json` — every post's metadata and card blurb —
+plus one small `<slug>.json` per body. The split is deliberate: the whole
+archive in one file is about 47 KB gzipped and the landing page needs none of
+the bodies to draw its cards, while the index alone is about 2 KB. A body is
+fetched only when that post is opened.
+
+**If you would rather it were live to the second,** the fetch needs a proxy that
+adds the CORS header — a ~15-line Cloudflare Worker, the same shape as the relay
+behind `/combo`. Point `SUBSTACK_INDEX` in `assets/posts.js` at it and the rest
+of the page does not change. The trade is a second origin to keep running, and a
+network round trip in front of the first paint.
+
+### A note on the `.md.offline` trick and Substack
+
+Renaming a local file to `.md.offline` removes *the local override*, not the
+post. If that piece is also in the Substack feed, it comes straight back on the
+next refresh — as the Substack copy. To keep a piece off the site entirely,
+unpublish it on Substack, or drop `--limit` low enough to exclude it.
 
 ### Supported markdown
 
@@ -201,9 +232,12 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 
 ```
 index.html
+tools/
+  fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
 assets/
   app.js                 routing, scroll clock, profile mounting, control panel
   feed.js                the landing page: one card per post
+  posts.js               merges local markdown with the Substack snapshot
   images.js              measures pictures before layout so nothing jumps
   posts.js               finds the posts; no manifest to maintain
   md.js                  front matter + block markdown
@@ -212,7 +246,10 @@ assets/
   profiles/
     tidewater.js  lantern.js  ledger.js  foundry.js
 posts/
-  overcoming-the-classics.md      <- everything in here is a post
+  overcoming-the-classics.md      <- every .md in here is a post
+  substack/
+    index.json                    <- build-time snapshot of the RSS feed
+    <slug>.json                   <- one body each, fetched on open
 ```
 
 `app.js` owns scrolling and time. Profiles know nothing about markdown, URLs, or
@@ -269,6 +306,8 @@ from `params`.
   hover and 2D pointer input that none of these use.
 - Inline emphasis (see above).
 - Captions. A picture is a picture; there is nowhere to say what it is of.
+- A live Substack read. The snapshot refreshes on a schedule, not on page load;
+  making it current to the second needs a CORS proxy (see above).
 - Pictures are hotlinked from Substack's CDN. That is how they are served today
   and it works, but it makes the posts depend on an account staying open.
   Committing the files next to the posts would make this repo self-contained.
