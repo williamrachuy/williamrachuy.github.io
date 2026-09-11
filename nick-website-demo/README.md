@@ -129,21 +129,36 @@ into `posts/` an override: edit a post, add alt text, trim it, and your version
 is what ships, while everything you have not touched keeps flowing in from
 Substack on its own.
 
-Refreshing the snapshot is a scheduled job, so it happens whether or not anyone
-pushes:
+#### The scheduled refresh does not currently work
 
-```yaml
-schedule:
-  - cron: '17 */6 * * *'     # four times a day
-```
+Substack is behind Cloudflare, which refuses the fetch from GitHub Actions
+runner address ranges. The build step gets a bare `403 Forbidden`. This is an
+address-based block, not a User-Agent one — the identical request returns `200`
+from an ordinary connection on every User-Agent tried, and `403` from a runner
+on all of them.
 
-The fetch step is `continue-on-error: true`, and the snapshot is committed to
-the repo as well. A Substack outage during a deploy therefore falls back to the
-last good copy rather than emptying the site's feed. If the snapshot is missing
-altogether — a fresh checkout, a build where the fetch failed every time — the
-feed quietly falls back to local markdown only.
+So the scheduled job runs, fails to reach the feed, raises a warning annotation,
+and publishes the snapshot committed to the repo. **The archive on the site is
+as of the last time someone ran the fetch script somewhere that can reach
+Substack and committed the result.** The schedule is left in place, at daily,
+so it heals itself if the block ever lifts.
 
-To refresh it by hand, or to preview before pushing:
+Two ways to actually fix it, neither done here:
+
+- **Fetch through a Cloudflare Worker.** A Worker calling Substack runs on
+  Cloudflare's own edge rather than from a blocked range. Point `--feed` at the
+  Worker and the build step starts working, with no other change. This is the
+  same piece of infrastructure already behind `/combo`.
+- **Refresh it from somewhere that can reach Substack** — a laptop, a home
+  server — and commit the result. No new services; it just needs doing by hand.
+
+The snapshot being committed is what keeps this from being fatal: a failed
+fetch, a Substack outage, or a fresh checkout all fall back to the last good
+copy rather than emptying the site's feed. If the snapshot is missing
+altogether the feed falls back to local markdown only.
+
+To refresh it by hand — which, per the above, is currently the only way it gets
+refreshed — or to preview before pushing:
 
 ```sh
 python3 tools/fetch-substack.py                        # defaults to TBH Press
