@@ -5,8 +5,10 @@ style by feeling it on a phone rather than arguing about it in the abstract.
 
 Live: `/nick-website-demo/`
 
-- `?post=some-file.md` loads a specific post
+- `?post=overcoming-the-classics` loads a specific post
 - `?profile=tidewater` overrides the post's default profile
+
+To publish, put a markdown file in `posts/` and commit it. There is no step two.
 
 ## The four profiles
 
@@ -21,11 +23,11 @@ Tidewater is the one that was asked for. Foundry is the control group — it
 exists so the other three have something to be judged against, and so there is
 somewhere sane to fall back to.
 
-## Adding a post
+## Publishing a post
 
-1. Drop a `.md` file in `posts/`.
-2. Add it to `posts/manifest.json`.
-3. Put front matter at the top of the markdown:
+Write a markdown file. Put it in `posts/`. Commit it. That is the entire
+process — there is no index to update, no list to register it in, no folder to
+create for it, and no build step to run. The page finds the file on its own.
 
 ```markdown
 ---
@@ -41,8 +43,63 @@ profile: tidewater
 Body text starts here.
 ```
 
-`profile:` is the default rendering for that post. Readers can still switch from
-the demo panel. Everything except `title` is optional.
+Only `title` is required. The rest:
+
+| field | what it does if you include it |
+|---|---|
+| `subtitle` | Second line under the title, in italic. |
+| `author`, `publication` | Byline, joined with a dot. |
+| `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
+| `source` | Adds an "Original post" link for screen readers and search engines. |
+| `profile` | Which of the four renderings this post opens in. Readers can still switch. |
+
+The filename becomes the post's link. `overcoming-the-classics.md` is at
+`?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
+spaces and the links stay tidy.
+
+### Taking a post down
+
+Rename it from `something.md` to `something.md.offline`. It stops being a post
+immediately, and the text is still sitting right there when you want it back.
+Renaming it to `.md` republishes it. (This is the same trick `/blog` uses.)
+
+To be clear about what that does and does not do: the post stops being listed
+and stops being reachable as a post, but the file is still in a public
+repository, so it is unpublished rather than private. Anything you would not
+want read should not be committed at all.
+
+### How it finds the posts
+
+There is no manifest because a manifest is a second thing to keep in sync, and
+the first time it falls out of sync the post silently vanishes. Instead the page
+asks GitHub what is in `posts/` — the same mechanism `/blog` on this site uses —
+and reads the title and date out of each file's front matter.
+
+Two consequences worth knowing:
+
+- **A post goes live when GitHub Pages finishes deploying it**, usually under a
+  minute after the commit. Nothing else has to happen.
+- **The listing comes from the GitHub API, which allows 60 requests an hour per
+  visitor IP.** A reader who blows through that keeps working — the list is
+  cached in their browser — but the very first visit from a rate-limited IP will
+  only find the one post named in `LAST_RESORT` at the top of `assets/posts.js`.
+  In practice this is a non-issue for a personal blog; it would matter if a post
+  hit the front page of somewhere.
+
+Previewing locally works the same way without touching GitHub. Run
+`python3 -m http.server` in the site root and open
+`http://localhost:8000/nick-website-demo/` — the page reads the directory
+listing the server prints, so you see exactly what you are about to publish.
+
+**If you move this to your own domain or repo,** change the one line in
+`index.html` that names the repository:
+
+```html
+<meta name="github-repo" content="williamrachuy/williamrachuy.github.io">
+```
+
+On a `username.github.io` address the page works that out by itself and the tag
+can be deleted.
 
 ### Supported markdown
 
@@ -55,19 +112,14 @@ it properly means measuring mixed fonts on a single line, which is what
 `@chenglou/pretext/rich-inline` is for. That is the honest next step; faking it
 by laying out each run separately would produce wrong line breaks.
 
-## ⚠️ `.nojekyll` is required
+## `.nojekyll`
 
 GitHub Pages runs Jekyll by default, and Jekyll converts any `.md` file that has
-YAML front matter into `.html`. That would turn `posts/overcoming-the-classics.md`
-into a 404 at runtime.
+YAML front matter into `.html` — which would turn every post into a 404 at
+runtime. The empty `.nojekyll` file at the **repository root** turns that off.
 
-Copy the `.nojekyll` file to the **repository root** (not this folder). It is
-empty; its presence is the whole signal. The site is hand-written static HTML
-with no Jekyll templating, so disabling Jekyll costs nothing.
-
-If you would rather not touch the repo root, the alternative is to drop front
-matter entirely and move `profile` into `manifest.json` — Jekyll passes through
-markdown that has no front matter.
+It is already there. This note exists so nobody deletes it wondering what it was
+for.
 
 ## How Pretext is used
 
@@ -102,14 +154,14 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 index.html
 assets/
   app.js                 loading, scroll clock, profile mounting, control panel
+  posts.js               finds the posts; no manifest to maintain
   md.js                  front matter + block markdown
   typeset.js             Pretext wrapper: blocks -> lines -> glyph positions
   styles.css
   profiles/
     tidewater.js  lantern.js  ledger.js  foundry.js
 posts/
-  manifest.json
-  overcoming-the-classics.md
+  overcoming-the-classics.md      <- everything in here is a post
 ```
 
 `app.js` owns scrolling and time. Profiles know nothing about markdown, URLs, or

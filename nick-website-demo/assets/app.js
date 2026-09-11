@@ -9,8 +9,8 @@
 //
 // Profiles know nothing about markdown, scrolling, or the control panel.
 
-import { parseDocument } from './md.js';
 import { typeset, loadEngine, engineName } from './typeset.js';
+import { discoverPosts, findPost } from './posts.js';
 
 import tidewater from './profiles/tidewater.js';
 import foundry from './profiles/foundry.js';
@@ -52,21 +52,9 @@ function readViewport() {
 
 // ----------------------------------------------------------------- loading
 
-async function loadManifest() {
-  try {
-    const r = await fetch('posts/manifest.json', { cache: 'no-cache' });
-    if (!r.ok) throw new Error(r.status);
-    return (await r.json()).posts || [];
-  } catch (_) {
-    return [{ file: 'overcoming-the-classics.md', title: 'Overcoming the Classics' }];
-  }
-}
-
-async function loadPost(file) {
-  const r = await fetch('posts/' + file, { cache: 'no-cache' });
-  if (!r.ok) throw new Error('Could not load posts/' + file + ' (' + r.status + ')');
-  return parseDocument(await r.text());
-}
+// Posts arrive from posts.js already fetched and parsed — the listing has to
+// read every post's front matter to know its title and date anyway, so there is
+// nothing left to load when the reader switches between them.
 
 // ------------------------------------------------------- accessible mirror
 
@@ -152,7 +140,8 @@ function buildControls() {
     const sel = document.createElement('select');
     for (const p of postList) {
       const o = document.createElement('option');
-      o.value = p.file; o.textContent = p.title || p.file;
+      o.value = p.file;
+      o.textContent = p.date ? p.title + '  ·  ' + p.date : p.title;
       if (p.file === currentPost) o.selected = true;
       sel.appendChild(o);
     }
@@ -222,15 +211,17 @@ stage.addEventListener('paramsync', e => {
   }
 });
 
-async function switchPost(file) {
-  currentPost = file;
-  state.doc = await loadPost(file);
+function switchPost(file) {
+  const post = findPost(postList, file);
+  if (!post) return;
+  currentPost = post.file;
+  state.doc = post.doc;
   renderReaderText(state.doc);
   document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
   window.scrollTo(0, 0);
   const wanted = byId[state.doc.meta.profile] ? state.doc.meta.profile : state.profile.id;
   mountProfile(reduced ? 'foundry' : wanted, false);
-  history.replaceState(null, '', '?post=' + encodeURIComponent(file) + '&profile=' + state.profile.id);
+  history.replaceState(null, '', '?post=' + encodeURIComponent(post.slug) + '&profile=' + state.profile.id);
 }
 
 // ------------------------------------------------------------------- clock
@@ -277,6 +268,11 @@ window.addEventListener('resize', () => {
 // ------------------------------------------------------------------- boot
 
 (async function boot() {
+  // Finding the posts and loading the type engine are independent, so they
+  // overlap. Discovery costs a directory listing the reader never waits on
+  // alone.
+  const postsReady = discoverPosts();
+
   await loadEngine();
   statusEl.textContent = engineName() === 'pretext' ? 'pretext' : 'fallback';
   statusEl.dataset.mode = engineName();
@@ -284,18 +280,24 @@ window.addEventListener('resize', () => {
   // Fonts must be resolved before we measure anything.
   if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (_) {} }
 
-  postList = await loadManifest();
-  const qs = new URLSearchParams(location.search);
-  currentPost = qs.get('post') || (postList[0] && postList[0].file) || 'overcoming-the-classics.md';
+  postList = await postsReady;
 
-  try {
-    state.doc = await loadPost(currentPost);
-  } catch (err) {
+  const qs = new URLSearchParams(location.search);
+  // No ?post= means the newest one, which is what discoverPosts sorted to the
+  // front. Publishing a post therefore makes it the landing page by itself.
+  const post = findPost(postList, qs.get('post')) || postList[0];
+
+  if (!post) {
+    document.getElementById('boot').hidden = true;
     document.getElementById('fatal').hidden = false;
     document.getElementById('fatal').textContent =
-      err.message + ' — if you opened this file directly from disk, serve it instead (python3 -m http.server).';
+      'No posts found in posts/. Add a .md file there — if you opened this page ' +
+      'directly from disk, serve it instead (python3 -m http.server).';
     return;
   }
+
+  currentPost = post.file;
+  state.doc = post.doc;
 
   renderReaderText(state.doc);
   document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
