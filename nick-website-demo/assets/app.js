@@ -1,5 +1,9 @@
 // app.js — orchestration.
 //
+// Two views. The feed is the landing page, a card per post; a post is the
+// reading experience. `?post=` in the URL is the only difference between them,
+// so every view is a real address you can link to, bookmark, or reload.
+//
 // Responsibilities, kept deliberately narrow:
 //   1. load a markdown post + the Pretext engine
 //   2. typeset once per width change
@@ -11,6 +15,7 @@
 
 import { typeset, loadEngine, engineName } from './typeset.js';
 import { discoverPosts, findPost } from './posts.js';
+import { renderFeed } from './feed.js';
 
 import tidewater from './profiles/tidewater.js';
 import foundry from './profiles/foundry.js';
@@ -25,6 +30,9 @@ const spacer = document.getElementById('spacer');
 const srOnly = document.getElementById('reader-text');
 const panel = document.getElementById('panel');
 const statusEl = document.getElementById('engine-status');
+const feedEl = document.getElementById('feed');
+const backEl = document.getElementById('back-to-feed');
+const controlsEl = document.getElementById('controls');
 
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -211,18 +219,78 @@ stage.addEventListener('paramsync', e => {
   }
 });
 
-function switchPost(file) {
-  const post = findPost(postList, file);
+// --------------------------------------------------------------- routing
+
+const SITE_TITLE = 'TBH Press — reading profiles';
+
+// Everything the reader view owns, torn down. A profile holds a canvas and a
+// few thousand glyph positions; leaving one mounted behind the feed would keep
+// the rAF clock warm for a view that never animates.
+function teardownReader() {
+  state.running = false;
+  if (state.inst) { state.inst.destroy(); state.inst = null; }
+  state.profile = null;
+  state.doc = null;
+  srOnly.innerHTML = '';
+  spacer.style.height = '0px';
+  delete document.body.dataset.profile;
+}
+
+function showFeed(push) {
+  teardownReader();
+  controlsEl.hidden = true;
+  controlsEl.classList.remove('open');
+  document.getElementById('panel-toggle').setAttribute('aria-expanded', 'false');
+  backEl.hidden = true;
+  feedEl.hidden = false;
+  document.title = SITE_TITLE;
+  renderFeed(feedEl, postList, post => showPost(post, true));
+  window.scrollTo(0, 0);
+  if (push) history.pushState({ view: 'feed' }, '', './');
+}
+
+function showPost(post, push) {
   if (!post) return;
+  feedEl.hidden = true;
+  feedEl.innerHTML = '';
+  controlsEl.hidden = false;
+  backEl.hidden = false;
+
   currentPost = post.file;
   state.doc = post.doc;
   renderReaderText(state.doc);
-  document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
+  document.title = (state.doc.meta.title || 'Demo') + ' — TBH Press';
   window.scrollTo(0, 0);
-  const wanted = byId[state.doc.meta.profile] ? state.doc.meta.profile : state.profile.id;
+
+  const declared = state.doc.meta.profile;
+  const wanted = byId[declared] ? declared : (state.profile ? state.profile.id : 'tidewater');
   mountProfile(reduced ? 'foundry' : wanted, false);
-  history.replaceState(null, '', '?post=' + encodeURIComponent(post.slug) + '&profile=' + state.profile.id);
+
+  const url = '?post=' + encodeURIComponent(post.slug) + '&profile=' + state.profile.id;
+  if (push) history.pushState({ view: 'post', slug: post.slug }, '', url);
+  else history.replaceState({ view: 'post', slug: post.slug }, '', url);
+
+  if (!state.running) { state.running = true; last = 0; requestAnimationFrame(tick); }
 }
+
+// Switching posts from the control panel replaces rather than stacks — the
+// back button should return to the feed, not walk back through every post the
+// reader sampled.
+function switchPost(file) {
+  showPost(findPost(postList, file), false);
+}
+
+// The address bar is the state, so back/forward just re-read it.
+window.addEventListener('popstate', () => {
+  const post = findPost(postList, new URLSearchParams(location.search).get('post'));
+  if (post) showPost(post, false); else showFeed(false);
+});
+
+backEl.addEventListener('click', e => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  showFeed(true);
+});
 
 // ------------------------------------------------------------------- clock
 
@@ -239,6 +307,7 @@ function tick(now) {
 
 window.addEventListener('scroll', () => {
   state.scrollY = window.scrollY || document.documentElement.scrollTop || 0;
+  if (!state.inst) return;
   // On a phone the panel eats most of the screen. Scrolling means you are done
   // with it.
   const shell = document.getElementById('controls');
@@ -255,6 +324,7 @@ let lastW = 0;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
+    if (!state.inst) return;               // the feed reflows on its own
     const { vw } = readViewport();
     // Height-only changes are the mobile URL bar. Ignore them.
     if (Math.abs(vw - lastW) < 2) return;
@@ -282,13 +352,9 @@ window.addEventListener('resize', () => {
 
   postList = await postsReady;
 
-  const qs = new URLSearchParams(location.search);
-  // No ?post= means the newest one, which is what discoverPosts sorted to the
-  // front. Publishing a post therefore makes it the landing page by itself.
-  const post = findPost(postList, qs.get('post')) || postList[0];
+  document.getElementById('boot').hidden = true;
 
-  if (!post) {
-    document.getElementById('boot').hidden = true;
+  if (!postList.length) {
     document.getElementById('fatal').hidden = false;
     document.getElementById('fatal').textContent =
       'No posts found in posts/. Add a .md file there — if you opened this page ' +
@@ -296,19 +362,18 @@ window.addEventListener('resize', () => {
     return;
   }
 
-  currentPost = post.file;
-  state.doc = post.doc;
-
-  renderReaderText(state.doc);
-  document.title = (state.doc.meta.title || 'Demo') + ' — reading profiles';
-
-  const wanted = qs.get('profile') || state.doc.meta.profile || 'tidewater';
   lastW = readViewport().vw;
-  mountProfile(reduced ? 'foundry' : (byId[wanted] ? wanted : 'tidewater'), false);
-  document.getElementById('boot').hidden = true;
 
-  state.running = true;
-  requestAnimationFrame(tick);
+  // ?post= opens that post; anything else is the feed.
+  const qs = new URLSearchParams(location.search);
+  const post = findPost(postList, qs.get('post'));
+  if (!post) { showFeed(false); return; }
+
+  // ?profile= overrides what the post asks for, so a particular rendering of a
+  // particular post stays shareable as one link.
+  const forced = qs.get('profile');
+  if (byId[forced]) post.doc.meta.profile = forced;
+  showPost(post, false);
 })();
 
 // --------------------------------------------------------------- panel UI

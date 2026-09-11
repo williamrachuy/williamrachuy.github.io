@@ -5,10 +5,25 @@ style by feeling it on a phone rather than arguing about it in the abstract.
 
 Live: `/nick-website-demo/`
 
-- `?post=overcoming-the-classics` loads a specific post
+- `/nick-website-demo/` is the feed — one card per post, newest first
+- `?post=overcoming-the-classics` opens that post
 - `?profile=tidewater` overrides the post's default profile
 
 To publish, put a markdown file in `posts/` and commit it. There is no step two.
+
+## The two views
+
+**The feed** is the landing page: a card per post showing date, title, subtitle
+and the opening few lines, newest first — the same shape as `/blog` on this
+site. It is ordinary flowing text, selectable and searchable, because choosing
+what to read is a different job from reading it.
+
+**A post** is the reading experience, in one of the four profiles below.
+
+The only difference between the two is `?post=` in the address, so every view is
+a real URL you can link to, bookmark, or reload, and the back button does what
+it should. Cards are real `<a href>` links, so the feed is navigable even before
+the script runs.
 
 ## The four profiles
 
@@ -47,15 +62,31 @@ Only `title` is required. The rest:
 
 | field | what it does if you include it |
 |---|---|
-| `subtitle` | Second line under the title, in italic. |
+| `subtitle` | Second line under the title, in italic. Also the card's second line. |
 | `author`, `publication` | Byline, joined with a dot. |
 | `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
 | `source` | Adds an "Original post" link for screen readers and search engines. |
+| `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
 | `profile` | Which of the four renderings this post opens in. Readers can still switch. |
 
 The filename becomes the post's link. `overcoming-the-classics.md` is at
 `?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
 spaces and the links stay tidy.
+
+### About the posts currently in here
+
+The five files in `posts/` are the five most recent TBH Press pieces, pulled
+from `https://tbhpress.substack.com/feed`. The front matter — title, subtitle,
+byline, date, canonical URL — is the real metadata from that feed.
+
+The bodies are the **opening of each piece plus a link back to the original**,
+not the complete essays. They are Nick's to place on his own site; when he wants
+them here in full, he pastes the text into the file below the front matter and
+commits. No code changes, no configuration — the body of the file is simply
+what gets typeset.
+
+`overcoming-the-classics.md` is the exception and carries its full text; it was
+already in the demo as the original sample post.
 
 ### Taking a post down
 
@@ -153,7 +184,8 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 ```
 index.html
 assets/
-  app.js                 loading, scroll clock, profile mounting, control panel
+  app.js                 routing, scroll clock, profile mounting, control panel
+  feed.js                the landing page: one card per post
   posts.js               finds the posts; no manifest to maintain
   md.js                  front matter + block markdown
   typeset.js             Pretext wrapper: blocks -> lines -> glyph positions
