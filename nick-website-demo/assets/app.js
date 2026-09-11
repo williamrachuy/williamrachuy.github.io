@@ -19,11 +19,12 @@ import { renderFeed } from './feed.js';
 import { resolveImages } from './images.js';
 
 import tidewater from './profiles/tidewater.js';
+import waterline from './profiles/waterline.js';
 import foundry from './profiles/foundry.js';
 import lantern from './profiles/lantern.js';
 import ledger from './profiles/ledger.js';
 
-const PROFILES = [tidewater, lantern, ledger, foundry];
+const PROFILES = [tidewater, waterline, lantern, ledger, foundry];
 const byId = Object.fromEntries(PROFILES.map(p => [p.id, p]));
 
 const stage = document.getElementById('stage');
