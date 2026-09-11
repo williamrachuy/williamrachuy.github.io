@@ -69,16 +69,35 @@ function card(post) {
 
 // `onOpen` gets the post instead of the browser, so opening one does not
 // reload the page and throw away the type engine we just finished loading.
+// Where the QR code points, and what it says underneath. The code itself is a
+// committed file drawn by tools/make-qr.py — nothing generates one at runtime
+// and no library is loaded to show one, so this stays a folder of static files.
+// It is deliberately the live address rather than location.href: the point is
+// to hand someone the published site, not the localhost you happen to be on.
+const SITE_URL = 'https://www.adividiardi.com/nick-website-demo/';
+const SITE_LABEL = 'adividiardi.com';
+
 export function renderFeed(host, posts, onOpen) {
   host.innerHTML = '';
 
   const head = document.createElement('header');
   head.className = 'feed-head';
   head.innerHTML =
-    '<h1>TBH Press</h1>' +
-    '<p class="feed-note">Words from the edge of your algorithm. ' +
-    'Pick a post — each one opens in the reading style it was set in, and you ' +
-    'can switch between all eight from the panel at the top.</p>';
+    '<div class="feed-intro">' +
+      '<h1>TBH Press</h1>' +
+      '<p class="feed-note">Words from the edge of your algorithm. ' +
+      'Pick a post — each one opens in the reading style it was set in, and you ' +
+      'can switch between all eight from the panel at the top.</p>' +
+    '</div>' +
+    // Not a link. Following it would do nothing useful — on the published site
+    // it reloads the page you are on, and while previewing locally it throws
+    // you out to production — so the code is a thing to point a camera at and
+    // the caption below it is the address to type or copy by hand.
+    '<div class="feed-qr">' +
+      '<img src="assets/qr-site.svg" alt="QR code for ' + SITE_URL + '"' +
+           ' width="123" height="123">' +
+      '<span><b>Scan to open</b>' + SITE_LABEL + '</span>' +
+    '</div>';
   host.appendChild(head);
 
   if (!posts.length) {

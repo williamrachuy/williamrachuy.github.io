@@ -18,6 +18,15 @@ and the opening few lines, newest first — the same shape as `/blog` on this
 site. It is ordinary flowing text, selectable and searchable, because choosing
 what to read is a different job from reading it.
 
+At the top of the feed is a **QR code for the published address**, so the site
+can be handed to someone standing next to you without anybody typing it. It is
+a committed SVG drawn by `tools/make-qr.py` — nothing generates a code at
+runtime and no library is loaded to show one, the same way the pictures and the
+font are files in the repo rather than requests to somebody else's server. It
+encodes the live URL rather than `location.href` on purpose: the point is to
+hand over the published site, not the localhost you happen to be previewing on.
+Re-run the script if the address ever changes.
+
 **A post** is the reading experience, in one of the eight profiles below.
 
 The only difference between the two is `?post=` in the address, so every view is
@@ -371,7 +380,9 @@ assets/fonts/            Share Tech Mono (SIL OFL) + its licence; Cipher's face
 tools/
   fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
   localize_images.py     copies referenced pictures into posts/images/
+  make-qr.py             redraws assets/qr-site.svg (needs `pip install segno`)
 assets/
+  qr-site.svg            the feed's QR code for the published address
   app.js                 routing, scroll clock, profile mounting, control panel
   assign.js              reads profiles.md and resolves which profile a post gets
   feed.js                the landing page: one card per post
