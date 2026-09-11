@@ -87,8 +87,9 @@ TBH Press, which is where the canonical version lives.
 
 Substack's own furniture — subscribe buttons, share links, embedded players — is
 stripped on the way in. Photographs are kept, in the place they appear in the
-piece, and are still served from Substack's CDN rather than copied into this
-repo.
+piece, and are **copied into `posts/images/`** rather than hotlinked, so the
+demo owns its own pictures and does not depend on a CDN or an account staying
+open. 31 pictures, about 4.3 MB.
 
 **The pictures have no alt text.** Substack did not carry any, and describing
 someone else's photographs is not a thing to guess at. Write it in the square
@@ -171,6 +172,17 @@ archive in one file is about 47 KB gzipped and the landing page needs none of
 the bodies to draw its cards, while the index alone is about 2 KB. A body is
 fetched only when that post is opened.
 
+It then calls `localize_images.py`, which copies any picture it does not already
+have into `posts/images/` and repoints the markdown at the local copy. That runs
+standalone too:
+
+```sh
+python3 tools/localize_images.py --dry-run   # report without downloading
+python3 tools/localize_images.py             # copy and rewrite
+```
+
+Both are idempotent, so running either twice is a no-op.
+
 **If you would rather it were live to the second,** the fetch needs a proxy that
 adds the CORS header — a ~15-line Cloudflare Worker, the same shape as the relay
 behind `/combo`. Point `SUBSTACK_INDEX` in `assets/posts.js` at it and the rest
@@ -249,6 +261,7 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 index.html
 tools/
   fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)
+  localize_images.py     copies referenced pictures into posts/images/
 assets/
   app.js                 routing, scroll clock, profile mounting, control panel
   feed.js                the landing page: one card per post
@@ -262,6 +275,8 @@ assets/
     tidewater.js  lantern.js  ledger.js  foundry.js
 posts/
   overcoming-the-classics.md      <- every .md in here is a post
+  images/
+    <uuid>.jpeg                   <- pictures, copied in rather than hotlinked
   substack/
     index.json                    <- build-time snapshot of the RSS feed
     <slug>.json                   <- one body each, fetched on open

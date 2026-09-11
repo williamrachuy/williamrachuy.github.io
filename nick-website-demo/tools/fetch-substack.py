@@ -252,6 +252,18 @@ def main():
           % (data['publication'], len(index), out,
              os.path.getsize(os.path.join(out, 'index.json')) / 1024, size / 1024))
 
+    # A fresh snapshot arrives pointing at Substack's CDN. Copy the pictures in
+    # and repoint it, so the archive on disk stays self-contained.
+    try:
+        import localize_images
+        stats = localize_images.localize_tree(quiet=True)
+        print('pictures: %d reference(s) localised across %d file(s)%s'
+              % (stats['rewritten'], stats['files'],
+                 '; %d unavailable' % stats['failed'] if stats['failed'] else ''))
+    except Exception as err:
+        print('::warning title=Pictures not localised::%s — posts keep their '
+              'remote image URLs.' % err)
+
 
 if __name__ == '__main__':
     main()

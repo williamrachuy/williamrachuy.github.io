@@ -8,7 +8,7 @@ source: https://tbhpress.substack.com/p/sailing-on-the-sea-of-slop
 profile: foundry
 ---
 
-![](https://substackcdn.com/image/fetch/$s_!-Q5U!,w_1456,c_limit,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F3abbe57c-b429-4cf5-a445-6794ab65ee02_5515x3481.jpeg)
+![](posts/images/3abbe57c-b429-4cf5-a445-6794ab65ee02.jpeg)
 
 To drift in the Sea of Slop may be as good as it gets. Every fascination and every distraction is waiting for me. It may be heaven, in a strange way. I need only sit back and use a remote or swipe a finger, but soon even that won’t be necessary. My eyeballs give everything away. Every blink is a new metric, always being optimized. It has become quite easy to enjoy this heavenly sea that is designed just for you and me.
 
