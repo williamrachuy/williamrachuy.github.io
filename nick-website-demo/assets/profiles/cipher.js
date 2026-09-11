@@ -8,9 +8,10 @@
 // likely each turn lands on the character that actually belongs. It is the same
 // gradient as Waterline, spent on identity rather than position.
 //
-// It never fully settles. Even on the line there is a small residual chance of
-// a glitch, so a line of text reads but flickers — the text is resolving, not
-// resolved.
+// It never has to fully settle. `Correct on the line` is exactly that: the
+// probability a turn lands on the true character for a glyph sitting on the
+// line. Below 1 there is a residual chance of a glitch, so the text reads but
+// flickers — resolving rather than resolved. At 1 the line is clean.
 //
 // The noise alphabet follows the film's: its code was a custom typeface built
 // from half-width katakana, mirrored, alongside Latin letters and numerals. The
@@ -98,7 +99,23 @@ const BASE_RAMP = (() => {
 // How far a pulse runs along its line, how fast, and how long a glyph holds it.
 const TRAIL = 16;
 const STEP = 0.028;      // seconds per glyph — about 570 glyphs a second
-const TAU = 0.42;        // seconds to decay to 1/e
+const TAU = 0.55;        // seconds to decay to 1/e
+
+// How long a glyph waits before reconsidering itself, in seconds: brisk out in
+// the dark, nearly still on the line. Stated as time rather than as a rate so
+// the numbers here are the thing you can picture — CHURN_FAR is how often a
+// glyph out in the noise turns over, and `churn` scales both ends. The rate a
+// given glyph *receives* energy is roughly TRAIL times faster than it changes,
+// which is why these can be this slow and the page still stays lit.
+const CHURN_FAR = 0.5;
+const CHURN_NEAR = 2.8;
+
+// No glyph's baseline lands exactly on the line, so if `Correct on the line`
+// only held at w === 1 the number on the slider would be one the text never
+// actually reaches — set it to 1 and the line would still flicker. The top of
+// the feather counts as on the line instead: at or above this weight a turn
+// lands on the true character with exactly the probability the slider says.
+const PLATEAU = 0.92;
 
 export default {
   id: 'cipher',
@@ -110,8 +127,8 @@ export default {
     { key: 'lineY', label: 'Focus line', type: 'range', min: 0.10, max: 0.85, step: 0.01, value: 0.44 },
     { key: 'feather', label: 'Feather width', type: 'range', min: 0.05, max: 0.7, step: 0.01, value: 0.34 },
     { key: 'falloff', label: 'Falloff', type: 'range', min: 0.4, max: 4, step: 0.1, value: 1.8 },
-    { key: 'churn', label: 'Churn', type: 'range', min: 0.1, max: 4, step: 0.1, value: 1 },
-    { key: 'glitch', label: 'Glitch on the line', type: 'range', min: 0, max: 0.25, step: 0.01, value: 0.04 },
+    { key: 'churn', label: 'Churn', type: 'range', min: 0.25, max: 2, step: 0.05, value: 1 },
+    { key: 'lock', label: 'Correct on the line', type: 'range', min: 0.3, max: 1, step: 0.01, value: 0.95 },
     { key: 'energy', label: 'Energy', type: 'range', min: 0, max: 1.5, step: 0.05, value: 0.85 },
     { key: 'showLine', label: 'Show the line', type: 'bool', value: true }
   ],
@@ -167,15 +184,19 @@ export default {
         if (j >= G.n || G.block[j] !== blk || G.line[j] !== ln) break;
         const mag = Math.pow(1 - k / TRAIL, 1.2);
         const at = nowSec + k * STEP;
-        // Keep whichever pulse is stronger; a later, weaker one must not
-        // overwrite the front of a pulse already on its way.
-        if (mag >= enMag[j] || at < enAt[j]) { enMag[j] = mag; enAt[j] = at; }
+        // Compare what each pulse will actually be worth at the moment this one
+        // lands, not raw magnitudes: a strong pulse that passed a second ago is
+        // spent, and must not go on shadowing every weaker one behind it. Doing
+        // it the other way leaves a glyph latched at the brightest magnitude it
+        // has ever seen, which reads as a steady glow instead of current.
+        const held = enMag[j] * Math.exp(-(at - enAt[j]) / TAU);
+        if (mag > held) { enMag[j] = mag; enAt[j] = at; }
       }
     }
 
     function energyAt(i, nowSec) {
       const age = nowSec - enAt[i];
-      if (age < 0 || age > 3) return 0;
+      if (age < 0 || age > TAU * 7) return 0;
       return enMag[i] * Math.exp(-age / TAU);
     }
 
@@ -239,7 +260,7 @@ export default {
         rnd = mulberry32(0x1b873593 ^ n);
         for (let i = 0; i < n; i++) {
           shown[i] = (rnd() * POOL.length) | 0;
-          nextAt[i] = rnd() * 0.6;
+          nextAt[i] = rnd() * CHURN_FAR;
           mirror[i] = rnd() < 0.5 ? 1 : 0;
         }
 
@@ -287,8 +308,13 @@ export default {
           // usually lands on noise; near it, rarely, and almost always on the
           // character that belongs.
           if (nowSec >= nextAt[i]) {
-            const settled = w * w;
-            const correct = rnd() < settled * (1 - P.glitch) + (1 - P.glitch) * 0.02;
+            // P.lock is the probability of landing on the true character for a
+            // glyph on the line; everything else scales down from it, to a
+            // faint 2% of it out in the dark.
+            const k = w >= PLATEAU ? 1 : w / PLATEAU;
+            const floor = P.lock * 0.02;
+            const pCorrect = floor + (P.lock - floor) * k * k;
+            const correct = rnd() < pCorrect;
             const was = shown[i];
             shown[i] = correct ? -1 : (rnd() * POOL.length) | 0;
             if (shown[i] !== was) {
@@ -299,7 +325,7 @@ export default {
             }
             // Churn slows to a crawl as a glyph approaches the line, which is
             // what makes text near it feel held rather than merely correct.
-            const base = 0.07 + 1.9 * w * w;
+            const base = CHURN_FAR + (CHURN_NEAR - CHURN_FAR) * w * w;
             nextAt[i] = nowSec + base * (0.6 + rnd() * 0.9) / P.churn;
           }
 
