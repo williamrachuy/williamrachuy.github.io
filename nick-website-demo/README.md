@@ -67,6 +67,7 @@ Nothing far from the viewport is drawn.
 | `tidewater` | Tidewater | Every glyph drifts, rotated and dark, until a draggable focus lens pulls it back onto its line and brightens it. Past the lens it lets go again. | Canvas, per-glyph physics. Heaviest. |
 | `lantern` | Lantern | Same reading-band idea at line granularity. Lines sit dim and offset, then settle and brighten inside the band. | DOM, ~60 elements. Cheap. |
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |
+| `meniscus` | Meniscus | The inverse of the others: the type is set properly and stays readable, and circles surface on it. Each carries a pressure field that pushes glyphs from its centre, hardest in the middle and nothing at the rim, so words bulge around it. Overlapping circles add, then the sum is capped well under a line height — a budge, not a shove. | Canvas, a few circles against the visible glyphs. |
 | `foundry` | Foundry | No motion. Ordinary flowing text, selectable and copyable. | DOM. Free. |
 
 Tidewater is the one that was asked for. Foundry is the control group — it
