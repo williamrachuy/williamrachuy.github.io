@@ -24,10 +24,30 @@ emptying the site's feed.
 
 import argparse, datetime, html, json, os, re, sys, tempfile
 import shutil
+import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 
 _rmtree = shutil.rmtree
+
+
+class FeedUnavailable(Exception):
+    """The feed could not be read. Expected, and not a reason to fail a build."""
+
+
+# Substack sits behind Cloudflare, which refuses requests from datacenter
+# address ranges — GitHub Actions runners included. Observed directly: the same
+# request that returns 200 from a residential connection returns 403 from a
+# runner, on every User-Agent tried. These headers are what a feed reader sends
+# and cost nothing; they are not expected to defeat an address-based block.
+HEADERS = {
+    'User-Agent': 'nick-website-demo/1.0 (+https://www.adividiardi.com/nick-website-demo/)',
+    'Accept': 'application/rss+xml, application/xml;q=0.9, */*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+}
+
+RETRIES = 3
 
 CE = '{http://purl.org/rss/1.0/modules/content/}encoded'
 DC_CREATOR = '{http://purl.org/dc/elements/1.1/}creator'
@@ -90,10 +110,27 @@ def strip_tags(s):
     return re.sub(r'(?s)<[^>]+>', '', html.unescape(s or '')).strip()
 
 
+def read_feed(feed_url):
+    last = None
+    for attempt in range(1, RETRIES + 1):
+        try:
+            req = urllib.request.Request(feed_url, headers=HEADERS)
+            with urllib.request.urlopen(req, timeout=30) as r:
+                return r.read()
+        except (urllib.error.URLError, OSError) as err:
+            last = err
+            code = getattr(err, 'code', None)
+            # A refusal is a decision, not a hiccup; only back off for the
+            # failures that a second attempt can actually change.
+            if code in (400, 401, 403, 404, 410):
+                break
+            if attempt < RETRIES:
+                time.sleep(2 ** attempt)
+    raise FeedUnavailable('%s: %s' % (feed_url, last))
+
+
 def fetch(feed_url, limit):
-    req = urllib.request.Request(feed_url, headers={'User-Agent': 'nick-website-demo/1.0'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read()
+    raw = read_feed(feed_url)
 
     channel = ET.fromstring(raw).find('channel')
     if channel is None:
@@ -159,9 +196,23 @@ def main():
     ap.add_argument('--limit', type=int, default=25)
     args = ap.parse_args()
 
-    data = fetch(args.feed, args.limit)
+    try:
+        data = fetch(args.feed, args.limit)
+    except FeedUnavailable as err:
+        # Deliberately not an error exit. The snapshot committed to the repo is
+        # still there and still correct, so the build should carry on and
+        # publish it — but silently swallowing this is how a feed quietly goes
+        # stale for months, so say so where GitHub will surface it.
+        print('::warning title=Substack feed unreachable::%s — publishing the '
+              'committed snapshot instead. The archive will be as of its last '
+              'successful fetch.' % err)
+        print('feed unreachable: %s' % err, file=sys.stderr)
+        return
+
     if not data['posts']:
-        raise SystemExit('feed returned no usable posts; leaving the previous snapshot alone')
+        print('::warning title=Substack feed empty::returned no usable posts; '
+              'keeping the committed snapshot.')
+        return
 
     out = os.path.abspath(args.out)
     parent = os.path.dirname(out)
