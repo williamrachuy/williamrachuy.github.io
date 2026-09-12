@@ -55,6 +55,13 @@ const BOND_NONE = 0;           // across a line or a block: nothing to break
 // sheet those same draws come off a single texture.
 const ATLAS = 2048;
 
+// How far into a piece's fade its letters start coming back on the page. With
+// no overlap the two are strictly sequential and there is an instant where the
+// floe is gone and the text has not arrived — every piece from one tap reaching
+// it at once, so the whole page blinks empty. Measured: the low-water mark of
+// glyphs on screen went from 358 of 1401 to 1211.
+const RETURN_AT = 0.35;
+
 // Beyond this a piece is treated as one that has stopped mattering.
 const MAX_PIECES = 420;
 const MAX_BREAKS = 40;         // per piece per strike, a guard and nothing more
@@ -82,7 +89,7 @@ export default {
   blurb: 'Still black type on paper. Tap it and it cracks into floes that turn and drift.',
   params: [
     { key: 'impact', label: 'Impact', type: 'range', min: 0.2, max: 4, step: 0.1, value: 1 },
-    { key: 'radius', label: 'Crack radius', type: 'range', min: 0.12, max: 1, step: 0.02, value: 0.34 },
+    { key: 'radius', label: 'Crack radius', type: 'range', min: 0.12, max: 1, step: 0.02, value: 0.26 },
     { key: 'falloff', label: 'Falloff', type: 'range', min: 0.4, max: 4, step: 0.1, value: 1.5 },
     { key: 'grain', label: 'Grain', type: 'range', min: 2, max: 24, step: 1, value: 7 },
     { key: 'fatigue', label: 'Fatigue', type: 'range', min: 0, max: 1.5, step: 0.05, value: 0.55 },
@@ -92,7 +99,8 @@ export default {
     { key: 'spin', label: 'Spin', type: 'range', min: 0, max: 4, step: 0.1, value: 1.6 },
     { key: 'drag', label: 'Water drag', type: 'range', min: 0.3, max: 6, step: 0.1, value: 1.7 },
     { key: 'drift', label: 'Drift for', type: 'range', min: 0.3, max: 6, step: 0.1, value: 1.6 },
-    { key: 'reform', label: 'Reform over', type: 'range', min: 0.3, max: 6, step: 0.1, value: 2.4 },
+    { key: 'fade', label: 'Fade out over', type: 'range', min: 0.2, max: 4, step: 0.1, value: 0.8 },
+    { key: 'back', label: 'Fade back in over', type: 'range', min: 0.2, max: 4, step: 0.1, value: 0.9 },
     { key: 'tapMs', label: 'Tap window (ms)', type: 'range', min: 90, max: 700, step: 10, value: 320 },
     { key: 'tapSlop', label: 'Tap slop (px)', type: 'range', min: 2, max: 30, step: 1, value: 10 },
     { key: 'ring', label: 'Show the strike', type: 'bool', value: true }
@@ -120,6 +128,9 @@ export default {
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
     let rings = [];
     let atlas = null, actx = null, shelfX = 0, shelfY = 0, shelfH = 0;
+    let rebuilding = false;    // guards the re-lay of the sheet against itself
+    let backAt = null;         // when each glyph started fading back into place
+    let nowSec = 0;
     let rnd = mulberry32(0x6b4f21a7);
     let pending = null;
     let reach = 0;             // furthest anything has travelled, for the cull
@@ -244,6 +255,15 @@ export default {
       return at;
     }
 
+    function rebuildAtlas() {
+      rebuilding = true;
+      resetAtlas();
+      const live = [...pieces.values()];
+      for (const pc of live) pc.img = null;
+      for (const pc of live) raster(pc);
+      rebuilding = false;
+    }
+
     // Text drawn through a rotating transform cannot use the glyph cache: the
     // angle is different on every frame, so every frame rasterises every glyph
     // from scratch. Measured, that alone was 60fps down to 27 with a few
@@ -270,14 +290,16 @@ export default {
       const pw = Math.max(1, Math.ceil(w * dpr));
       const ph = Math.max(1, Math.ceil(h * dpr));
       let at = place(pw, ph);
-      if (!at) {
-        // The sheet is full. Clear it and lay every live piece down again;
-        // anything that still will not fit is past caring about.
-        resetAtlas();
-        for (const other of pieces.values()) if (other !== pc) other.img = null;
+      if (!at && !rebuilding) {
+        // The sheet is full. Clear it and lay every live piece down again — the
+        // first version dropped their patches and never redrew them, which is
+        // what made whole paragraphs vanish after a few taps: the glyphs were
+        // still owned by pieces that had nothing left to draw.
+        rebuildAtlas();
+        if (pc.img) return;                 // it was laid down by the rebuild
         at = place(pw, ph);
-        if (!at) return;
       }
+      if (!at) { startFade(pc); return; }   // genuinely no room: let it go
 
       actx.save();
       actx.setTransform(dpr, 0, 0, dpr, at.x, at.y);
@@ -304,8 +326,10 @@ export default {
         rot: 0, vrot: 0,
         img: null, ax: 0, ay: 0, aw: 0, ah: 0,
         sx: 0, sy: 0, sw: 0, sh: 0,
-        t: 0, phase: 0, wear: 0,
-        dx0: 0, dy0: 0, rot0: 0
+        t: 0, phase: 0, wear: 0, alpha: 1,
+        // Every piece from one tap otherwise begins and ends its drift on the
+        // same frame, which reads as a single object rather than as debris.
+        hold: 0.78 + rnd() * 0.5,
       };
       if (parent) {
         // Solve the child's own translation so that nothing moves at the moment
@@ -324,15 +348,41 @@ export default {
         pc.t = parent.t;
         pc.phase = parent.phase;
       }
-      for (let i = i0; i <= i1; i++) owner[i] = pc.id;
+      // A drifting piece owns its glyphs outright, so anything left over from
+      // an earlier return is cancelled; a piece that inherited a fading parent
+      // keeps the return already running, or the two would draw each other
+      // twice.
+      for (let i = i0; i <= i1; i++) {
+        owner[i] = pc.id;
+        if (pc.phase === 0) backAt[i] = 0;
+      }
       pieces.set(pc.id, pc);
       return pc;
     }
 
-    function retire(pc) {
-      for (let i = pc.i0; i <= pc.i1; i++) if (owner[i] === pc.id) owner[i] = -1;
-      pc.img = null;            // its patch on the sheet, not the sheet
+    // `returning` is the difference between a piece that has finished fading —
+    // its letters now have to fade back in where they belong — and one that is
+    // simply being taken off the books, because it split into children that
+    // already own its glyphs or because it never really left the sheet.
+    function retire(pc, returning) {
+      for (let i = pc.i0; i <= pc.i1; i++) {
+        if (owner[i] !== pc.id) continue;
+        owner[i] = -1;
+        // startFade already set this going; the fallback is for a piece that
+        // somehow reaches the end without having been faded.
+        if (returning && !backAt[i]) backAt[i] = nowSec;
+      }
+      pc.img = null;            // its patch on the sheet, not the sheet itself
       pieces.delete(pc.id);
+    }
+
+    function startFade(pc) {
+      if (pc.phase === 1) return;
+      pc.phase = 1; pc.t = 0;
+      // Its letters are already on their way back, behind it. A fading piece
+      // shares its glyphs with the sheet rather than owning them outright.
+      const at = nowSec + P.fade * RETURN_AT;
+      for (let i = pc.i0; i <= pc.i1; i++) if (owner[i] === pc.id) backAt[i] = at;
     }
 
     // The piece a glyph currently belongs to, as a range. For intact sheet this
@@ -390,10 +440,12 @@ export default {
       for (const sp of spans) split(sp, stressAt, px, py, R);
 
       if (pieces.size > MAX_PIECES) {
-        // Oldest first: the ones that have been in the air longest are the ones
-        // a reader has stopped watching.
-        const all = [...pieces.values()].sort((x, y) => y.t - x.t);
-        for (let i = 0; i < all.length && pieces.size > MAX_PIECES; i++) retire(all[i]);
+        // Oldest first — ids only ever go up, so they order by age, which `t`
+        // does not once a piece changes phase. And they are faded rather than
+        // deleted: snapping two hundred pieces out of existence was the other
+        // half of "it healed the moment I tapped again".
+        const all = [...pieces.values()].sort((x, y) => x.id - y.id);
+        for (let i = 0; i < all.length && all.length - i > MAX_PIECES; i++) startFade(all[i]);
       }
     }
 
@@ -445,6 +497,14 @@ export default {
       }
 
       const parent = sp.pc;
+      // Nothing broke. Kicking the piece where it stands beats tearing it down
+      // and building an identical one, which burned a patch of the sheet every
+      // time a reader tapped near something already in the air.
+      if (parent && segs.length === 1) {
+        parent.wear += Math.min(1, stressAt(parent.cx + parent.dx, parent.cy + parent.dy));
+        kick(parent, stressAt, px, py, R);
+        return;
+      }
       if (parent) pieces.delete(parent.id);
 
       for (const [a, b] of segs) {
@@ -452,7 +512,7 @@ export default {
         pc.wear = (parent ? parent.wear : 0) + Math.min(1, stressAt(pc.cx + pc.dx, pc.cy + pc.dy));
         kick(pc, stressAt, px, py, R);
         // A fresh piece that took nothing and inherited nothing never happened.
-        if (!parent && !pc.vx && !pc.vy && !pc.vrot) { retire(pc); continue; }
+        if (!parent && !pc.vx && !pc.vy && !pc.vrot) { retire(pc, false); continue; }
         raster(pc);
       }
     }
@@ -510,27 +570,22 @@ export default {
       DONE.length = 0;
       for (const pc of pieces.values()) {
         pc.t += dt;
+        // Drag never stops, in either phase: a piece that is on its way out is
+        // still a piece on water, and freezing it the moment it starts to fade
+        // would be the one unphysical thing in here.
+        const k = Math.exp(-P.drag * dt);
+        pc.vx *= k; pc.vy *= k; pc.vrot *= k;
+        pc.dx += pc.vx * dt;
+        pc.dy += pc.vy * dt;
+        pc.rot += pc.vrot * dt;
+
         if (pc.phase === 0) {
-          // Nothing pulls it anywhere. It coasts, drag takes the speed and the
-          // spin off it, and it stops where it stops.
-          const k = Math.exp(-P.drag * dt);
-          pc.vx *= k; pc.vy *= k; pc.vrot *= k;
-          pc.dx += pc.vx * dt;
-          pc.dy += pc.vy * dt;
-          pc.rot += pc.vrot * dt;
-          if (pc.t >= P.drift) {
-            pc.phase = 1; pc.t = 0;
-            pc.dx0 = pc.dx; pc.dy0 = pc.dy;
-            // Home by the shorter way round, and by whole turns where it has
-            // made them, so a floe unwinds rather than rewinding.
-            pc.rot0 = pc.rot;
-          }
+          if (pc.t >= P.drift * pc.hold) startFade(pc);
         } else {
-          const u = Math.min(1, pc.t / Math.max(0.05, P.reform));
-          const s = 1 - u * u * (3 - 2 * u);       // smoothstep, easing to a stop
-          pc.dx = pc.dx0 * s;
-          pc.dy = pc.dy0 * s;
-          pc.rot = pc.rot0 * s;
+          // It does not travel home. It goes out where it is, and its letters
+          // come back on the page behind it.
+          const u = Math.min(1, pc.t / Math.max(0.05, P.fade));
+          pc.alpha = 1 - u * u * (3 - 2 * u);
           if (u >= 1) { DONE.push(pc); continue; }
         }
         const off = Math.abs(pc.dx) + Math.abs(pc.dy);
@@ -538,7 +593,7 @@ export default {
       }
       // Retired after the walk rather than during it: deleting out of a Map
       // while iterating it is the kind of thing that works until it does not.
-      for (let i = 0; i < DONE.length; i++) retire(DONE[i]);
+      for (let i = 0; i < DONE.length; i++) retire(DONE[i], true);
       reach = far;
     }
 
@@ -552,7 +607,9 @@ export default {
           im.dx += im.vx * dt; im.dy += im.vy * dt;
           if (im.t >= P.drift) { im.phase = 1; im.t = 0; im.dx0 = im.dx; im.dy0 = im.dy; }
         } else {
-          const u = Math.min(1, im.t / Math.max(0.05, P.reform));
+          // A photograph is one object and does not shatter, so there is
+          // nothing to fade back in behind it: it just slides home.
+          const u = Math.min(1, im.t / Math.max(0.05, P.fade + P.back));
           const s = 1 - u * u * (3 - 2 * u);
           im.dx = im.dx0 * s; im.dy = im.dy0 * s;
           if (u >= 1) { im.dx = 0; im.dy = 0; im.vx = 0; im.vy = 0; im.t = 0; im.phase = 0; }
@@ -605,6 +662,7 @@ export default {
         canvas.style.height = vh + 'px';
 
         owner = new Int32Array(G.n).fill(-1);
+        backAt = new Float32Array(G.n);
         pieces = new Map();
         nextId = 1;
         rings = [];
@@ -627,7 +685,7 @@ export default {
 
       frame(t, dt, scrollY) {
         if (!G) return;
-        const nowSec = t * 0.001;
+        nowSec = t * 0.001;
         const d = Math.min(0.04, dt);
 
         if (pending) {
@@ -662,17 +720,36 @@ export default {
         let lo = 0, hi = n;
         while (lo < hi) { const m = (lo + hi) >> 1; if (G.y[m] < minY) lo = m + 1; else hi = m; }
 
-        let curFont = '';
+        let curFont = '', curA = 1;
+        const backFor = 1 / Math.max(0.05, P.back);
         for (let i = lo; i < n; i++) {
           const ty = G.y[i];
           if (ty > maxY) break;
-          if (owner[i] >= 0) continue;
+          if (owner[i] >= 0 && !backAt[i]) continue;
           const sy = ty + padTop - scrollY;
           if (sy < -70 || sy > vh + 70) continue;
+
+          // A glyph whose piece has finished fading comes back where it
+          // belongs, over `Fade back in`. Quantised so a paragraph mid-return
+          // is a handful of alpha changes rather than one per letter.
+          let a = 1;
+          if (backAt[i]) {
+            const u = (nowSec - backAt[i]) * backFor;
+            if (u >= 1) backAt[i] = 0;
+            else {
+              a = Math.round(u * 16) / 16;
+              // Nothing visible yet, and during a crossfade this is most of
+              // them: the floe is still carrying the letter.
+              if (a <= 0) continue;
+            }
+          }
+          if (a !== curA) { ctx.globalAlpha = a; curA = a; }
+
           const f = G.font[i];
           if (f !== curFont) { ctx.font = f; curFont = f; }
           ctx.fillText(G.ch[i], G.x[i], sy);
         }
+        if (curA !== 1) ctx.globalAlpha = 1;
 
         // The floes: one transform each, then every letter in the piece keeps
         // its own spacing while the whole thing turns.
@@ -683,9 +760,11 @@ export default {
           // Roughly where it is now; a piece well off screen is not drawn.
           const my = pc.cy + pc.dy + padTop - scrollY;
           if (my < -220 || my > vh + 220) continue;
-          if (!pc.img) continue;
+          if (!pc.img || pc.alpha <= 0.05) continue;   // the tail is not worth a blit
+          if (pc.alpha !== 1) ctx.globalAlpha = pc.alpha;
           ctx.setTransform(dpr * a, dpr * b, -dpr * b, dpr * a, dpr * ex, dpr * ey);
           ctx.drawImage(pc.img, pc.ax, pc.ay, pc.aw, pc.ah, pc.sx, pc.sy, pc.sw, pc.sh);
+          if (pc.alpha !== 1) ctx.globalAlpha = 1;
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
       },
