@@ -18,6 +18,7 @@
 #     Meniscus    scattered letters that gather where you tap
 #     Cipher      characters resolving out of noise as they near the line
 #     Marbles     black on white, with coloured glass drifting over the words
+#     Percussion  black on white, still until you tap it and it goes off
 #
 # Three things decide how a post reads, and the most specific one wins:
 #
