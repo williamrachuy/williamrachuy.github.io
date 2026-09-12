@@ -87,7 +87,7 @@ export function renderFeed(host, posts, onOpen) {
       '<h1>TBH Press</h1>' +
       '<p class="feed-note">Words from the edge of your algorithm. ' +
       'Pick a post — each one opens in the reading style it was set in, and you ' +
-      'can switch between all eight from the panel at the top.</p>' +
+      'can switch between all nine from the panel at the top.</p>' +
     '</div>' +
     // Not a link. Following it would do nothing useful — on the published site
     // it reloads the page you are on, and while previewing locally it throws

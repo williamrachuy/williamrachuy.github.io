@@ -27,8 +27,9 @@ import foundry from './profiles/foundry.js';
 import lantern from './profiles/lantern.js';
 import ledger from './profiles/ledger.js';
 import marbles from './profiles/marbles.js';
+import percussion from './profiles/percussion.js';
 
-const PROFILES = [tidewater, waterline, lantern, ledger, meniscus, cipher, marbles, foundry];
+const PROFILES = [tidewater, waterline, lantern, ledger, meniscus, cipher, marbles, percussion, foundry];
 const byId = Object.fromEntries(PROFILES.map(p => [p.id, p]));
 const isKnownProfile = id => !!byId[id];
 
