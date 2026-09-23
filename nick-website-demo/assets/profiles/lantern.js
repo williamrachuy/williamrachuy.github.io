@@ -72,7 +72,8 @@ export default {
             frag.appendChild(im);
             // A picture settles on its own centre, so a tall one is not still
             // dim at the top while its bottom edge has already passed the band.
-            items.push({ el: im, top: blk.top + padTop + blk.height / 2, cur: 0, img: true, on: true });
+            items.push({ el: im, top: blk.top + padTop + blk.height / 2, cur: 0, img: true, on: true,
+                         o: '', tf: '', c: '' });
             continue;
           }
           for (const ln of blk.lines) {
@@ -84,7 +85,8 @@ export default {
             el.style.font = blk.font;
             el.style.lineHeight = blk.lineHeight + 'px';
             frag.appendChild(el);
-            items.push({ el, top: ln.top + padTop + blk.lineHeight / 2, cur: 0, on: true });
+            items.push({ el, top: ln.top + padTop + blk.lineHeight / 2, cur: 0, on: true,
+                         o: '', tf: '', c: '' });
           }
         }
         layer.appendChild(frag);
@@ -115,23 +117,39 @@ export default {
         }
       },
 
+      // The scroll just jumped back one period. The first pass's lines were
+      // culled long ago and have forgotten how lit they were, so without this
+      // the band goes dark for a moment every time the post comes round.
+      wrap() {
+        const m = items.length >> 1;
+        if (!m || items.length !== m * 2) return;
+        for (let k = 0; k < m; k++) items[k].cur = items[k + m].cur;
+      },
+
       destroy() { layer.remove(); }
     };
 
+    // Every value is written only when it differs from what is already there.
+    // A line sitting still in the band, or out in the dark, would otherwise
+    // have three styles rewritten every frame, and a colour write repaints the
+    // line whether or not the colour moved.
     function apply(it, w) {
-      const o = P.floor + (1 - P.floor) * w;
-      it.el.style.opacity = o.toFixed(3);
-      it.el.style.transform = `translate3d(0, ${((1 - w) * P.lift).toFixed(2)}px, 0)`;
+      const o = (P.floor + (1 - P.floor) * w).toFixed(3);
+      if (o !== it.o) { it.el.style.opacity = o; it.o = o; }
+      const tf = `translate3d(0, ${((1 - w) * P.lift).toFixed(1)}px, 0)`;
+      if (tf !== it.tf) { it.el.style.transform = tf; it.tf = tf; }
       if (it.img) {
         // Text goes from gold to cream; a photograph has its own colours, so it
         // comes up out of the dark instead.
-        it.el.style.filter = `brightness(${(0.34 + 0.66 * w).toFixed(3)}) saturate(${(0.55 + 0.45 * w).toFixed(3)})`;
+        const c = `brightness(${(0.34 + 0.66 * w).toFixed(3)}) saturate(${(0.55 + 0.45 * w).toFixed(3)})`;
+        if (c !== it.c) { it.el.style.filter = c; it.c = c; }
         return;
       }
       // Dim lines stay gold; lit lines go cream.
-      it.el.style.color = w > 0.5
+      const c = w > 0.5
         ? `rgb(${(170 + 70 * (w - 0.5) * 2) | 0},${(143 + 89 * (w - 0.5) * 2) | 0},${(90 + 124 * (w - 0.5) * 2) | 0})`
         : `rgb(${(74 + 96 * w * 2) | 0},${(62 + 81 * w * 2) | 0},${(38 + 52 * w * 2) | 0})`;
+      if (c !== it.c) { it.el.style.color = c; it.c = c; }
     }
   }
 };

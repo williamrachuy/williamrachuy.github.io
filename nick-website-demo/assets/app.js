@@ -266,6 +266,7 @@ function buildControls() {
     if (p.type === 'range') {
       const i = document.createElement('input');
       i.type = 'range'; i.min = p.min; i.max = p.max; i.step = p.step;
+      i.dataset.key = p.key;
       i.value = inst.params[p.key];
       const out = document.createElement('em');
       out.textContent = (+i.value).toFixed(2).replace(/\.00$/, '');
@@ -302,18 +303,16 @@ function buildControls() {
   panel.appendChild(foot);
 }
 
-// Tidewater tells the panel when the lens was dragged.
+// A profile with a draggable handle tells the panel when it moved, naming the
+// param it changed, so the matching slider follows the drag.
 stage.addEventListener('paramsync', e => {
-  const row = panel.querySelector('.ctl input[type=range]');
-  if (row && e.detail.lensY != null && state.profile.id === 'tidewater') {
-    // The lens slider is the second range in Tidewater's list.
-    const ranges = panel.querySelectorAll('.ctl input[type=range]');
-    if (ranges[0]) {
-      ranges[0].value = e.detail.lensY;
-      const em = ranges[0].parentElement.querySelector('em');
-      if (em) em.textContent = e.detail.lensY.toFixed(2);
-    }
-  }
+  const { key, value } = e.detail || {};
+  if (!state.profile || key == null || value == null) return;
+  const input = panel.querySelector('.ctl input[type=range][data-key="' + key + '"]');
+  if (!input) return;
+  input.value = value;
+  const em = input.parentElement.querySelector('em');
+  if (em) em.textContent = (+input.value).toFixed(2).replace(/\.00$/, '');
 });
 
 // --------------------------------------------------------------- routing
@@ -324,7 +323,7 @@ const SITE_TITLE = 'TBH Press — reading profiles';
 // few thousand glyph positions; leaving one mounted behind the feed would keep
 // the rAF clock warm for a view that never animates.
 function teardownReader() {
-  state.running = false;
+  stopClock();
   if (state.inst) { state.inst.destroy(); state.inst = null; }
   state.profile = null;
   state.doc = null;
@@ -405,7 +404,7 @@ async function showPost(post, push, forceProfile) {
   const url = slugUrl + '&profile=' + state.profile.id;
   history.replaceState({ view: 'post', slug: post.slug }, '', url);
 
-  if (!state.running) { state.running = true; last = 0; requestAnimationFrame(tick); }
+  startClock();
 
   // A picture too slow for the first paint gets one re-layout when it arrives,
   // holding the reader's place in the post rather than their pixel offset.
@@ -443,6 +442,26 @@ backEl.addEventListener('click', e => {
 // ------------------------------------------------------------------- clock
 
 let last = 0;
+let rafId = 0;
+
+// Exactly one loop, ever. Leaving the reader and coming straight back — the
+// back button, then forward, inside one frame — used to find the old loop's
+// callback still queued and start a second beside it, and from then on every
+// profile drew every frame twice.
+function startClock() {
+  if (state.running) return;
+  state.running = true;
+  last = 0;
+  cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(tick);
+}
+
+function stopClock() {
+  state.running = false;
+  cancelAnimationFrame(rafId);
+  rafId = 0;
+}
+
 function tick(now) {
   if (!state.running) return;
   const dt = last ? Math.min(0.05, (now - last) / 1000) : 0.016;
@@ -453,13 +472,20 @@ function tick(now) {
   // this point, so the jump lands on an identical picture and cannot be seen.
   // Done here rather than in the scroll handler so it happens once per frame
   // and never re-enters mid-event.
+  //
+  // The picture is only identical if whatever a profile keeps per glyph is
+  // identical too — ink that has been written, a character mid-churn, a letter
+  // mid-drift. `wrap()` is where a profile hands the state of its second pass
+  // back to the first, so the pass that comes into view is the one that was
+  // on screen, not the one the reader left behind a whole post ago.
   if (state.period > 0 && y >= state.period) {
     y -= state.period;
     window.scrollTo(0, y);
+    if (state.inst && state.inst.wrap) state.inst.wrap();
   }
   state.scrollY = y;
   if (state.inst) state.inst.frame(now, dt, y);
-  requestAnimationFrame(tick);
+  rafId = requestAnimationFrame(tick);
 }
 
 window.addEventListener('scroll', () => {

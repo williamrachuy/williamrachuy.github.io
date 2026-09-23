@@ -4,10 +4,12 @@
 // glass loose on top of it.
 //
 // The ends of `How many` and `Size` are where they are for a measured reason.
-// Glass is transparent, so every marble on screen is another full-screen layer
-// of alpha blending, and that is fill rate rather than anything a cache can
-// help with — six at 0.24 holds 48fps, eight at 0.30 falls to 27, and by then
-// the page is a wash of colour and not a reading profile anyway.
+// Glass is transparent, so every marble on screen is another layer of alpha
+// blending — six at 0.24 held 48fps when the glass was filled into the canvas
+// every frame, eight at 0.30 fell to 27, and by then the page is a wash of
+// colour and not a reading profile anyway. The glass is its own layer now,
+// under a transparent canvas, so the compositor moves it rather than the
+// canvas re-rasterising it, and the blending is the GPU's to do.
 //
 // A marble carries the shell-shaped pressure field the first Meniscus had: the
 // push is nothing at the centre, strongest at a ring partway out, nothing again
@@ -34,7 +36,6 @@
 
 import { imageOf } from '../images.js';
 
-const PAPER = '#fbfaf7';
 const INK = [21, 19, 15];
 
 // Printer's colours rather than screen ones: saturated enough to read as glass
@@ -100,7 +101,7 @@ export default {
     canvas.className = 'stage-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     host.appendChild(canvas);
-    const ctx = canvas.getContext('2d', { alpha: false });
+    const ctx = canvas.getContext('2d', { alpha: true });
 
     // The page goes to paper for as long as this profile is mounted. Set on the
     // root rather than the body so the strip behind an overscroll matches too.
@@ -118,6 +119,7 @@ export default {
     let rnd = mulberry32(0x51ed270b);
 
     const handles = [];      // one invisible grab target per marble
+    const glass = [];        // and one layer of coloured glass under the type
 
     function base() { return Math.min(vw, vh); }
     function radiusOf(o) { return P.size * base() * o.spread; }
@@ -224,10 +226,66 @@ export default {
 
     function syncOrbs() {
       const want = Math.max(1, Math.round(P.count));
-      while (orbs.length > want) { orbs.pop(); dropHandle(handles.pop()); }
+      while (orbs.length > want) { orbs.pop(); dropHandle(handles.pop()); glass.pop().el.remove(); }
       while (orbs.length < want) {
         orbs.push(makeOrb(orbs.length));
         handles.push(makeHandle(orbs.length - 1));
+        glass.push(makeGlass());
+      }
+      styleGlass();
+    }
+
+    // ------------------------------------------------------------ the glass
+
+    function makeGlass() {
+      const el = document.createElement('div');
+      el.className = 'fx-layer';
+      el.setAttribute('aria-hidden', 'true');
+      el.style.borderRadius = '50%';
+      const ring = document.createElement('div');
+      ring.style.cssText = 'position:absolute;box-sizing:border-box;border-radius:50%';
+      el.appendChild(ring);
+      host.insertBefore(el, canvas);
+      return { el, ring, tf: '' };
+    }
+
+    // Everything about a marble's look except where it is. Only a control or
+    // a new layout changes any of it, so this is not run per frame.
+    function styleGlass() {
+      for (let i = 0; i < orbs.length; i++) {
+        const o = orbs[i], g = glass[i], r = radiusOf(o), c = o.c, a = P.ink;
+        g.el.style.width = g.el.style.height = (r * 2) + 'px';
+        g.tf = '';
+        // The glass is drawn on the colour field, not the push field: it is
+        // densest where the type takes the most colour and gone at the rim, so
+        // what you see on the paper is what is happening to the words. Stops
+        // follow tintKernel so the two cannot drift apart.
+        const stops = [];
+        for (let k = 0; k <= 6; k++) {
+          const u = k / 6;
+          stops.push(`rgba(${c[0]},${c[1]},${c[2]},${(a * tintKernel(u)).toFixed(3)}) ${(u * 100).toFixed(2)}%`);
+        }
+        g.el.style.background = 'radial-gradient(circle closest-side, ' + stops.join(', ') + ')';
+        // The ring sits exactly where the push peaks, so the wall the words
+        // are bending around is something you can see rather than infer.
+        if (P.ring && P.shell > 0.05) {
+          const lw = Math.max(1, r * 0.014), rr = r * P.shell;
+          g.ring.style.display = '';
+          g.ring.style.width = g.ring.style.height = (rr * 2 + lw) + 'px';
+          g.ring.style.left = g.ring.style.top = (r - rr - lw / 2) + 'px';
+          g.ring.style.border = lw + 'px solid ' +
+            `rgba(${c[0]},${c[1]},${c[2]},${Math.min(0.9, a * 1.7).toFixed(3)})`;
+        } else {
+          g.ring.style.display = 'none';
+        }
+      }
+    }
+
+    function placeGlass() {
+      for (let i = 0; i < orbs.length; i++) {
+        const o = orbs[i], g = glass[i], r = rad[i];
+        const tf = `translate(${(o.x - r).toFixed(1)}px, ${(o.y - r).toFixed(1)}px)`;
+        if (tf !== g.tf) { g.el.style.transform = tf; g.tf = tf; }
       }
     }
 
@@ -280,7 +338,7 @@ export default {
       el.addEventListener('pointermove', onMove);
       el.addEventListener('pointerup', onUp);
       el.addEventListener('pointercancel', onUp);
-      return { el, onDown, onMove, onUp };
+      return { el, onDown, onMove, onUp, size: '', tf: '' };
     }
 
     function dropHandle(h) {
@@ -298,10 +356,13 @@ export default {
         // The grip is the still middle of the marble, not the whole disc: the
         // rim is where the text is, and a touch there should still scroll.
         const gr = Math.max(26, r * Math.max(0.34, P.shell * 0.8));
-        const el = handles[i].el;
-        el.style.width = el.style.height = (gr * 2) + 'px';
-        el.style.transform = 'translate(' + Math.round(o.x - gr) + 'px,' +
-                                            Math.round(o.y - gr) + 'px)';
+        const h = handles[i], el = h.el;
+        // Written only on a change: a marble at rest would otherwise restyle
+        // its grip every frame for nothing.
+        const size = Math.round(gr * 2) + 'px';
+        if (size !== h.size) { el.style.width = el.style.height = size; h.size = size; }
+        const tf = 'translate(' + Math.round(o.x - gr) + 'px,' + Math.round(o.y - gr) + 'px)';
+        if (tf !== h.tf) { el.style.transform = tf; h.tf = tf; }
       }
     }
 
@@ -416,40 +477,12 @@ export default {
       return F;
     }
 
-    function drawOrb(o) {
-      const r = radiusOf(o);
-      if (o.x < -r || o.x > vw + r || o.y < -r || o.y > vh + r) return;
-      const c = o.c, a = P.ink;
-      // The glass is drawn on the colour field, not the push field: it is
-      // densest where the type takes the most colour and gone at the rim, so
-      // what you see on the paper is what is happening to the words. Stops
-      // follow tintKernel so the two cannot drift apart.
-      const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, r);
-      for (let k = 0; k <= 6; k++) {
-        const u = k / 6;
-        g.addColorStop(u, `rgba(${c[0]},${c[1]},${c[2]},${(a * tintKernel(u)).toFixed(3)})`);
-      }
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, r, 0, TAU);
-      ctx.fill();
-
-      // The ring sits exactly where the push peaks, so the wall the words are
-      // bending around is something you can see rather than infer.
-      if (P.ring && P.shell > 0.05) {
-        ctx.strokeStyle = `rgba(${c[0]},${c[1]},${c[2]},${Math.min(0.9, a * 1.7).toFixed(3)})`;
-        ctx.lineWidth = Math.max(1, r * 0.014);
-        ctx.beginPath();
-        ctx.arc(o.x, o.y, r * P.shell, 0, TAU);
-        ctx.stroke();
-      }
-    }
-
     return {
       params: P,
       setParam(k, v) {
         P[k] = v;
         if (k === 'count') syncOrbs();
+        else if (k === 'size' || k === 'ink' || k === 'shell' || k === 'ring') styleGlass();
       },
       topPad(viewport) { return viewport.vh * 0.3; },
       bottomPad(viewport) { return viewport.vh * 0.45; },
@@ -473,14 +506,11 @@ export default {
                        x: b.x + b.width / 2, y: b.top + b.height / 2 }))
           .filter(im => im.el);
 
-        // An opaque canvas starts black, and the first frame is a frame away.
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = PAPER;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
         // A resize re-enters here; marbles already in play keep their places
-        // rather than being scattered again mid-read.
+        // rather than being scattered again mid-read. Their size follows the
+        // screen, so the glass is restyled either way.
         if (!orbs.length) syncOrbs();
+        else styleGlass();
       },
 
       frame(t, dt, scrollY) {
@@ -494,14 +524,14 @@ export default {
         cacheRadii();
         placeHandles();
 
+        // Under the type, on its own layer: a marble is a thing the words
+        // pass over. The page behind the canvas is already paper.
+        placeGlass();
+
         ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = PAPER;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.textBaseline = 'alphabetic';
-
-        // Under the type: a marble is a thing the words pass over.
-        for (const o of orbs) drawOrb(o);
 
         for (const im of imgs) {
           const sy = im.y + padTop - scrollY;
@@ -549,6 +579,7 @@ export default {
 
       destroy() {
         while (handles.length) dropHandle(handles.pop());
+        while (glass.length) glass.pop().el.remove();
         orbs = [];
         document.documentElement.classList.remove('is-paper');
         canvas.remove();

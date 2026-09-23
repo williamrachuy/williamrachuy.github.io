@@ -309,8 +309,20 @@ function explode(blocks) {
   }
 
   const n = chars.length;
+
+  // Where the second pass of a looping post begins. Both passes are laid out
+  // identically, so glyph i and glyph i + half are the same letter one period
+  // apart — which is what lets a profile hand its per-glyph state across the
+  // seam. Zero when the post is not doubled.
+  let half = 0;
+  for (let i = 0; i < n; i++) {
+    if (blocks[bblock[i]].loop === 2) { half = i; break; }
+  }
+  if (half * 2 !== n) half = 0;
+
   return {
     n,
+    half,
     ch: chars,
     x: Float32Array.from(bx),
     y: Float32Array.from(by),

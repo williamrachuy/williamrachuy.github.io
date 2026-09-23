@@ -66,6 +66,16 @@ const SPENT = 0.02;
 // rather than the whole thing fading uniformly.
 const GRIP = 2.2;
 
+// Angle and size are drawn in steps: 1/ROT_STEPS of a radian, 1/SIZE_STEPS of
+// full size. Every resting glyph here is both turned and shrunk, and a glyph
+// drawn through a transform nothing has used before is rasterised from its
+// outline, while one drawn through a transform already seen comes out of the
+// glyph cache. Continuous values missed on every glyph on every frame. At
+// resting size a step moves the tip of a letter by about a third of a pixel,
+// which the drift is already doing anyway.
+const ROT_STEPS = 32;
+const SIZE_STEPS = 32;
+
 export default {
   id: 'meniscus',
   name: 'Meniscus',
@@ -89,11 +99,36 @@ export default {
     host.appendChild(canvas);
     const ctx = canvas.getContext('2d', { alpha: true });
 
+    // The menisci are drawn as layers under the canvas, one element each,
+    // positioned and faded by the compositor. Filled into the canvas, each was
+    // a radial gradient over a disc most of a screen wide, every frame — at
+    // four of them that was more raster than all the type put together.
+    const rings = [];
+    function ringAt(k) {
+      if (!rings[k]) {
+        const el = document.createElement('div');
+        el.className = 'fx-layer';
+        el.setAttribute('aria-hidden', 'true');
+        el.style.cssText += ';box-sizing:border-box;border-radius:50%;' +
+          'border:1px solid rgba(226,206,158,0.2);' +
+          'background:radial-gradient(circle closest-side, rgba(214,186,124,0.055), rgba(214,186,124,0) 100%)';
+        host.insertBefore(el, canvas);
+        rings[k] = { el, size: '', tf: '', o: '', on: true };
+      }
+      return rings[k];
+    }
+    function hideRing(k) {
+      const g = rings[k];
+      if (g && g.on) { g.el.style.display = 'none'; g.on = false; }
+    }
+
     const P = {};
     for (const p of this.params) P[p.key] = p.value;
 
     let G = null;
     let cx = null, cy = null, cr = null;        // where each glyph is, and how it lies
+    let seen = null;                            // the frame each glyph was last stepped on
+    let frameNo = 0;
     let ox = null, oy = null, fq = null, ph = null;
     let rot0 = null, rfq = null, rph = null;
     let imgs = [];
@@ -106,6 +141,7 @@ export default {
     function seed(n) {
       const rnd = mulberry32(0x7f4a7c15 ^ n);
       cx = new Float32Array(n); cy = new Float32Array(n); cr = new Float32Array(n);
+      seen = new Int32Array(n).fill(-1);
       ox = new Float32Array(n); oy = new Float32Array(n);
       fq = new Float32Array(n * 2); ph = new Float32Array(n * 2);
       rot0 = new Float32Array(n); rfq = new Float32Array(n); rph = new Float32Array(n);
@@ -208,6 +244,22 @@ export default {
       params: P,
       setParam(k, v) { P[k] = v; },
       setPeriod(p) { period = p; },
+
+      // The scroll just jumped back one period. Hand the second pass's glyphs
+      // to the first, one period up — positions here are in document space —
+      // so the letters now on screen are the ones that were, mid-drift and
+      // mid-gather, rather than ones last touched a whole post ago.
+      wrap() {
+        const h = G ? G.half : 0;
+        if (!h) return;
+        const shift = G.y[h] - G.y[0];
+        for (let i = 0; i < h; i++) {
+          cx[i] = cx[i + h];
+          cy[i] = cy[i + h] - shift;
+          cr[i] = cr[i + h];
+          seen[i] = seen[i + h];
+        }
+      },
       topPad(viewport) { return viewport.vh * 0.32; },
       bottomPad(viewport) { return viewport.vh * 0.5; },
 
@@ -220,12 +272,8 @@ export default {
         canvas.style.width = vw + 'px';
         canvas.style.height = vh + 'px';
 
+        // The first frame places every glyph straight onto its drift goal.
         seed(G.n);
-        for (let i = 0; i < G.n; i++) {
-          cx[i] = G.x[i] + ox[i] * P.scatter;
-          cy[i] = G.y[i] + padTop + oy[i] * P.scatter;
-          cr[i] = rot0[i] * P.spin;
-        }
 
         imgs = layout.blocks
           .filter(b => b.type === 'image')
@@ -240,6 +288,7 @@ export default {
         if (!G) return;
         const nowSec = t * 0.001;
         const n = G.n;
+        frameNo++;
 
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -260,7 +309,7 @@ export default {
           if (menisci[i].now < SPENT) menisci.splice(i, 1);
         }
 
-        if (P.ring) drawMenisci(scrollY);
+        drawMenisci(scrollY);
 
         const sc = P.scatter;
         const tt = nowSec * P.drift;
@@ -285,7 +334,7 @@ export default {
         // Gathering is quicker than letting go: a meniscus takes hold in about a
         // second, and the words slide back out over several. Both are far below
         // anything that reads as snapping.
-        let curFill = '', identity = true;
+        let curFill = '', curFont = '', identity = true;
 
         for (let i = lo; i < n; i++) {
           const ty = G.y[i];
@@ -310,24 +359,33 @@ export default {
           const goalR = inv * P.spin *
             (rot0[i] + Math.sin(tt * rfq[i] * 6.283 + rph[i]) * 0.5);
 
-          const rate = 1.1 + 3.4 * w;
-          const k = 1 - Math.exp(-rate * dt);
-          cx[i] += (goalX - cx[i]) * k;
-          cy[i] += (goalY - cy[i]) * k;
-          cr[i] += (goalR - cr[i]) * k;
+          // A glyph outside the working set last frame has not been stepped
+          // since, and easing it from there dragged it across the screen as it
+          // came back into view. It starts from where the drift has it now.
+          if (seen[i] !== frameNo - 1) {
+            cx[i] = goalX; cy[i] = goalY; cr[i] = goalR;
+          } else {
+            const rate = 1.1 + 3.4 * w;
+            const k = 1 - Math.exp(-rate * dt);
+            cx[i] += (goalX - cx[i]) * k;
+            cy[i] += (goalY - cy[i]) * k;
+            cr[i] += (goalR - cr[i]) * k;
+          }
+          seen[i] = frameNo;
 
           const sy = cy[i] - scrollY;
           if (sy < -50 || sy > vh + 50) continue;
 
           const fill = RAMP[(w * (BUCKETS - 1)) | 0];
           if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
-          ctx.font = G.font[i];
+          const f = G.font[i];
+          if (f !== curFont) { ctx.font = f; curFont = f; }
 
-          const s = rest + (1 - rest) * w;
-          const r = cr[i];
+          const s = Math.round((rest + (1 - rest) * w) * SIZE_STEPS) / SIZE_STEPS;
+          const r = Math.round(cr[i] * ROT_STEPS) / ROT_STEPS;
           // Upright and full size is the common case once a meniscus has hold,
           // and it is the one worth keeping off the transform path.
-          if (s > 0.995 && r > -0.004 && r < 0.004) {
+          if (s >= 1 && r === 0) {
             if (!identity) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); identity = true; }
             ctx.fillText(G.ch[i], cx[i], sy);
           } else {
@@ -351,27 +409,31 @@ export default {
         window.removeEventListener('pointerdown', onDown);
         window.removeEventListener('pointerup', onUp);
         window.removeEventListener('pointercancel', onCancel);
+        for (const g of rings) g.el.remove();
         canvas.remove();
       }
     };
 
+    // Each meniscus is a faint disc with a rim, both scaled by its strength —
+    // which is just the layer's opacity. Only what changed is written.
     function drawMenisci(scrollY) {
-      for (const m of menisci) {
-        // Draw it against whichever pass of the post is on screen.
-        const sy = foldY(m.y + padTop - scrollY);
-        if (sy < -m.r || sy > vh + m.r) continue;
-        const e = m.now;
-
-        const g = ctx.createRadialGradient(m.x, sy, 0, m.x, sy, m.r);
-        g.addColorStop(0, `rgba(214,186,124,${(0.055 * e).toFixed(4)})`);
-        g.addColorStop(1, 'rgba(214,186,124,0)');
-        ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(m.x, sy, m.r, 0, 6.2832); ctx.fill();
-
-        ctx.strokeStyle = `rgba(226,206,158,${(0.2 * e).toFixed(4)})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(m.x, sy, m.r, 0, 6.2832); ctx.stroke();
+      let k = 0;
+      if (P.ring) {
+        for (const m of menisci) {
+          // Draw it against whichever pass of the post is on screen.
+          const sy = foldY(m.y + padTop - scrollY);
+          if (sy < -m.r || sy > vh + m.r) continue;
+          const g = ringAt(k++);
+          if (!g.on) { g.el.style.display = ''; g.on = true; }
+          const size = (m.r * 2 + 1).toFixed(1) + 'px';
+          if (size !== g.size) { g.el.style.width = g.el.style.height = size; g.size = size; }
+          const tf = `translate(${(m.x - m.r - 0.5).toFixed(1)}px, ${(sy - m.r - 0.5).toFixed(1)}px)`;
+          if (tf !== g.tf) { g.el.style.transform = tf; g.tf = tf; }
+          const o = m.now.toFixed(3);
+          if (o !== g.o) { g.el.style.opacity = o; g.o = o; }
+        }
       }
+      for (; k < rings.length; k++) hideRing(k);
     }
 
     function drawHint() {

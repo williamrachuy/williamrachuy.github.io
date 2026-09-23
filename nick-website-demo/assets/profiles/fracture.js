@@ -135,6 +135,12 @@ export default {
     let pending = null;
     let reach = 0;             // furthest anything has travelled, for the cull
 
+    // The sheet is still until someone taps it, so most frames are the same
+    // picture as the last. `drawnAt` is the scroll position the canvas shows;
+    // while it matches and nothing is moving or fading, the frame is skipped.
+    let drawnAt = NaN;
+    let settling = false;      // letters still fading back in, as of the last draw
+
     function blastRadius() { return P.radius * Math.min(vw, vh); }
 
     // ------------------------------------------------------------- the sheet
@@ -598,8 +604,10 @@ export default {
     }
 
     function stepImages(dt) {
+      let moving = false;
       for (const im of imgs) {
         if (!im.t && !im.vx && !im.vy && !im.dx && !im.dy) continue;
+        moving = true;
         im.t += dt;
         if (im.phase === 0) {
           const k = Math.exp(-P.drag * dt);
@@ -615,6 +623,7 @@ export default {
           if (u >= 1) { im.dx = 0; im.dy = 0; im.vx = 0; im.vy = 0; im.t = 0; im.phase = 0; }
         }
       }
+      return moving;
     }
 
     function shoveImages(px, py, R) {
@@ -648,9 +657,39 @@ export default {
 
     return {
       params: P,
-      setParam(k, v) { P[k] = v; },
+      setParam(k, v) { P[k] = v; drawnAt = NaN; },
       topPad(viewport) { return viewport.vh * 0.3; },
       bottomPad(viewport) { return viewport.vh * 0.45; },
+
+      // The scroll just jumped back one period. Anything in the air belongs to
+      // the second pass, which has just gone a period off screen; carry it to
+      // the same letters in the first pass so the floes stay where they were
+      // instead of the page healing mid-crack.
+      wrap() {
+        const h = G ? G.half : 0;
+        if (!h) return;
+        const shift = G.y[h] - G.y[0];
+        // Whatever was cracked in the first pass is a whole post behind the
+        // reader. Let it go; its letters are about to be taken over.
+        for (const pc of [...pieces.values()]) if (pc.i0 < h) pieces.delete(pc.id);
+        owner.copyWithin(0, h, 2 * h);
+        backAt.copyWithin(0, h, 2 * h);
+        owner.fill(-1, h);
+        backAt.fill(0, h);
+        for (const pc of pieces.values()) {
+          pc.i0 -= h; pc.i1 -= h;
+          pc.cy -= shift; pc.sy -= shift;
+        }
+        for (const g of rings) if (g.y >= shift * 0.5) g.y -= shift;
+        const m = imgs.length >> 1;
+        if (imgs.length === m * 2) {
+          for (let k = 0; k < m; k++) {
+            const a = imgs[k], b = imgs[k + m];
+            for (const f of ['dx', 'dy', 'vx', 'vy', 'dx0', 'dy0', 't', 'phase']) { a[f] = b[f]; b[f] = 0; }
+          }
+        }
+        drawnAt = NaN;
+      },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -681,6 +720,7 @@ export default {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = PAPER;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drawnAt = NaN;
       },
 
       frame(t, dt, scrollY) {
@@ -695,7 +735,14 @@ export default {
           pending = null;
         }
         if (pieces.size) step(d);
-        stepImages(d);
+        // Rings are only aged while they are being drawn; with the strike
+        // hidden they would sit in the list forever and hold the page awake.
+        if (!P.ring) rings.length = 0;
+        const imgsMoving = stepImages(d);
+
+        if (!pieces.size && !rings.length && !imgsMoving && !settling && scrollY === drawnAt) return;
+        drawnAt = scrollY;
+        settling = false;
 
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = PAPER;
@@ -737,6 +784,7 @@ export default {
             const u = (nowSec - backAt[i]) * backFor;
             if (u >= 1) backAt[i] = 0;
             else {
+              settling = true;
               a = Math.round(u * 16) / 16;
               // Nothing visible yet, and during a crossfade this is most of
               // them: the floe is still carrying the letter.
