@@ -298,20 +298,6 @@ export default {
         placeHandle();
       },
       topPad(viewport) { return viewport.vh * 0.32; },
-      bottomPad(viewport) { return viewport.vh * 0.55; },
-
-      // The scroll just jumped back one period. Without this the first pass
-      // comes into view showing whatever noise it held when the reader left it
-      // a whole post ago, and every character on screen changes at once.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        shown.copyWithin(0, h, 2 * h);
-        nextAt.copyWithin(0, h, 2 * h);
-        enMag.copyWithin(0, h, 2 * h);
-        enAt.copyWithin(0, h, 2 * h);
-        mirror.copyWithin(0, h, 2 * h);
-      },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;

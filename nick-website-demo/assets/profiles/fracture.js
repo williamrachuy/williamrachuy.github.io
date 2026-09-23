@@ -659,37 +659,6 @@ export default {
       params: P,
       setParam(k, v) { P[k] = v; drawnAt = NaN; },
       topPad(viewport) { return viewport.vh * 0.3; },
-      bottomPad(viewport) { return viewport.vh * 0.45; },
-
-      // The scroll just jumped back one period. Anything in the air belongs to
-      // the second pass, which has just gone a period off screen; carry it to
-      // the same letters in the first pass so the floes stay where they were
-      // instead of the page healing mid-crack.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        const shift = G.y[h] - G.y[0];
-        // Whatever was cracked in the first pass is a whole post behind the
-        // reader. Let it go; its letters are about to be taken over.
-        for (const pc of [...pieces.values()]) if (pc.i0 < h) pieces.delete(pc.id);
-        owner.copyWithin(0, h, 2 * h);
-        backAt.copyWithin(0, h, 2 * h);
-        owner.fill(-1, h);
-        backAt.fill(0, h);
-        for (const pc of pieces.values()) {
-          pc.i0 -= h; pc.i1 -= h;
-          pc.cy -= shift; pc.sy -= shift;
-        }
-        for (const g of rings) if (g.y >= shift * 0.5) g.y -= shift;
-        const m = imgs.length >> 1;
-        if (imgs.length === m * 2) {
-          for (let k = 0; k < m; k++) {
-            const a = imgs[k], b = imgs[k + m];
-            for (const f of ['dx', 'dy', 'vx', 'vy', 'dx0', 'dy0', 't', 'phase']) { a[f] = b[f]; b[f] = 0; }
-          }
-        }
-        drawnAt = NaN;
-      },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;

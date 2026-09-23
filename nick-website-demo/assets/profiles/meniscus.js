@@ -133,7 +133,6 @@ export default {
     let rot0 = null, rfq = null, rph = null;
     let imgs = [];
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
-    let period = 0;
     let menisci = [];
     let everTapped = false;
     let hintFade = 0;
@@ -164,14 +163,6 @@ export default {
       }
     }
 
-    // The post repeats every `period`, so the field has to repeat with it:
-    // fold the separation into the nearest whole number of periods. Without
-    // this a meniscus stops matching its text the first time the scroll wraps.
-    function foldY(dy) {
-      if (period > 0) dy -= period * Math.round(dy / period);
-      return dy;
-    }
-
     // Strength of a meniscus now. Half-life, so it is never quite gone — but
     // each one older than the newest decays faster in proportion to how many
     // are stacked on top of it. Tap everywhere and nothing holds anywhere.
@@ -188,7 +179,7 @@ export default {
         const m = menisci[i];
         const r = m.r;
         const dx = px - m.x;
-        const dy = foldY(pyDoc - m.y);
+        const dy = pyDoc - m.y;
         if (dx > r || dx < -r || dy > r || dy < -r) continue;   // cheap reject
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d >= r) continue;
@@ -243,25 +234,8 @@ export default {
     return {
       params: P,
       setParam(k, v) { P[k] = v; },
-      setPeriod(p) { period = p; },
 
-      // The scroll just jumped back one period. Hand the second pass's glyphs
-      // to the first, one period up — positions here are in document space —
-      // so the letters now on screen are the ones that were, mid-drift and
-      // mid-gather, rather than ones last touched a whole post ago.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        const shift = G.y[h] - G.y[0];
-        for (let i = 0; i < h; i++) {
-          cx[i] = cx[i + h];
-          cy[i] = cy[i + h] - shift;
-          cr[i] = cr[i + h];
-          seen[i] = seen[i + h];
-        }
-      },
       topPad(viewport) { return viewport.vh * 0.32; },
-      bottomPad(viewport) { return viewport.vh * 0.5; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -420,8 +394,7 @@ export default {
       let k = 0;
       if (P.ring) {
         for (const m of menisci) {
-          // Draw it against whichever pass of the post is on screen.
-          const sy = foldY(m.y + padTop - scrollY);
+          const sy = m.y + padTop - scrollY;
           if (sy < -m.r || sy > vh + m.r) continue;
           const g = ringAt(k++);
           if (!g.on) { g.el.style.display = ''; g.on = true; }

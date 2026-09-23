@@ -71,21 +71,7 @@ export default {
         drawn.scrollY = NaN;
       },
 
-      // The scroll just jumped back one period. The first pass holds whatever
-      // was written the last time through — usually all of it — so without
-      // this the lines below the head would appear already inked the moment
-      // the post came round again.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        const L = lineKey[h];
-        if (ink.length === L * 2) ink.copyWithin(0, L, 2 * L);
-        const m = imgs.length >> 1;
-        if (imgs.length === m * 2) for (let k = 0; k < m; k++) imgs[k].ink = imgs[k + m].ink;
-        drawn.scrollY = NaN;
-      },
       topPad(viewport) { return viewport.vh * 0.30; },
-      bottomPad(viewport) { return viewport.vh * 0.55; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;

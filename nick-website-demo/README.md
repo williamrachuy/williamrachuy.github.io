@@ -34,43 +34,19 @@ a real URL you can link to, bookmark, or reload, and the back button does what
 it should. Cards are real `<a href>` links, so the feed is navigable even before
 the script runs.
 
-## Looping
+## The end of a post
 
-A post has a definite top — the browser clamps at zero, and above the first line
-there is only the top pad. Reach the bottom and it hands straight back to the
-top and keeps going.
+A post has a definite top and a definite end. Scrolled all the way down, the
+last line sits at the middle of the screen with half a screen of empty page
+below it, so the end reads as an end rather than as the bottom edge of the
+window. The runway below is set in one place, `app.js`, for every profile.
 
-It works by laying the post out **twice**, one pass after the other with a gap
-between. With both passes present, the view at `scrollY` and the view at
-`scrollY + period` are the same picture, so jumping the scroll position back by
-exactly one period cannot be seen. That is the entire mechanism, and it means no
-profile has to know looping exists: each one renders a long document and culls
-it by y as it already did.
-
-Only the tail is duplicated. `state.doc` stays the post as written, so the
-accessible mirror, the page title and the card feed never stutter.
-
-The picture is only identical if whatever a profile keeps per glyph is identical
-too — ink already written, a character mid-churn, a letter mid-drift, a floe in
-the air. So a profile that keeps state gets a `wrap()` call at the moment of the
-jump and copies its second pass's state onto its first (`glyphs.half` is where
-the second pass starts). Without it the first pass came into view as the reader
-left it a whole post earlier: Ledger showed the lines below the head already
-inked, Cipher swapped every character on screen, Lantern's band went dark for a
-moment.
-
-The period is measured, not summed — margin collapsing and skipped broken images
-both move things around, and the two passes are laid out identically so the
-offset between them is exact by construction. It is then rounded, because the
-spacer is sized in whole pixels: leaving it fractional makes `scrollY >= period`
-compare 5493 against 5493.4, and the wrap never fires at all.
-
-### What is rendered
+## What is rendered
 
 Nothing far from the viewport is drawn.
 
 - The canvas profiles binary-search the glyph array for the visible span and
-  stop at the far edge, so doubling the post does not double per-frame work.
+  stop at the far edge, so a long post costs no more per frame than a short one.
 - Lantern takes a line out of the document entirely once it is more than 300px
   beyond the viewport, and puts it back on the way in. On the longest post that
   is 23 to 43 live lines out of 378.
@@ -440,7 +416,6 @@ export default {
       params: P,
       setParam(k, v) { P[k] = v; },
       topPad(vp) { return vp.vh * 0.3; },      // scroll runway above content
-      bottomPad(vp) { return vp.vh * 0.5; },   // and below
       setLayout(layout, viewport, pad, doc) { /* build */ },
       frame(t, dt, scrollY) { /* 60fps */ },
       contentHeight() { /* optional; defaults to layout.height */ },

@@ -42,7 +42,6 @@ export default {
       params: P,
       setParam(k, v) { P[k] = v; },
       topPad(viewport) { return viewport.vh * 0.34; },
-      bottomPad(viewport) { return viewport.vh * 0.5; },
 
       setLayout(layout, viewport, pad) {
         vh = viewport.vh; padTop = pad.top;
@@ -102,8 +101,8 @@ export default {
           const sy = it.top - scrollY;
           if (sy < -CULL || sy > vh + CULL) {
             // Out of range: take it out of the document entirely rather than
-            // leaving it to be laid out and composited every frame. A looping
-            // post holds two passes, so most of these are always off screen.
+            // leaving it to be laid out and composited every frame. On a long
+            // post most of these are off screen at any moment.
             // Only touched on the crossing, never per frame, because toggling
             // display is what costs — reading a boolean is not.
             if (it.on) { it.el.style.display = 'none'; it.on = false; it.cur = 0; }
@@ -115,15 +114,6 @@ export default {
           it.cur += (w - it.cur) * k;
           apply(it, it.cur);
         }
-      },
-
-      // The scroll just jumped back one period. The first pass's lines were
-      // culled long ago and have forgotten how lit they were, so without this
-      // the band goes dark for a moment every time the post comes round.
-      wrap() {
-        const m = items.length >> 1;
-        if (!m || items.length !== m * 2) return;
-        for (let k = 0; k < m; k++) items[k].cur = items[k + m].cur;
       },
 
       destroy() { layer.remove(); }

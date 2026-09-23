@@ -223,24 +223,6 @@ export default {
         placeHandle();
       },
       topPad(viewport) { return viewport.vh * 0.34; },
-      bottomPad(viewport) { return viewport.vh * 0.6; },
-
-      // Positions are screen space, so the second pass's glyphs are exactly
-      // where the first pass's need to be once the scroll has jumped back.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        cx.copyWithin(0, h, 2 * h);
-        cy.copyWithin(0, h, 2 * h);
-        seen.copyWithin(0, h, 2 * h);
-        const m = imgs.length >> 1;
-        if (imgs.length === m * 2) {
-          for (let k = 0; k < m; k++) {
-            const a = imgs[k], b = imgs[k + m];
-            a.cx = b.cx; a.cy = b.cy; a.placed = b.placed;
-          }
-        }
-      },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;

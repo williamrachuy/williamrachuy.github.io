@@ -157,11 +157,8 @@ export default {
         rot0[i] = (rnd() - 0.5) * 1.5;
       }
       // Its own generator, so adding this left every drift exactly as it was.
-      // Both passes of a looping post get the same ranks, or the far field
-      // would thin a different set of letters the moment the scroll wraps.
       const rr = mulberry32(0x68e31da4 ^ n);
-      const h = G && G.half ? G.half : n;
-      for (let i = 0; i < n; i++) rank[i] = i < h ? rr() : rank[i - h];
+      for (let i = 0; i < n; i++) rank[i] = rr();
     }
 
     // Lens weight: 1 inside the core, easing to 0 across the falloff.
@@ -263,26 +260,6 @@ export default {
         placeHandle();
       },
       topPad(viewport) { return viewport.vh * 0.34; },
-      bottomPad(viewport) { return viewport.vh * 0.62; },
-
-      // The scroll just jumped back one period. Positions here are in screen
-      // space, so the second pass's glyphs are exactly where the first pass's
-      // now need to be: hand them across and nothing on screen moves.
-      wrap() {
-        const h = G ? G.half : 0;
-        if (!h) return;
-        cx.copyWithin(0, h, 2 * h);
-        cy.copyWithin(0, h, 2 * h);
-        cr.copyWithin(0, h, 2 * h);
-        seen.copyWithin(0, h, 2 * h);
-        const m = imgs.length >> 1;
-        if (imgs.length === m * 2) {
-          for (let k = 0; k < m; k++) {
-            const a = imgs[k], b = imgs[k + m];
-            a.cx = b.cx; a.cy = b.cy; a.cr = b.cr; a.placed = b.placed;
-          }
-        }
-      },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;

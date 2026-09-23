@@ -485,7 +485,6 @@ export default {
         else if (k === 'size' || k === 'ink' || k === 'shell' || k === 'ring') styleGlass();
       },
       topPad(viewport) { return viewport.vh * 0.3; },
-      bottomPad(viewport) { return viewport.vh * 0.45; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
