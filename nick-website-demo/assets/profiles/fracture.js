@@ -135,6 +135,12 @@ export default {
     let pending = null;
     let reach = 0;             // furthest anything has travelled, for the cull
 
+    // The sheet is still until someone taps it, so most frames are the same
+    // picture as the last. `drawnAt` is the scroll position the canvas shows;
+    // while it matches and nothing is moving or fading, the frame is skipped.
+    let drawnAt = NaN;
+    let settling = false;      // letters still fading back in, as of the last draw
+
     function blastRadius() { return P.radius * Math.min(vw, vh); }
 
     // ------------------------------------------------------------- the sheet
@@ -598,8 +604,10 @@ export default {
     }
 
     function stepImages(dt) {
+      let moving = false;
       for (const im of imgs) {
         if (!im.t && !im.vx && !im.vy && !im.dx && !im.dy) continue;
+        moving = true;
         im.t += dt;
         if (im.phase === 0) {
           const k = Math.exp(-P.drag * dt);
@@ -615,6 +623,7 @@ export default {
           if (u >= 1) { im.dx = 0; im.dy = 0; im.vx = 0; im.vy = 0; im.t = 0; im.phase = 0; }
         }
       }
+      return moving;
     }
 
     function shoveImages(px, py, R) {
@@ -648,9 +657,8 @@ export default {
 
     return {
       params: P,
-      setParam(k, v) { P[k] = v; },
+      setParam(k, v) { P[k] = v; drawnAt = NaN; },
       topPad(viewport) { return viewport.vh * 0.3; },
-      bottomPad(viewport) { return viewport.vh * 0.45; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -681,6 +689,7 @@ export default {
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = PAPER;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
+        drawnAt = NaN;
       },
 
       frame(t, dt, scrollY) {
@@ -695,7 +704,14 @@ export default {
           pending = null;
         }
         if (pieces.size) step(d);
-        stepImages(d);
+        // Rings are only aged while they are being drawn; with the strike
+        // hidden they would sit in the list forever and hold the page awake.
+        if (!P.ring) rings.length = 0;
+        const imgsMoving = stepImages(d);
+
+        if (!pieces.size && !rings.length && !imgsMoving && !settling && scrollY === drawnAt) return;
+        drawnAt = scrollY;
+        settling = false;
 
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.fillStyle = PAPER;
@@ -737,6 +753,7 @@ export default {
             const u = (nowSec - backAt[i]) * backFor;
             if (u >= 1) backAt[i] = 0;
             else {
+              settling = true;
               a = Math.round(u * 16) / 16;
               // Nothing visible yet, and during a crossfade this is most of
               // them: the floe is still carrying the letter.

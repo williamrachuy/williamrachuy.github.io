@@ -25,21 +25,32 @@ body {
   margin: 0;
   min-height: 100dvh;
   overscroll-behavior-y: none;
-  background:
-    radial-gradient(120% 60% at 50% 0%, rgba(214,186,124,0.035), transparent 60%),
-    linear-gradient(180deg, var(--bg2), var(--bg) 70%);
-  background-attachment: fixed;
   font-family: var(--serif);
   color: var(--cream);
 }
 
+/* The page's backdrop. It used to be the body's own background with
+   `background-attachment: fixed`, which looks the same and costs far more: a
+   fixed background has to be repainted on every frame of a scroll, across the
+   whole screen, on the main thread. As a fixed layer of its own it is painted
+   once and the compositor just leaves it where it is. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(214,186,124,0.035), transparent 60%),
+    linear-gradient(180deg, var(--bg2), var(--bg) 70%);
+}
+.is-paper body::before { display: none; }
+
 /* ------------------------------------------------------------- stage */
 
-/* Height is set per layout, to exactly the scrollable region. Clipping matters:
-   the DOM profiles hold two passes of the post, and without this their own
-   content extends the page past the loop point — you could then drag the
-   scrollbar beyond the wrap and land mid-article with a visible jump. The
-   canvas and the lens handle are position:fixed, so they escape this. */
+/* Height is set per layout, to exactly the scrollable region, and clipped so
+   nothing a DOM profile lays out can stretch the page past the end of the post.
+   The canvas and the lens handle are position:fixed, so they escape this. */
 #stage {
   position: absolute;
   top: 0; left: 0;
@@ -48,6 +59,19 @@ body {
   overflow: clip;
 }
 #spacer { width: 100%; }
+
+/* Glows, rings and glass that sit under a canvas profile's type. They are
+   static shapes that only ever move, fade or resize, so they live on layers of
+   their own and the compositor moves them; drawn into the canvas, every one of
+   them was re-rasterised across hundreds of thousands of pixels every frame.
+   Below the canvas (z-index 1), which is where the canvas used to draw them. */
+.fx-layer {
+  position: fixed;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity;
+}
 
 .stage-canvas {
   position: fixed;
@@ -533,9 +557,6 @@ body {
   letter-spacing: 0.1em;
   color: rgba(232, 224, 209, 0.38);
 }
-
-/* The breath between one pass of a looping post and the next. */
-.fy-gap { height: 11em; }
 
 /* Share Tech Mono, SIL OFL 1.1 — see assets/fonts/OFL.txt. Latin subset only;
    Cipher uses it for every Western character it draws. Not the film's typeface,

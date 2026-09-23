@@ -34,51 +34,42 @@ a real URL you can link to, bookmark, or reload, and the back button does what
 it should. Cards are real `<a href>` links, so the feed is navigable even before
 the script runs.
 
-## Looping
+## The end of a post
 
-A post has a definite top — the browser clamps at zero, and above the first line
-there is only the top pad. Reach the bottom and it hands straight back to the
-top and keeps going.
+A post has a definite top and a definite end. Scrolled all the way down, the
+last line sits at the middle of the screen with half a screen of empty page
+below it, so the end reads as an end rather than as the bottom edge of the
+window. The runway below is set in one place, `app.js`, for every profile.
 
-It works by laying the post out **twice**, one pass after the other with a gap
-between. With both passes present, the view at `scrollY` and the view at
-`scrollY + period` are the same picture, so jumping the scroll position back by
-exactly one period cannot be seen. That is the entire mechanism, and it means no
-profile has to know looping exists: each one renders a long document and culls
-it by y as it already did.
-
-Only the tail is duplicated. `state.doc` stays the post as written, so the
-accessible mirror, the page title and the card feed never stutter.
-
-The period is measured, not summed — margin collapsing and skipped broken images
-both move things around, and the two passes are laid out identically so the
-offset between them is exact by construction. It is then rounded, because the
-spacer is sized in whole pixels: leaving it fractional makes `scrollY >= period`
-compare 5493 against 5493.4, and the wrap never fires at all.
-
-### What is rendered
+## What is rendered
 
 Nothing far from the viewport is drawn.
 
 - The canvas profiles binary-search the glyph array for the visible span and
-  stop at the far edge, so doubling the post does not double per-frame work.
+  stop at the far edge, so a long post costs no more per frame than a short one.
 - Lantern takes a line out of the document entirely once it is more than 300px
   beyond the viewport, and puts it back on the way in. On the longest post that
   is 23 to 43 live lines out of 378.
 - Foundry is left alone on purpose. It is the control group: ordinary flowing
   text that stays selectable and findable, which virtualising would break.
+- Tidewater thins its current far from the lens. Everywhere the lens has any
+  pull every glyph is drawn; past that the share falls to 40% about a third of a
+  screen further out. Each glyph has a fixed rank deciding whether it survives,
+  so the same letters are always the ones left, and they fade at the cut rather
+  than pop. They are still stepped while hidden, so one that comes back is where
+  the current has been carrying it.
 
 ## The nine profiles
 
 | id | name | what it does | cost |
 |---|---|---|---|
 | `waterline` | Waterline | One line of pixels where the type is truly on its mark; a feather above and below where everything is caught mid-snap. The feather is a speed, not a shape — widening it does not widen the area of correct text, it gives glyphs longer to arrive. Distance also takes size, down to `farSize`. `falloff` sets how concentrated the gradient is near the line; `balance` splits the feather's reach between the approach and the departure, for a slow roll on against a sharp roll off or the reverse. | Canvas, per-glyph physics. |
-| `tidewater` | Tidewater | Every glyph drifts, rotated and dark, until a draggable focus lens pulls it back onto its line and brightens it. Past the lens it lets go again. | Canvas, per-glyph physics. Heaviest. |
+| `tidewater` | Tidewater | Every glyph drifts, rotated and dark, until a draggable focus lens pulls it back onto its line and brightens it. Past the lens it lets go again, and far from it the current thins out. | Canvas, per-glyph physics. Heaviest. |
 | `lantern` | Lantern | Same reading-band idea at line granularity. Lines sit dim and offset, then settle and brighten inside the band. | DOM, ~60 elements. Cheap. |
 | `ledger` | Ledger | Lines are blank until they cross a write head, then ink in left-to-right and stay written. | Canvas, no physics. Medium. |
 | `meniscus` | Meniscus | Nothing is composed and nothing composes itself. Every glyph drifts near where it belongs, small, dim and tilted, rocking slowly around its own angle. A tap drops a meniscus: inside it the type is pulled onto its true positions, unwinds to true vertical, and comes up to full size and full brightness — and it is the only thing holding it there. Each decays on a half-life and the words go back to drifting, so reading is something you keep doing. Menisci crowd each other — the more there are, the faster the older ones give out. | Canvas, per-glyph, plus a handful of distance checks. |
 | `cipher` | Cipher | Waterline's gradient spent on identity rather than position. Nothing moves; what changes is which character is drawn. Far from the line a glyph shows something else and keeps churning, and the closer it comes the more likely each turn lands on the character that belongs. `Correct on the line` is that probability at the line itself, so at 1 the line resolves clean and below it the text reads but flickers. `Churn` is how often a glyph reconsiders itself: about twice a second out in the noise at the default, and roughly every two and a half seconds on the line, where it is held rather than merely correct. Some fraction of changes release energy that runs off down that glyph's own line as a pulse — sparse enough that a line carries one or two currents at a time and you can watch one travel, rather than a wash. `Energy` sets how many and how bright; at 0 the field is just the gradient. Green, and set in Share Tech Mono throughout — the profile declares its own family and `typeset()` measures against it, so line breaking and every glyph position come out of that font's metrics rather than the serif's. The noise alphabet is half-width katakana (U+FF66-FF9D) with digits and Latin, drawn mirrored about half the time, after the film's. | Canvas, no physics. |
-| `marbles` | Marbles | The one light page: black type on paper with a few discs of coloured glass loose on top of it. Each carries the shell-shaped pressure field the first Meniscus had — no push at the centre, strongest at a ring partway out, nothing at the rim — so a word bends around the ring rather than being shoved off a point, and the ring is drawn where the push peaks so you can see the edge doing the work. Colour is a second field, strongest where the push is weakest: type under the middle keeps its shape and takes the marble's hue, type at the edge keeps its colour and gets moved. Nothing dims. They drift, they are pulled toward type by a density map of the page built at layout, and they can be picked up, dragged and thrown. | Canvas, plus one invisible grab element per marble. |
+| `marbles` | Marbles | The one light page: black type on paper with a few discs of coloured glass loose on top of it. Each carries the shell-shaped pressure field the first Meniscus had — no push at the centre, strongest at a ring partway out, nothing at the rim — so a word bends around the ring rather than being shoved off a point, and the ring is drawn where the push peaks so you can see the edge doing the work. Colour is a second field, strongest where the push is weakest: type under the middle keeps its shape and takes the marble's hue, type at the edge keeps its colour and gets moved. Nothing dims. They drift, they are pulled toward type by a density map of the page built at layout, and they can be picked up, dragged and thrown. | Canvas, plus one invisible grab element and one layer of glass per marble. |
 | `fracture` | Fracture | The other light page. Black type, set properly and perfectly still — scrolling does nothing to it. Tap it and it cracks the way an ice sheet cracks, into floes that turn on the water and drift until they stop. The sheet is held by bonds between neighbouring glyphs: the gap where a space used to be barely holds, letter to letter inside a word holds hard, so cracks run through the spaces first and words come off whole. Bonds get stronger as a piece gets shorter, so breaking converges on its own — a long word gives a handful of segments rather than loose letters — and ice already struck is easier to strike again, so a second press on a segment will shed a single character. Each piece is a rigid body with one centre of mass, one velocity and one spin, coasting on drag with nothing pulling it anywhere. It does not travel back: it fades out where it stopped, and its letters fade in behind it on the page, the two overlapping so the paragraph is never absent. | Canvas. Each floe is rasterised once into a shared 2048px sheet and only ever blitted after that — text drawn through a transform that changes every frame cannot use the glyph cache, and rasterising every glyph afresh each frame cost 35fps at the defaults. Window listeners that only watch. |
 | `foundry` | Foundry | No motion. Ordinary flowing text, selectable and copyable. | DOM. Free. |
 
@@ -425,7 +416,6 @@ export default {
       params: P,
       setParam(k, v) { P[k] = v; },
       topPad(vp) { return vp.vh * 0.3; },      // scroll runway above content
-      bottomPad(vp) { return vp.vh * 0.5; },   // and below
       setLayout(layout, viewport, pad, doc) { /* build */ },
       frame(t, dt, scrollY) { /* 60fps */ },
       contentHeight() { /* optional; defaults to layout.height */ },
@@ -449,8 +439,31 @@ from `params`.
   the mobile URL bar collapsing, and reacting to those makes the page jump.
 - **Performance.** Glyph positions are sorted by y, so each frame binary-searches
   the visible span instead of touching all ~2,300 glyphs. Fill styles are
-  quantized into 28 buckets and only reassigned when the bucket changes; the
-  rotation transform is skipped entirely for glyphs that have straightened out.
+  quantized into buckets, built as strings once, and only reassigned when the
+  bucket changes; the rotation transform is skipped entirely for glyphs that
+  have straightened out. Beyond that, measured in headless Chromium at phone
+  size, the things that cost were:
+  - **Transforms nothing had drawn before.** A glyph at a size or angle not yet
+    seen is rasterised from its outline; one already seen comes out of the
+    glyph cache. Waterline and Meniscus scaled with distance continuously, so
+    nearly every glyph missed on nearly every frame. Size is now drawn in 1/32
+    steps and angle in 1/24–1/32 radian steps. Waterline's glyph cost fell by
+    about three quarters.
+  - **Big gradients rasterised every frame.** The lens glow, the focus-line
+    feather, the menisci and the marbles' glass were filled into the canvas
+    per frame, hundreds of thousands of pixels each. They are layers under the
+    canvas now (`.fx-layer`), styled when a control changes and moved with
+    `transform`/`opacity`, which the compositor does without repainting.
+  - **`background-attachment: fixed`** on the body, which repaints the whole
+    screen on every frame of a scroll. It is a fixed `body::before` now: same
+    picture, painted once.
+  - **Frames that draw nothing new.** Ledger once everything in view is written,
+    and Fracture until it is tapped, skip the frame when nothing has moved.
+  - Lantern and the marble grips write a style only when its value changed.
+- **Glyphs coming back into range.** The physics profiles only step glyphs near
+  the viewport. One that left and came back used to resume from a screen
+  position it held a scroll ago, and streaked in from off screen; it now
+  starts where the drift would have it.
 
 ## Not done yet
 

@@ -58,10 +58,7 @@ const STYLE = {
   note:       { size: 0.96, weight: 400, italic: true,  lh: 1.58, align: 'left',   mt: 0.0,  mb: 1.02 },
   blockquote: { size: 0.98, weight: 400, italic: true,  lh: 1.54, align: 'left',   mt: 0.35, mb: 1.05, indent: 0.9 },
   hr:         { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 1.05, mb: 1.35 },
-  image:      { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 0.75, mb: 1.15 },
-  // Breathing room between one pass of a looping post and the next. Draws
-  // nothing; its whole purpose is the margin either side of it.
-  gap:        { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 5.5, mb: 5.5 }
+  image:      { size: 1.00, weight: 400, italic: false, lh: 1.00, align: 'center', mt: 0.75, mb: 1.15 }
 };
 
 export function styleFor(type) { return STYLE[type] || STYLE.p; }
@@ -200,14 +197,6 @@ export function typeset(doc, viewportW, viewportH, family) {
     // Collapse adjacent margins the way CSS would.
     y += Math.max(prevMb, st.mt * size);
 
-    if (b.type === 'gap') {
-      blocks.push({ type: 'gap', align: 'center', x: left, top: y, width,
-                    lineHeight: 1, font, size, italic: false, weight: st.weight,
-                    lines: [], loop: b.loop });
-      prevMb = st.mb * size;
-      continue;
-    }
-
     if (b.type === 'image') {
       const ratio = b.ih / b.iw;
       let w = colW;
@@ -218,8 +207,7 @@ export function typeset(doc, viewportW, viewportH, family) {
       blocks.push({
         type: 'image', align: 'center', x: left + (width - w) / 2, top: y,
         width: w, height: h, src: b.src, alt: b.text,
-        lineHeight: h, font, size, italic: false, weight: st.weight, lines: [],
-        loop: b.loop
+        lineHeight: h, font, size, italic: false, weight: st.weight, lines: []
       });
       y += h;
       prevMb = st.mb * size;
@@ -228,7 +216,7 @@ export function typeset(doc, viewportW, viewportH, family) {
 
     if (b.type === 'hr') {
       blocks.push({ type: 'hr', align: 'center', x: left, top: y, lineHeight: 1, font, size, lines: [],
-                    italic: st.italic, weight: st.weight, width, loop: b.loop });
+                    italic: st.italic, weight: st.weight, width });
       y += 1;
       prevMb = st.mb * size;
       continue;
@@ -259,16 +247,17 @@ export function typeset(doc, viewportW, viewportH, family) {
 
     blocks.push({
       type: b.type, align: st.align, x: left + indent, top: y, width: colW,
-      lineHeight: lh, font, size, italic: st.italic, weight: st.weight, lines,
-      loop: b.loop
+      lineHeight: lh, font, size, italic: st.italic, weight: st.weight, lines
     });
 
     y += raw.length * lh;
     prevMb = st.mb * size;
   }
 
+  // `end` is where the last line stops, without the margin that would follow
+  // it; `height` keeps that margin, the way a block of CSS would.
   const height = y + prevMb;
-  return { width, left, base, height, blocks, glyphs: explode(blocks) };
+  return { width, left, base, height, end: y, blocks, glyphs: explode(blocks) };
 }
 
 // ---------------------------------------------------------------- glyph pass
@@ -309,6 +298,7 @@ function explode(blocks) {
   }
 
   const n = chars.length;
+
   return {
     n,
     ch: chars,

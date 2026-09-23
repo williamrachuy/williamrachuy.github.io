@@ -25,6 +25,14 @@ const MID = [168, 141, 89];
 const LIT = [242, 234, 216];
 const BUCKETS = 32;
 
+// Sizes are drawn in steps of 1/SIZE_STEPS. A glyph at a size nothing has
+// drawn it at before is rasterised from its outline; at a size already seen it
+// comes out of the glyph cache. With size following distance continuously,
+// almost every glyph on screen missed on almost every frame — measured, that
+// was three quarters of this profile's cost — and a 3% step in the size of a
+// letter that is also drifting is not something anyone can see.
+const SIZE_STEPS = 32;
+
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
 
 function mulberry32(a) {
@@ -80,6 +88,17 @@ export default {
     canvas.setAttribute('aria-hidden', 'true');
     host.appendChild(canvas);
 
+    // The line and its feather glow are a layer under the canvas rather than
+    // a gradient filled across it every frame; they only change when a
+    // control does.
+    const glow = document.createElement('div');
+    glow.className = 'fx-layer';
+    glow.setAttribute('aria-hidden', 'true');
+    const rule = document.createElement('div');
+    rule.style.cssText = 'position:absolute;left:0;right:0;height:1px;background:rgba(226,206,158,0.55)';
+    glow.appendChild(rule);
+    host.insertBefore(glow, canvas);
+
     const handle = document.createElement('div');
     handle.className = 'lens-handle';
     handle.dataset.mode = 'band';
@@ -95,6 +114,8 @@ export default {
 
     let G = null;
     let cx = null, cy = null;              // where each glyph currently is
+    let seen = null;                       // the frame each glyph was last stepped on
+    let frameNo = 0;
     let ox = null, oy = null, fq = null, ph = null;
     let imgs = [];
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
@@ -105,6 +126,7 @@ export default {
     function seed(n) {
       const rnd = mulberry32(0x2545f491 ^ n);
       cx = new Float32Array(n); cy = new Float32Array(n);
+      seen = new Int32Array(n).fill(-1);
       ox = new Float32Array(n); oy = new Float32Array(n);
       fq = new Float32Array(n); ph = new Float32Array(n);
       for (let i = 0; i < n; i++) {
@@ -142,6 +164,30 @@ export default {
     function placeHandle() {
       handle.style.top = (lineY * vh) + 'px';
       handle.style.left = '';
+      placeLine();
+    }
+
+    // One pixel of true alignment, with the feather it commands shown faintly
+    // either side of it so the mechanism is visible. Sampled rather than a
+    // two-stop gradient, so the glow traces the actual falloff curve —
+    // asymmetry and exponent both visible in the shape.
+    function placeLine() {
+      glow.style.display = P.showLine ? '' : 'none';
+      if (!P.showLine) return;
+      const y = Math.round(lineY * vh) + 0.5;
+      const up = reachAbove(), down = reachBelow();
+      const total = up + down;
+      const stops = [];
+      for (let i = 0; i <= 16; i++) {
+        const stop = i / 16;
+        const w = weightAt(y - up + stop * total);
+        stops.push('rgba(214,186,124,' + (0.075 * w).toFixed(4) + ') ' + (stop * 100).toFixed(2) + '%');
+      }
+      glow.style.width = vw + 'px';
+      glow.style.height = total + 'px';
+      glow.style.transform = `translate(0px, ${y - up}px)`;
+      glow.style.background = 'linear-gradient(180deg, ' + stops.join(', ') + ')';
+      rule.style.top = (up - 0.5) + 'px';
     }
 
     const onDown = e => {
@@ -156,7 +202,7 @@ export default {
       lineY = clamp01((e.clientY - r.top) / vh);
       P.lineY = lineY;
       placeHandle();
-      host.dispatchEvent(new CustomEvent('paramsync', { detail: { lensY: P.lineY } }));
+      host.dispatchEvent(new CustomEvent('paramsync', { detail: { key: 'lineY', value: P.lineY } }));
       e.preventDefault();
     };
     const onUp = e => {
@@ -177,7 +223,6 @@ export default {
         placeHandle();
       },
       topPad(viewport) { return viewport.vh * 0.34; },
-      bottomPad(viewport) { return viewport.vh * 0.6; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -204,23 +249,19 @@ export default {
           })
           .filter(im => im.el);
 
+        // The first frame places every glyph straight onto its goal.
         seed(G.n);
-        for (let i = 0; i < G.n; i++) {
-          cx[i] = G.x[i] + ox[i] * P.scatter;
-          cy[i] = G.y[i] + padTop + oy[i] * P.scatter;
-        }
         placeHandle();
       },
 
       frame(t, dt, scrollY) {
         if (!G) return;
         const n = G.n;
+        frameNo++;
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.textBaseline = 'alphabetic';
-
-        if (P.showLine) drawLine(ctx);
 
         const sc = P.scatter;
         const span = Math.max(sc * 1.6, 220);
@@ -235,7 +276,7 @@ export default {
 
         for (const im of imgs) drawImage(im, dt, scrollY, tt);
 
-        let curFill = '', identity = true;
+        let curFill = '', curFont = '', identity = true;
         for (let i = lo; i < n; i++) {
           const ty = G.y[i];
           if (ty > maxY) break;
@@ -251,7 +292,7 @@ export default {
           // Size falls away from the line, and the line it sits on contracts
           // toward the centre of the measure, so a receding line stays a line
           // instead of spreading into loose letters.
-          const s = far + (1 - far) * w;
+          const s = Math.round((far + (1 - far) * w) * SIZE_STEPS) / SIZE_STEPS;
           const goalX = measureCx + (G.x[i] - measureCx) * s
                       + inv * (ox[i] * sc + Math.sin(tt * fq[i] + ph[i]) * 11);
           const goalY = screenY + inv * (oy[i] * sc + Math.cos(tt * fq[i] * 0.8 + ph[i]) * 8);
@@ -263,18 +304,28 @@ export default {
           // cannot converge in the time they have, and the focus line never
           // assembles. `falloff` is the one control over how concentrated this
           // is; it does not need help.
-          const rate = 0.8 + 46 * w;
-          const k = 1 - Math.exp(-rate * dt);
-          cx[i] += (goalX - cx[i]) * k;
-          cy[i] += (goalY - cy[i]) * k;
+          //
+          // A glyph that was outside the working set last frame holds a
+          // screen position from a scroll long gone, and easing from there
+          // streaked it in from off screen. It starts at its goal instead.
+          if (seen[i] !== frameNo - 1) {
+            cx[i] = goalX; cy[i] = goalY;
+          } else {
+            const rate = 0.8 + 46 * w;
+            const k = 1 - Math.exp(-rate * dt);
+            cx[i] += (goalX - cx[i]) * k;
+            cy[i] += (goalY - cy[i]) * k;
+          }
+          seen[i] = frameNo;
 
           if (cy[i] < -60 || cy[i] > vh + 60) continue;
 
           const fill = RAMP[(w * (BUCKETS - 1)) | 0];
           if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
-          ctx.font = G.font[i];
+          const f = G.font[i];
+          if (f !== curFont) { ctx.font = f; curFont = f; }
 
-          if (s > 0.995) {
+          if (s >= 1) {
             if (!identity) { ctx.setTransform(dpr, 0, 0, dpr, 0, 0); identity = true; }
             ctx.fillText(G.ch[i], cx[i], cy[i]);
           } else {
@@ -293,6 +344,7 @@ export default {
         handle.removeEventListener('pointercancel', onUp);
         canvas.remove();
         handle.remove();
+        glow.remove();
       }
     };
 
@@ -316,28 +368,6 @@ export default {
       ctx.drawImage(im.el, -im.w / 2, -im.h / 2, im.w, im.h);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.globalAlpha = 1;
-    }
-
-    // One pixel of true alignment, with the feather it commands shown faintly
-    // either side of it so the mechanism is visible.
-    function drawLine(c) {
-      const y = Math.round(lineY * vh) + 0.5;
-      const up = reachAbove(), down = reachBelow();
-
-      // Sampled rather than a two-stop gradient, so the glow traces the actual
-      // falloff curve — asymmetry and exponent both visible in the shape.
-      const g = c.createLinearGradient(0, y - up, 0, y + down);
-      const total = up + down;
-      for (let i = 0; i <= 16; i++) {
-        const stop = i / 16;
-        const w = weightAt(y - up + stop * total);
-        g.addColorStop(stop, 'rgba(214,186,124,' + (0.075 * w).toFixed(4) + ')');
-      }
-      c.fillStyle = g;
-      c.fillRect(0, y - up, vw, total);
-
-      c.fillStyle = 'rgba(226,206,158,0.55)';
-      c.fillRect(0, y - 0.5, vw, 1);
     }
   }
 };

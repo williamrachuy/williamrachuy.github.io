@@ -96,6 +96,29 @@ const BASE_RAMP = (() => {
   return out;
 })();
 
+// Energy is quantised to this many levels, and every colour a glyph can be —
+// base bucket crossed with energy level — is built as a string once, here.
+// Building an rgba() string per glyph per frame, and having the context parse
+// each one back, was most of this profile's script time.
+const ENERGY_LEVELS = 24;
+const FILLS = (() => {
+  const out = new Array(BUCKETS * (ENERGY_LEVELS + 1));
+  for (let b = 0; b < BUCKETS; b++) {
+    const c = BASE_RAMP[b];
+    for (let l = 0; l <= ENERGY_LEVELS; l++) {
+      const e = l / ENERGY_LEVELS;
+      // Energy pushes the colour toward white-green and lifts the alpha, so a
+      // pulse is visible even out where the base is almost nothing.
+      const r = (c[0] + (HOT[0] - c[0]) * e) | 0;
+      const g = (c[1] + (HOT[1] - c[1]) * e) | 0;
+      const bl = (c[2] + (HOT[2] - c[2]) * e) | 0;
+      const a = Math.min(1, c[3] + 0.75 * e);
+      out[b * (ENERGY_LEVELS + 1) + l] = `rgba(${r},${g},${bl},${a.toFixed(3)})`;
+    }
+  }
+  return out;
+})();
+
 // How far a pulse runs along its line, how fast, and how long a glyph holds it.
 const TRAIL = 16;
 const STEP = 0.028;      // seconds per glyph — about 570 glyphs a second
@@ -146,6 +169,17 @@ export default {
     canvas.className = 'stage-canvas';
     canvas.setAttribute('aria-hidden', 'true');
     host.appendChild(canvas);
+
+    // The line and its glow are a layer under the canvas rather than a
+    // gradient filled across it every frame; they only change when a control
+    // does.
+    const glow = document.createElement('div');
+    glow.className = 'fx-layer';
+    glow.setAttribute('aria-hidden', 'true');
+    const rule = document.createElement('div');
+    rule.style.cssText = 'position:absolute;left:0;right:0;height:1px;background:rgba(150,255,180,0.42)';
+    glow.appendChild(rule);
+    host.insertBefore(glow, canvas);
 
     const handle = document.createElement('div');
     handle.className = 'lens-handle';
@@ -208,7 +242,28 @@ export default {
       return enMag[i] * Math.exp(-age / TAU);
     }
 
-    function placeHandle() { handle.style.top = (lineY * vh) + 'px'; }
+    function placeHandle() {
+      handle.style.top = (lineY * vh) + 'px';
+      placeLine();
+    }
+
+    function placeLine() {
+      glow.style.display = P.showLine ? '' : 'none';
+      if (!P.showLine) return;
+      const y = Math.round(lineY * vh) + 0.5;
+      const reach = reachOf();
+      const stops = [];
+      for (let i = 0; i <= 12; i++) {
+        const stop = i / 12;
+        const w = weightAt(y - reach + stop * reach * 2);
+        stops.push(`rgba(0,200,90,${(0.05 * w).toFixed(4)}) ${(stop * 100).toFixed(2)}%`);
+      }
+      glow.style.width = vw + 'px';
+      glow.style.height = (reach * 2) + 'px';
+      glow.style.transform = `translate(0px, ${y - reach}px)`;
+      glow.style.background = 'linear-gradient(180deg, ' + stops.join(', ') + ')';
+      rule.style.top = (reach - 0.5) + 'px';
+    }
 
     const onDown = e => {
       dragging = true;
@@ -222,7 +277,7 @@ export default {
       lineY = clamp01((e.clientY - r.top) / vh);
       P.lineY = lineY;
       placeHandle();
-      host.dispatchEvent(new CustomEvent('paramsync', { detail: { lensY: P.lineY } }));
+      host.dispatchEvent(new CustomEvent('paramsync', { detail: { key: 'lineY', value: P.lineY } }));
       e.preventDefault();
     };
     const onUp = e => {
@@ -243,7 +298,6 @@ export default {
         placeHandle();
       },
       topPad(viewport) { return viewport.vh * 0.32; },
-      bottomPad(viewport) { return viewport.vh * 0.55; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -276,6 +330,10 @@ export default {
           .filter(b => b.type === 'image')
           .map(b => ({ el: imageOf(b), w: b.width, h: b.height, x: b.x, y: b.top }))
           .filter(im => im.el);
+
+        // Until this ran the handle sat wherever the stylesheet left it, not
+        // on the line, and only found its place the first time it was dragged.
+        placeHandle();
       },
 
       frame(t, dt, scrollY) {
@@ -292,8 +350,6 @@ export default {
         // up reads as more current rather than as more glare. Both terms are at
         // most 1, which is why the fill below needs no clamp.
         const eAmp = Math.sqrt(P.energy);
-
-        if (P.showLine) drawLine();
 
         for (const im of imgs) {
           const sy = im.y + padTop - scrollY;
@@ -344,14 +400,8 @@ export default {
           }
 
           const e = eAmp > 0 ? energyAt(i, nowSec) * eAmp : 0;
-          const c = BASE_RAMP[(w * (BUCKETS - 1)) | 0];
-          // Energy pushes the colour toward white-green and lifts the alpha, so
-          // a pulse is visible even out where the base is almost nothing.
-          const r = (c[0] + (HOT[0] - c[0]) * e) | 0;
-          const g = (c[1] + (HOT[1] - c[1]) * e) | 0;
-          const bl = (c[2] + (HOT[2] - c[2]) * e) | 0;
-          const a = Math.min(1, c[3] + 0.75 * e);
-          const fill = `rgba(${r},${g},${bl},${a.toFixed(3)})`;
+          const fill = FILLS[((w * (BUCKETS - 1)) | 0) * (ENERGY_LEVELS + 1) +
+                             ((e * ENERGY_LEVELS + 0.5) | 0)];
           if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
 
           // True character and substitute are the same face now, so there is
@@ -383,22 +433,8 @@ export default {
         handle.removeEventListener('pointercancel', onUp);
         canvas.remove();
         handle.remove();
+        glow.remove();
       }
     };
-
-    function drawLine() {
-      const y = Math.round(lineY * vh) + 0.5;
-      const reach = reachOf();
-      const g = ctx.createLinearGradient(0, y - reach, 0, y + reach);
-      for (let i = 0; i <= 12; i++) {
-        const stop = i / 12;
-        const w = weightAt(y - reach + stop * reach * 2);
-        g.addColorStop(stop, `rgba(0,200,90,${(0.05 * w).toFixed(4)})`);
-      }
-      ctx.fillStyle = g;
-      ctx.fillRect(0, y - reach, vw, reach * 2);
-      ctx.fillStyle = 'rgba(150,255,180,0.42)';
-      ctx.fillRect(0, y - 0.5, vw, 1);
-    }
   }
 };

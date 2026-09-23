@@ -15,6 +15,25 @@ const GHOST = [58, 50, 34];
 
 const clamp01 = v => (v < 0 ? 0 : v > 1 ? 1 : v);
 
+// How written a glyph is, quantised, with every colour it can be built once —
+// one table with the unwritten text showing and one without. Building an
+// rgba() string per glyph per frame was most of this profile's script time.
+const LEVELS = 48;
+function fillTable(ghost) {
+  const out = new Array(LEVELS + 1);
+  for (let l = 0; l <= LEVELS; l++) {
+    const a = l / LEVELS;
+    const r = (GHOST[0] + (INK[0] - GHOST[0]) * a) | 0;
+    const g = (GHOST[1] + (INK[1] - GHOST[1]) * a) | 0;
+    const b = (GHOST[2] + (INK[2] - GHOST[2]) * a) | 0;
+    const alpha = ghost ? (0.16 + 0.84 * a) : a;
+    out[l] = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+  }
+  return out;
+}
+const FILL_GHOST = fillTable(true);
+const FILL_BARE = fillTable(false);
+
 export default {
   id: 'ledger',
   name: 'Ledger',
@@ -40,14 +59,19 @@ export default {
     let imgs = [];
     let dpr = 1, vw = 0, vh = 0, padTop = 0;
 
+    // Once everything in view is written and the page is not moving, every
+    // frame is the same picture. `drawn` is what the canvas currently shows;
+    // while it still matches, the frame is skipped outright.
+    let drawn = { scrollY: NaN };
+
     return {
       params: P,
       setParam(k, v) {
         P[k] = v;
-        if (k === 'rewind' && !v) { /* keep latched */ }
+        drawn.scrollY = NaN;
       },
+
       topPad(viewport) { return viewport.vh * 0.30; },
-      bottomPad(viewport) { return viewport.vh * 0.55; },
 
       setLayout(layout, viewport, pad) {
         G = layout.glyphs;
@@ -82,14 +106,11 @@ export default {
         lineLen = new Int32Array(key + 1);
         for (const [k, c] of counts) lineLen[k] = c;
         ink = new Float32Array(key + 1);
+        drawn.scrollY = NaN;
       },
 
       frame(t, dt, scrollY) {
         if (!G) return;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.textBaseline = 'alphabetic';
 
         const head = P.headY * vh;
         const n = G.n;
@@ -98,8 +119,37 @@ export default {
         let lo = 0, hi = n;
         while (lo < hi) { const m = (lo + hi) >> 1; if (G.y[m] < minY) lo = m + 1; else hi = m; }
 
-        // Advance ink for lines above the head.
+        // Advance ink for lines above the head — first, and on its own, so
+        // the frame knows whether anything changed before it draws anything.
         const rate = P.speed * dt * 1.9;
+        let changed = scrollY !== drawn.scrollY;
+        for (let i = lo; i < n; i++) {
+          const ty = G.y[i];
+          if (ty > maxY) break;
+          if (glyphIdx[i] !== 0) continue;
+          const k = lineKey[i];
+          const was = ink[k];
+          if (ty + padTop - scrollY <= head) ink[k] = Math.min(1, was + rate);
+          else if (P.rewind) ink[k] = Math.max(0, was - rate * 1.6);
+          if (ink[k] !== was) changed = true;
+        }
+        for (const im of imgs) {
+          const sy = im.top + padTop - scrollY;
+          if (sy > vh + 40 || sy + im.h < -40) continue;
+          const was = im.ink;
+          if (sy <= head) im.ink = Math.min(1, was + rate * 0.55);
+          else if (P.rewind) im.ink = Math.max(0, was - rate);
+          if (im.ink !== was) changed = true;
+        }
+        if (!changed) return;
+        drawn.scrollY = scrollY;
+
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.textBaseline = 'alphabetic';
+
+        const FILL = P.ghost ? FILL_GHOST : FILL_BARE;
         let curFont = '', curFill = '';
 
         for (let i = lo; i < n; i++) {
@@ -108,23 +158,13 @@ export default {
           const sy = ty + padTop - scrollY;
           const k = lineKey[i];
 
-          if (glyphIdx[i] === 0) {
-            const target = sy <= head ? 1 : 0;
-            if (target === 1) ink[k] = Math.min(1, ink[k] + rate);
-            else if (P.rewind) ink[k] = Math.max(0, ink[k] - rate * 1.6);
-          }
-
           const len = lineLen[k] || 1;
           const written = ink[k] * (len + 4);
           const a = clamp01(written - glyphIdx[i]);
 
           if (a <= 0.004 && !P.ghost) continue;
 
-          const r = (GHOST[0] + (INK[0] - GHOST[0]) * a) | 0;
-          const g = (GHOST[1] + (INK[1] - GHOST[1]) * a) | 0;
-          const b = (GHOST[2] + (INK[2] - GHOST[2]) * a) | 0;
-          const alpha = P.ghost ? (0.16 + 0.84 * a) : a;
-          const fill = `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
+          const fill = FILL[(a * LEVELS + 0.5) | 0];
           if (fill !== curFill) { ctx.fillStyle = fill; curFill = fill; }
           const f = G.font[i];
           if (f !== curFont) { ctx.font = f; curFont = f; }
@@ -138,10 +178,6 @@ export default {
         for (const im of imgs) {
           const sy = im.top + padTop - scrollY;
           if (sy > vh + 40 || sy + im.h < -40) continue;
-
-          const target = sy <= head ? 1 : 0;
-          if (target === 1) im.ink = Math.min(1, im.ink + rate * 0.55);
-          else if (P.rewind) im.ink = Math.max(0, im.ink - rate);
 
           if (P.ghost && im.ink < 1) {
             ctx.globalAlpha = 0.12;
