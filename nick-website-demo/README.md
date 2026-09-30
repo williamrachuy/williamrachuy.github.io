@@ -216,6 +216,16 @@ into `posts/` an override: edit a post, add alt text, trim it, and your version
 is what ships, while everything you have not touched keeps flowing in from
 Substack on its own.
 
+#### Live reading through a Cloudflare Worker
+
+`worker/substack-proxy.js` is a Cloudflare Worker that fetches Substack from
+Cloudflare's own network, adds the CORS header, caches for 10 minutes, and
+serves `/index`, `/post/<slug>` and `/search?q=`. Put its address in
+`<meta name="substack-api">` in `index.html` and the feed, post bodies and the
+feed's search box read live; leave it empty and the snapshot below is used.
+If the Worker is unreachable the page falls back to the snapshot on its own.
+Setup and moving it between accounts are in `worker/README.md`.
+
 #### The scheduled refresh does not currently work
 
 Substack is behind Cloudflare, which refuses the fetch from GitHub Actions

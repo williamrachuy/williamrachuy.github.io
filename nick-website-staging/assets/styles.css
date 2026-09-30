@@ -427,6 +427,22 @@ body::before {
   color: rgba(232, 224, 209, 0.52);
 }
 
+.feed-search { margin: 0 0 18px; }
+.feed-search input {
+  width: 100%;
+  padding: 13px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--cream);
+  font: 400 16px/1.2 var(--ui);   /* 16px: anything smaller zooms the page on iOS */
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.feed-search input::placeholder { color: rgba(232, 224, 209, 0.34); }
+.feed-search input:focus { border-color: rgba(214, 186, 124, 0.5); }
+
 .posts { display: grid; gap: 14px; }
 
 .post-card {

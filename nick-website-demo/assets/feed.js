@@ -74,10 +74,11 @@ function card(post) {
 // and no library is loaded to show one, so this stays a folder of static files.
 // It is deliberately the live address rather than location.href: the point is
 // to hand someone the published site, not the localhost you happen to be on.
-const SITE_URL = 'https://www.adividiardi.com/nick-website-demo/';
+const SITE_URL = 'https://www.adividiardi.com/nick-website-staging/';
 const SITE_LABEL = 'adividiardi.com';
 
-export function renderFeed(host, posts, onOpen) {
+export function renderFeed(host, posts, onOpen, opts = {}) {
+  const { search, controls = true } = opts;
   host.innerHTML = '';
 
   const head = document.createElement('header');
@@ -86,8 +87,8 @@ export function renderFeed(host, posts, onOpen) {
     '<div class="feed-intro">' +
       '<h1>TBH Press</h1>' +
       '<p class="feed-note">Words from the edge of your algorithm. ' +
-      'Pick a post — each one opens in the reading style it was set in, and you ' +
-      'can switch between all nine from the panel at the top.</p>' +
+      'Pick a post — each one opens in the reading style it was set in' +
+      (controls ? ', and you can switch between all nine from the panel at the top.' : '.') + '</p>' +
     '</div>' +
     // Not a link. Following it would do nothing useful — on the published site
     // it reloads the page you are on, and while previewing locally it throws
@@ -108,23 +109,75 @@ export function renderFeed(host, posts, onOpen) {
     return;
   }
 
+  const bar = document.createElement('div');
+  bar.className = 'feed-search';
+  bar.innerHTML = '<input type="search" placeholder="Search posts" aria-label="Search posts" ' +
+                  'autocomplete="off" spellcheck="false" enterkeyhint="search">';
+  host.appendChild(bar);
+  const input = bar.firstChild;
+
   const list = document.createElement('div');
   list.className = 'posts';
-  for (const post of posts) {
-    const el = card(post);
-    el.addEventListener('click', e => {
-      // Leave the modified clicks alone: cmd/ctrl-click and middle-click should
-      // still open a real new tab.
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
-      e.preventDefault();
-      onOpen(post);
-    });
-    list.appendChild(el);
-  }
   host.appendChild(list);
 
   const foot = document.createElement('p');
   foot.className = 'feed-foot';
-  foot.textContent = posts.length + ' post' + (posts.length === 1 ? '' : 's');
   host.appendChild(foot);
+
+  function draw(shown, q) {
+    list.innerHTML = '';
+    for (const post of shown) {
+      const el = card(post);
+      el.addEventListener('click', e => {
+        // Leave the modified clicks alone: cmd/ctrl-click and middle-click
+        // should still open a real new tab.
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+        e.preventDefault();
+        onOpen(post);
+      });
+      list.appendChild(el);
+    }
+    const n = shown.length;
+    foot.textContent = q
+      ? (n ? n + ' post' + (n === 1 ? '' : 's') + ' matching \u201c' + q + '\u201d' : 'Nothing matches \u201c' + q + '\u201d')
+      : posts.length + ' post' + (posts.length === 1 ? '' : 's');
+  }
+
+  // Instant filter over what is already on the page, then — if a Substack
+  // proxy is configured — Substack's own full-text search is folded in, so a
+  // word that only appears deep inside a post still finds it.
+  let ticket = 0;
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    const mine = ++ticket;
+    if (!q) { draw(posts, ''); return; }
+
+    const words = squash(q).split(' ').filter(Boolean);
+    const here = posts.filter(p => {
+      const hay = squash(p.title + ' ' + p.subtitle + ' ' + p.excerpt);
+      return words.every(w => hay.includes(w));
+    });
+    draw(here, q);
+
+    if (!search || q.length < 2) return;
+    clearTimeout(input._t);
+    input._t = setTimeout(async () => {
+      const found = await search(q);
+      if (mine !== ticket || !found.length) return;
+      const bare = u => (u || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+      const sources = new Set(posts.map(p => bare(p.source)).filter(Boolean));
+      const inList = new Set(here);
+      const extra = [];
+      for (const f of found) {
+        // The same piece the page already has (possibly a local .md that
+        // replaces it) is shown as that post, never as a second copy.
+        const hit = posts.find(p => p.slug === f.slug) || (sources.has(bare(f.source)) ? null : f);
+        if (hit && !inList.has(hit) && !extra.includes(hit)) extra.push(hit);
+      }
+      const merged = here.concat(extra).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      draw(merged, q);
+    }, 300);
+  });
+
+  draw(posts, '');
 }

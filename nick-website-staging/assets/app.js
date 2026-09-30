@@ -14,7 +14,7 @@
 // Profiles know nothing about markdown, scrolling, or the control panel.
 
 import { typeset, loadEngine, engineName } from './typeset.js';
-import { discoverPosts, findPost, ensureDoc } from './posts.js';
+import { discoverPosts, findPost, ensureDoc, searchSubstack } from './posts.js';
 import { renderFeed } from './feed.js';
 import { resolveImages } from './images.js';
 import { loadAssignments, profileFor } from './assign.js';
@@ -300,7 +300,7 @@ function showFeed(push) {
   backEl.hidden = true;
   feedEl.hidden = false;
   document.title = SITE_TITLE;
-  renderFeed(feedEl, postList, post => showPost(post, true));
+  renderFeed(feedEl, postList, post => showPost(post, true), { search: searchSubstack, controls: HAS_CONTROLS });
   window.scrollTo(0, 0);
   if (push) history.pushState({ view: 'feed' }, '', './');
 }

@@ -22,6 +22,9 @@ import { parseDocument } from './md.js';
 // The Substack side of the feed, written at build time by
 // tools/fetch-substack.py. Substack sends no CORS headers, so the browser
 // cannot read the publication directly; this is a same-origin snapshot of it.
+// That is the fallback. When the page names a Substack proxy (a Cloudflare
+// Worker, see worker/README.md) the feed and the post bodies are read live from
+// it instead, and this snapshot is only what is shown if the proxy is down.
 // Absent (a plain checkout, or a build where the fetch failed) simply means the
 // feed is local markdown only.
 const SUBSTACK_INDEX = 'posts/substack/index.json';
@@ -30,6 +33,21 @@ const SUBSTACK_INDEX = 'posts/substack/index.json';
 // host with no directory index. Without it the page would have nothing at all
 // to show, which is a worse answer than showing the post that ships with it.
 const LAST_RESORT = 'overcoming-the-classics.md';
+
+// `<meta name="substack-api" content="https://….workers.dev">` in index.html.
+// Empty or missing means "no live feed": the committed snapshot alone.
+function apiBase() {
+  const tag = document.querySelector('meta[name="substack-api"]');
+  return ((tag && tag.content) || '').trim().replace(/\/+$/, '');
+}
+
+const LIVE_TIMEOUT_MS = 6000;
+
+async function liveJson(path) {
+  const r = await fetch(apiBase() + path, { signal: AbortSignal.timeout(LIVE_TIMEOUT_MS) });
+  if (!r.ok) throw new Error(path + ' answered ' + r.status);
+  return r.json();
+}
 
 // A stalled request never rejects on its own. Listing is not worth more than
 // this much of the reader's time; past it, take the fallback.
@@ -172,7 +190,36 @@ async function localPosts() {
 // fetched when the reader actually opens that post — the landing page needs
 // none of them to draw its cards, and the whole archive inlined would be some
 // twenty times the payload for a page that shows titles.
+function substackCard(p, publication, origin) {
+  return {
+    origin: 'substack',
+    file: 'substack/' + p.slug,
+    slug: p.slug,
+    title: p.title || p.slug,
+    subtitle: p.subtitle || '',
+    excerpt: p.excerpt || '',
+    date: p.date || '',
+    source: p.source || '',
+    publication: publication || p.publication || '',
+    live: origin === 'live',
+    meta: p,
+    doc: null
+  };
+}
+
 async function substackPosts() {
+  if (apiBase()) {
+    try {
+      const index = await liveJson('/index');
+      if (Array.isArray(index.posts) && index.posts.length) {
+        return index.posts.map(p => substackCard(p, index.publication, 'live'));
+      }
+      throw new Error('proxy listed no posts');
+    } catch (err) {
+      console.warn('[posts] live Substack feed unavailable (' + err.message + '); using the snapshot');
+    }
+  }
+
   let index;
   try {
     const r = await fetch(SUBSTACK_INDEX, { cache: 'no-cache' });
@@ -183,28 +230,37 @@ async function substackPosts() {
     return [];
   }
 
-  return (index.posts || []).map(p => ({
-    origin: 'substack',
-    file: 'substack/' + p.slug,
-    slug: p.slug,
-    title: p.title || p.slug,
-    subtitle: p.subtitle || '',
-    excerpt: p.excerpt || '',
-    date: p.date || '',
-    source: p.source || '',
-    publication: index.publication || p.publication || '',
-    meta: p,
-    doc: null
-  }));
+  return (index.posts || []).map(p => substackCard(p, index.publication, 'snapshot'));
+}
+
+// Full-text search across the publication, done by Substack through the proxy.
+// Resolves to cards for posts that matched, or [] when there is no proxy or it
+// is not answering — the feed's own title/excerpt filter still works then.
+export async function searchSubstack(q) {
+  if (!apiBase()) return [];
+  try {
+    const r = await liveJson('/search?q=' + encodeURIComponent(q));
+    return (r.posts || []).map(p => substackCard(p, r.publication, 'live'));
+  } catch (err) {
+    console.warn('[posts] search unavailable (' + err.message + ')');
+    return [];
+  }
 }
 
 // Fills in a Substack post's body the first time it is opened. Local posts
 // already carry theirs.
 export async function ensureDoc(post) {
   if (post.doc) return post.doc;
-  const r = await fetch('posts/substack/' + encodeURIComponent(post.slug) + '.json', { cache: 'no-cache' });
-  if (!r.ok) throw new Error('Could not load ' + post.slug + ' (' + r.status + ')');
-  const { body } = await r.json();
+  let body;
+  if (apiBase()) {
+    try { body = (await liveJson('/post/' + encodeURIComponent(post.slug))).body; }
+    catch (err) { console.warn('[posts] live body unavailable (' + err.message + '); trying the snapshot'); }
+  }
+  if (body == null) {
+    const r = await fetch('posts/substack/' + encodeURIComponent(post.slug) + '.json', { cache: 'no-cache' });
+    if (!r.ok) throw new Error('Could not load ' + post.slug + ' (' + r.status + ')');
+    body = (await r.json()).body;
+  }
 
   // Rebuild the front matter the markdown parser expects, so a post from the
   // feed and a post from a file go through exactly the same path from here on.

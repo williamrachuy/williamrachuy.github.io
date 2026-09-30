@@ -195,17 +195,23 @@ Posts with their own `profile:` line, and posts named individually in
 
 ## Posts that come from Substack
 
-The site pulls in your Substack posts from a saved copy (a "snapshot") stored in
-`posts/substack/`. Two things to know:
+There are two ways the site gets your Substack posts:
 
-- **New Substack posts don't appear on their own right now.** The snapshot has
-  to be refreshed by running a small script somewhere that can reach Substack
-  (your own computer works): `python3 tools/fetch-substack.py`, then commit the
-  changed files. The scheduled automatic refresh is set up but currently blocked
-  by Substack's bot protection when it runs from GitHub. Until that is solved,
-  the quickest way to get a brand-new post up is to **write it as a `.md` file**.
-- Substack posts have no file to put a `profile:` line in, so to style one, use
-  `profiles.md` ([above](#set-it-in-profilesmd)).
+- **Live (recommended).** A small free Cloudflare Worker reads your Substack for
+  the site. New posts appear within minutes with nothing to commit, and the
+  search box on the front page searches the full text of every post. Setting it
+  up takes about 10 minutes, once. Follow **`worker/README.md`**; the only
+  thing that touches the site is the `substack-api` line near the top of
+  `index.html`.
+- **Saved copy (the fallback).** `posts/substack/` holds a snapshot of the
+  publication. The site uses it when the `substack-api` line is empty or the
+  Worker is down, so the site never goes blank. It does **not** update itself:
+  refreshing it means running `python3 tools/fetch-substack.py` on a computer
+  and committing the result.
+
+Either way, Substack posts have no file to put a `profile:` line in, so to style
+one, use `profiles.md` ([above](#set-it-in-profilesmd)). To edit or replace a
+Substack post, write a `.md` file with the same `source:` link.
 
 ---
 
@@ -229,7 +235,8 @@ commit.
 
 | Problem | Likely cause |
 |---|---|
-| New post doesn't appear | Wait a minute and hard-refresh. Check the file is in `posts`, ends in exactly `.md`, and was committed. |
+| New post doesn't appear | Wait a minute and hard-refresh. Check the file is in `posts`, ends in exactly `.md`, and was committed. For a Substack post: is the Worker set up (`worker/README.md`)? Without it, new Substack posts don't appear. |
+| Substack posts are out of date, or search only finds titles | The `substack-api` line in `index.html` is empty or wrong, or the Worker is down. Open the Worker's `/health` address. |
 | Post appears but the title is the file name | The `title:` line is missing, or the `---` lines around the front matter are missing. |
 | Post is in the wrong place in the list | The `date:` isn't in `2026-07-14` form, or is missing. |
 | Profile isn't what I set | A higher layer is overriding it (the post's own `profile:` line beats `profiles.md`), or the profile name is misspelled. Names must be lowercase. |
@@ -247,6 +254,8 @@ misspelled name) and say which line.
 When this folder is first copied to your own GitHub Pages repository, two things
 carry a reference to the old location. You only do this once.
 
+0. **The Substack Worker.** Do `worker/README.md` first; it ends with pasting
+   an address into the `substack-api` line of `index.html`.
 1. **`index.html`** has a line near the top:
    `<meta name="github-repo" content="williamrachuy/williamrachuy.github.io">`.
    Change the `owner/repo` part to yours (for example `nick/nick.github.io`).
@@ -271,6 +280,7 @@ posts/              ← you edit this: one .md file per post
   substack/         the saved copy of your Substack (don't edit by hand)
 assets/             the code that makes the site work
 tools/              helper scripts (refresh Substack, redraw the QR code)
+worker/             the Substack Worker and its setup guide (not part of the site itself)
 ```
 
 **You only ever need `posts/` and `profiles.md`.** Everything in `assets/` is the
