@@ -107,7 +107,7 @@ Only `title` is required. The rest:
 | `date` | Byline, and the sort order. **Newest post is what a visitor lands on.** Write it as `2026-06-26`. |
 | `source` | Adds an "Original post" link for screen readers and search engines. |
 | `excerpt` | What the card shows. Leave it out and the card uses the post's opening. |
-| `profile` | Which of the nine renderings this post opens in. Readers can still switch. Overruled by `profiles.md` — see below. |
+| `profile` | Which of the nine renderings this post opens in. The highest-priority setting — it beats `profiles.md`. See below. |
 
 The filename becomes the post's link. `overcoming-the-classics.md` is at
 `?post=overcoming-the-classics`. Keep filenames lowercase with dashes instead of
@@ -115,18 +115,17 @@ spaces and the links stay tidy.
 
 ### Which profile a post is set in
 
-Three places can say, and the most specific one that does wins:
+Three layers, highest priority first. The first one that has an answer wins:
 
 | | where | applies to |
 |---|---|---|
-| 1 | nothing said anywhere — **Foundry** | every post |
-| 2 | `profile:` in the post's front matter | posts that have a `.md` file |
-| 3 | a line in **`profiles.md`** | any post, and it beats 2 |
+| 1 | `profile:` in the post's front matter | posts that have a `.md` file — **beats everything below** |
+| 2 | a line in **`profiles.md`** | any post, including Substack ones with no file here |
+| 3 | nothing said anywhere — **Foundry** | every post |
 
-Rule 3 exists because of rule 2's limit. A post that comes in from Substack has
-no file here to write `profile:` into, so without somewhere outside the post to
-say, half the feed could never be set at all. `profiles.md` sits next to
-`index.html` and is one line per post:
+A post that comes in from Substack has no file here to write `profile:` into,
+so `profiles.md` is how it gets one. Anything not covered by either layer is
+Foundry. `profiles.md` sits next to `index.html` and is one line per post:
 
 ```
 How Nodes Can Fix Broken Networks: cipher
@@ -139,14 +138,15 @@ both sides, so a title copied off the page matches whatever it happens to
 contain. A line naming a profile that does not exist is reported in the console
 and otherwise ignored, rather than silently doing nothing.
 
-One line re-skins everything, over both of the rules above:
+One line sets the background for every post that has no more specific answer:
 
 ```
 everything: cipher
 ```
 
-A named line still beats it, so `everything:` is a background you can put
-exceptions on rather than a switch that cancels the file.
+A post's own `profile:` and a named line in `profiles.md` both still beat it, so
+`everything:` replaces Foundry as the default rather than cancelling the rest.
+
 
 Since this is the only place a Substack post's profile can be set,
 `fetch-substack.py` does not assign one. It used to hand them out in rotation so
@@ -367,7 +367,7 @@ To vendor it instead of hitting a CDN: `npm pack @chenglou/pretext`, drop
 
 ```
 index.html
-profiles.md              which profile each post is set in; beats front matter
+profiles.md              which profile each post is set in; beaten by a post's own front matter
 assets/fonts/            Share Tech Mono (SIL OFL) + its licence; Cipher's face
 tools/
   fetch-substack.py      build-time: RSS -> posts/substack/ (Substack has no CORS)

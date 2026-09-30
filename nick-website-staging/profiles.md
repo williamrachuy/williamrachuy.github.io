@@ -38,12 +38,22 @@
 #
 # Delete a line and that post goes back to Foundry (or to `everything:`).
 
-How Nodes Can Fix Broken Networks: cipher
-Magical Plugs in the Winter: lantern
-Mad Men, Self-Actualization and Being Curious About Who You Want to Become: meniscus
-Make 2025 The Year You Reclaim Your Attention: waterline
-The Last American Bagholder: ledger
+# Staging: every Substack post is given a profile here so the site reads the
+# way the real one will. Posts with their own .md file set theirs at the top of
+# that file, which beats anything in this list.
 
-# Either way of naming a post works — this one is by the short name from its
-# web address rather than by its title.
-montana-and-wyoming-travel-log: tidewater
+how-nodes-can-fix-broken-networks: ledger
+my-favorite-content-from-2025: marbles
+magical-plugs-in-the-winter: fracture
+montana-and-wyoming-travel-log: meniscus
+how-to-tell-if-your-content-diet: cipher
+mad-men-self-actualization-and-being: foundry
+bite-sized-book-reviews-abundance: lantern
+how-substack-should-use-algorithms: waterline
+14-conversation-starters-for-americas: tidewater
+make-2025-the-year-you-reclaim-your: ledger
+why-culture-has-drifted-to-the-right: tidewater
+billionaire-influence-as-americas: meniscus
+5-painful-truths-about-america-for: fracture
+a-broadcast-from-the-front-the-current: cipher
+the-last-american-bagholder: lantern

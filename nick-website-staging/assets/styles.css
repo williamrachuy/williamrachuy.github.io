@@ -1,0 +1,570 @@
+/* styles.css — mobile first. Desktop gets the same thing, wider. */
+
+:root {
+  color-scheme: dark;
+  --bg: #040507;
+  --bg2: #090b10;
+  --cream: #e8e0d1;
+  --gold: #d6ba7c;
+  --gold-dim: #4a3e26;
+  --line: rgba(214, 186, 124, 0.16);
+  --serif: Cambria, Georgia, "Times New Roman", serif;
+  --ui: ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  background: var(--bg);
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  position: relative;
+  margin: 0;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+  font-family: var(--serif);
+  color: var(--cream);
+}
+
+/* The page's backdrop. It used to be the body's own background with
+   `background-attachment: fixed`, which looks the same and costs far more: a
+   fixed background has to be repainted on every frame of a scroll, across the
+   whole screen, on the main thread. As a fixed layer of its own it is painted
+   once and the compositor just leaves it where it is. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(214,186,124,0.035), transparent 60%),
+    linear-gradient(180deg, var(--bg2), var(--bg) 70%);
+}
+.is-paper body::before { display: none; }
+
+/* ------------------------------------------------------------- stage */
+
+/* Height is set per layout, to exactly the scrollable region, and clipped so
+   nothing a DOM profile lays out can stretch the page past the end of the post.
+   The canvas and the lens handle are position:fixed, so they escape this. */
+#stage {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  overflow: hidden;
+  overflow: clip;
+}
+#spacer { width: 100%; }
+
+/* Glows, rings and glass that sit under a canvas profile's type. They are
+   static shapes that only ever move, fade or resize, so they live on layers of
+   their own and the compositor moves them; drawn into the canvas, every one of
+   them was re-rasterised across hundreds of thousands of pixels every frame.
+   Below the canvas (z-index 1), which is where the canvas used to draw them. */
+.fx-layer {
+  position: fixed;
+  top: 0; left: 0;
+  pointer-events: none;
+  z-index: 0;
+  will-change: transform, opacity;
+}
+
+.stage-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(180deg, rgba(4,5,7,0.92) 0%, rgba(4,5,7,0) 14%),
+    linear-gradient(0deg, rgba(4,5,7,0.92) 0%, rgba(4,5,7,0) 16%);
+}
+
+/* ------------------------------------------------------- lens handle */
+
+.lens-handle {
+  position: fixed;
+  right: 0;
+  z-index: 6;
+  width: 56px;
+  height: 56px;
+  margin-top: -28px;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+.lens-handle[data-mode="circle"] { right: auto; margin-left: -28px; }
+.lens-handle span {
+  display: block;
+  width: 30px;
+  height: 3px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(214,186,124,0.15), rgba(214,186,124,0.75));
+  box-shadow: 0 0 14px rgba(214,186,124,0.35);
+  transition: transform .18s ease, background .18s ease;
+}
+.lens-handle[data-mode="circle"] span {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(214,186,124,0.35), rgba(214,186,124,0.06) 70%);
+  border: 1px solid rgba(214,186,124,0.5);
+}
+/* ---------------------------------------------------- marbles profile */
+
+/* The one light profile. Set on <html> by the profile itself while it is
+   mounted, so the strip behind an overscroll is paper as well, and taken off
+   again on the way out. */
+.is-paper, .is-paper body {
+  color-scheme: light;
+  background: #fbfaf7;
+}
+.is-paper body { color: #15130f; }
+/* The vignette is a near-black fade at the top and bottom edges, and it sits
+   above the canvas. Left alone on a light page it is a smudge of soot across
+   the paper, so it fades to paper instead. */
+.is-paper #vignette {
+  background:
+    linear-gradient(180deg, rgba(251,250,247,0.92) 0%, rgba(251,250,247,0) 14%),
+    linear-gradient(0deg, rgba(251,250,247,0.92) 0%, rgba(251,250,247,0) 16%);
+}
+
+/* The grab target for one marble: invisible, and only as big as the still
+   middle of it. `touch-action: none` is the whole point — without it a drag
+   here is a page scroll and a marble can never be picked up on a phone — and
+   it is confined to this circle so a touch anywhere else still scrolls. */
+.marble-grip {
+  position: fixed;
+  top: 0; left: 0;
+  z-index: 5;
+  border-radius: 50%;
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+.marble-grip.is-held { cursor: grabbing; }
+
+.lens-handle.is-dragging { cursor: grabbing; }
+.lens-handle.is-dragging span { transform: scaleX(1.5); background: rgba(232,224,209,0.9); }
+.lens-handle[data-mode="circle"].is-dragging span { transform: scale(1.25); }
+
+/* --------------------------------------------------- foundry profile */
+
+.foundry {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  color: var(--cream);
+}
+.foundry .fy { margin: 0; color: rgba(232,224,209,0.9); }
+.foundry .fy-title { color: var(--cream); letter-spacing: 0.005em; }
+.foundry .fy-subtitle { color: rgba(232,224,209,0.7); }
+.foundry .fy-meta { color: rgba(214,186,124,0.62); letter-spacing: 0.08em; text-transform: uppercase; }
+.foundry .fy-blockquote { border-left: 2px solid var(--line); }
+.foundry hr { border: 0; border-top: 1px solid var(--line); width: 38%; margin: 1.6em auto; }
+
+/* --------------------------------------------------- lantern profile */
+
+.lantern { position: absolute; top: 0; left: 0; width: 100%; z-index: 3; }
+.lt-line {
+  position: absolute;
+  white-space: pre;
+  will-change: opacity, transform;
+  color: var(--gold-dim);
+}
+.lt-rule {
+  position: absolute;
+  height: 1px;
+  background: var(--line);
+  opacity: .6;
+}
+
+/* ---------------------------------------------------------- controls */
+
+#controls {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 40;
+  font-family: var(--ui);
+  padding-top: env(safe-area-inset-top, 0px);
+  background: linear-gradient(180deg, rgba(6,7,10,0.94), rgba(6,7,10,0.78) 70%, rgba(6,7,10,0));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+#panel-toggle {
+  appearance: none;
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid rgba(214,186,124,0.1);
+  color: rgba(232,224,209,0.8);
+  font: 500 13px/1.2 var(--ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#panel-toggle .lbl { flex: 1; text-align: left; }
+#panel-toggle .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--gold);
+  box-shadow: 0 0 9px rgba(214,186,124,0.7);
+}
+#panel-toggle svg { transition: transform .22s ease; opacity: .7; }
+#controls.open #panel-toggle svg { transform: rotate(180deg); }
+
+#engine-status {
+  font: 500 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .06em;
+  padding: 4px 7px;
+  border-radius: 4px;
+  border: 1px solid rgba(214,186,124,0.22);
+  color: rgba(214,186,124,0.8);
+  text-transform: none;
+}
+#engine-status[data-mode="fallback"] { color: #d79b7a; border-color: rgba(215,155,122,0.35); }
+
+#panel {
+  display: none;
+  padding: 6px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+  max-height: 62dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border-bottom: 1px solid rgba(214,186,124,0.1);
+}
+#controls.open #panel { display: block; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 7px; padding: 10px 0 6px; }
+.chip {
+  appearance: none;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 19px;
+  border: 1px solid rgba(214,186,124,0.22);
+  background: rgba(214,186,124,0.04);
+  color: rgba(232,224,209,0.75);
+  font: 500 13px/1 var(--ui);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.chip.on {
+  background: rgba(214,186,124,0.16);
+  border-color: rgba(214,186,124,0.6);
+  color: var(--cream);
+}
+
+.blurb {
+  margin: 2px 0 12px;
+  font: 400 12.5px/1.5 var(--ui);
+  color: rgba(232,224,209,0.5);
+}
+
+.ctl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 2px 0;
+  font: 400 12.5px/1.3 var(--ui);
+  color: rgba(232,224,209,0.62);
+}
+.ctl > span { flex: 0 0 38%; }
+.ctl em { flex: 0 0 3.2em; text-align: right; font-style: normal; font-family: ui-monospace, Menlo, monospace; font-size: 11px; color: rgba(214,186,124,0.7); }
+.ctl input[type=range] { flex: 1; accent-color: #d6ba7c; height: 28px; }
+.ctl input[type=checkbox] { width: 22px; height: 22px; accent-color: #d6ba7c; }
+.ctl select {
+  flex: 1;
+  min-height: 36px;
+  background: rgba(255,255,255,0.05);
+  color: rgba(232,224,209,0.85);
+  border: 1px solid rgba(214,186,124,0.22);
+  border-radius: 8px;
+  padding: 0 8px;
+  font: 400 13px var(--ui);
+}
+
+.assign-hint {
+  margin: -6px 0 12px;
+  font: 400 11.5px/1.6 var(--ui);
+  color: rgba(232,224,209,0.34);
+}
+.assign-hint code {
+  font: 400 11px/1.5 ui-monospace, Menlo, monospace;
+  color: rgba(214,186,124,0.72);
+  background: rgba(255,255,255,0.05);
+  border-radius: 5px;
+  padding: 1px 5px;
+  /* A long title must not push the panel wider than the screen. */
+  overflow-wrap: anywhere;
+}
+
+.foot {
+  margin: 14px 0 0;
+  font: 400 11px/1.5 ui-monospace, Menlo, monospace;
+  color: rgba(232,224,209,0.32);
+}
+
+/* ------------------------------------------------------------- misc */
+
+#boot, #fatal {
+  position: fixed;
+  left: 50%; top: 48%;
+  transform: translate(-50%, -50%);
+  margin: 0;
+  z-index: 20;
+  max-width: 80vw;
+  text-align: center;
+  font: italic 400 15px/1.5 var(--serif);
+  color: rgba(214,186,124,0.55);
+}
+#fatal { color: #d79b7a; font-style: normal; font-size: 13px; font-family: var(--ui); }
+
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (min-width: 760px) {
+  #controls { left: auto; right: 0; width: 360px; border-bottom-left-radius: 14px; overflow: hidden; }
+  #panel { max-height: 78dvh; }
+}
+
+/* ----------------------------------------------------------------- feed */
+/* The landing page. Same card shape as /blog, in this demo's palette. */
+
+#feed {
+  position: relative;
+  z-index: 20;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: calc(64px + env(safe-area-inset-top, 0px)) 18px
+           calc(48px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Title on the left, a code to point a phone at on the right; on a narrow
+   screen the code drops underneath and stays at the top of the page, which is
+   the only place it is any use. */
+.feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22px 28px;
+  margin: 0 0 30px;
+}
+.feed-intro { flex: 1 1 19rem; min-width: 0; }
+
+.feed-qr {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.feed-qr img {
+  display: block;
+  /* 123 is 41 modules and quiet zone at exactly 3px each: at a whole number of
+     pixels per module the edges land on the grid and stay crisp. */
+  width: 123px;
+  height: 123px;
+  border-radius: 8px;
+}
+.feed-qr span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font: 500 11px/1.3 var(--ui);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(232, 224, 209, 0.3);
+}
+.feed-qr b {
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  color: rgba(214, 186, 124, 0.72);
+}
+@media (min-width: 560px) {
+  /* Beside the title there is room to stack the caption under the code, which
+     reads better than a label hanging off its side. */
+  .feed-qr { flex-direction: column; align-items: flex-end; gap: 9px; }
+  .feed-qr span { align-items: flex-end; text-align: right; }
+}
+
+.feed-head h1 {
+  margin: 0 0 10px;
+  font: 400 clamp(30px, 7vw, 46px)/1.05 var(--serif);
+  letter-spacing: -0.01em;
+  color: var(--cream);
+}
+.feed-note {
+  margin: 0;
+  max-width: 34rem;
+  font: 400 clamp(14px, 2.1vw, 16px)/1.6 var(--ui);
+  color: rgba(232, 224, 209, 0.52);
+}
+
+.posts { display: grid; gap: 14px; }
+
+.post-card {
+  display: block;
+  padding: clamp(16px, 3.4vw, 24px);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(214,186,124,0.035), rgba(255,255,255,0.016));
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+/* Hover is a desktop idea. On a touch screen it sticks after the tap. */
+@media (hover: hover) {
+  .post-card:hover {
+    border-color: rgba(214, 186, 124, 0.34);
+    background: linear-gradient(180deg, rgba(214,186,124,0.07), rgba(255,255,255,0.03));
+    transform: translateY(-1px);
+  }
+}
+.post-card:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.post-card .date {
+  margin-bottom: 9px;
+  font: 500 11px/1 var(--ui);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(214, 186, 124, 0.62);
+}
+.post-card h2 {
+  margin: 0 0 7px;
+  font: 400 clamp(21px, 3.8vw, 29px)/1.14 var(--serif);
+  color: rgba(232, 224, 209, 0.94);
+}
+.post-card .subtitle {
+  margin: 0 0 11px;
+  font: italic 400 clamp(14px, 2.1vw, 17px)/1.42 var(--serif);
+  color: rgba(232, 224, 209, 0.6);
+}
+.post-card .excerpt {
+  font: 400 clamp(13.5px, 1.9vw, 15px)/1.6 var(--ui);
+  color: rgba(232, 224, 209, 0.46);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.feed-empty {
+  padding: 56px 20px;
+  text-align: center;
+  color: rgba(232, 224, 209, 0.5);
+}
+.feed-empty .icon { font-size: 38px; opacity: 0.35; margin-bottom: 10px; }
+.feed-empty p { margin: 0; font-style: italic; }
+
+.feed-foot {
+  margin: 26px 0 0;
+  font: 500 11px/1 var(--ui);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: rgba(232, 224, 209, 0.28);
+}
+
+/* Back out of a post. Bottom-left keeps it clear of the controls bar at the
+   top and within thumb reach on a phone. */
+#back-to-feed {
+  position: fixed;
+  z-index: 45;
+  left: calc(12px + env(safe-area-inset-left, 0px));
+  bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  padding: 9px 14px;
+  border-radius: 19px;
+  border: 1px solid rgba(214, 186, 124, 0.22);
+  background: rgba(8, 9, 13, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: rgba(232, 224, 209, 0.72);
+  font: 500 12px/1 var(--ui);
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) {
+  #back-to-feed:hover { border-color: rgba(214,186,124,0.4); color: var(--cream); }
+}
+
+/* --------------------------------------------------------------- pictures */
+
+/* Foundry: a picture in the flow, like any other block. */
+.fy-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+  /* The layout reserves at most this much, so a portrait cannot take the
+     whole screen and leave nothing to read alongside it. */
+  max-height: 62dvh;
+  object-fit: contain;
+  object-position: center;
+  background: rgba(214, 186, 124, 0.04);
+}
+
+/* Lantern: positioned to the coordinates the layout computed, and lit by the
+   reading band rather than by the browser. */
+.lt-img {
+  position: absolute;
+  display: block;
+  border-radius: 4px;
+  object-fit: cover;
+  background: rgba(214, 186, 124, 0.04);
+  will-change: opacity, transform, filter;
+  transform: translateZ(0);
+}
+
+/* Which pipeline a card came down. Quiet on purpose — it is a fact about the
+   plumbing, not about the writing. */
+.post-card .origin {
+  margin-left: 10px;
+  padding: 2px 7px;
+  border: 1px solid rgba(214, 186, 124, 0.22);
+  border-radius: 10px;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  color: rgba(232, 224, 209, 0.38);
+}
+
+/* Share Tech Mono, SIL OFL 1.1 — see assets/fonts/OFL.txt. Latin subset only;
+   Cipher uses it for every Western character it draws. Not the film's typeface,
+   which is proprietary and is not shipped here. */
+@font-face {
+  font-family: 'Share Tech Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('fonts/share-tech-mono-latin.woff2') format('woff2');
+}
