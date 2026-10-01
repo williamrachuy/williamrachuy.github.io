@@ -31,9 +31,28 @@
 //   ALLOWED_ORIGIN    optional. Which site may call this Worker, for example
 //                     https://nick.github.io . Unset means any site, which is
 //                     fine: the data is public anyway.
-//   CACHE_SECONDS     optional. How long answers are kept. Default 600.
+//   CACHE_SECONDS     optional. How long answers are kept. Default 1800.
+//   PUBLICATION_NAME  optional. The publication's display name, e.g. TBH Press.
+//                     Saves one request to Substack per refresh.
+//
+// Optional storage (only if Substack keeps answering 429 "too many requests"):
+//
+//   STORE             a Workers KV namespace bound under this name, plus a Cron
+//                     Trigger (every 30 minutes). The Worker then refreshes a
+//                     copy of the feed in the background and visitors only
+//                     ever read that copy, so Substack is asked a few times
+//                     an hour no matter how many people visit, and a refusal
+//                     leaves the last good copy in place. See worker/README.md.
+//
+// Whatever the setup, a refusal from Substack is retried, and if it persists
+// the last good answer is served (marked with an X-Served-Stale header) instead
+// of an error.
 
-const DEFAULT_CACHE_SECONDS = 600;
+const DEFAULT_CACHE_SECONDS = 1800;
+const POST_FRESH_SECONDS = 86400;   // a post body rarely changes; recheck daily
+const STALE_KEEP_SECONDS = 2592000; // keep the last good copy for 30 days
+const RETRIES = 2;
+const WARM_POSTS = 30;              // bodies fetched per scheduled refresh
 const PAGE = 50;            // Substack's archive pages
 const MAX_POSTS = 500;      // a safety stop, not an expected size
 const UPSTREAM_TIMEOUT_MS = 10000;
@@ -57,7 +76,7 @@ export default {
     const ttl = Number(env.CACHE_SECONDS) > 0 ? Number(env.CACHE_SECONDS) : DEFAULT_CACHE_SECONDS;
 
     // /health is never cached: its whole job is to report the present moment.
-    if (url.pathname === '/health') return health(host, cors);
+    if (url.pathname === '/health') return health(host, cors, env);
 
     const cache = typeof caches !== 'undefined' ? caches.default : null;
     const key = new Request(url.origin + url.pathname + url.search, { method: 'GET' });
@@ -68,51 +87,164 @@ export default {
 
     let res;
     try {
-      res = await route(url, host, ttl);
+      res = await route(url, host, ttl, env);
     } catch (err) {
       return json({ error: String((err && err.message) || err) }, 502, cors);
     }
 
-    // Only remember good answers; a failure should be retried next time.
-    if (cache && res.status === 200) ctx.waitUntil(cache.put(key, res.clone()));
+    // Only remember good, fresh answers; a failure or a stale fallback should
+    // be retried next time.
+    if (cache && res.status === 200 && !res.headers.has('X-Served-Stale')) ctx.waitUntil(cache.put(key, res.clone()));
     return withHeaders(res, cors);
+  },
+
+  // Cron Trigger. Does nothing unless a KV namespace is bound as STORE: with
+  // nowhere shared to keep a copy there is nothing for a background refresh to
+  // refresh.
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(warm(env));
   }
 };
 
-async function route(url, host, ttl) {
+async function route(url, host, ttl, env) {
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
   if (path === '/' || path === '/index') {
-    return json(await listPosts(host, ''), 200, cacheHeaders(ttl));
+    const { data, stale } = await cached(env, 'index', ttl, () => listPosts(host, '', env), true);
+    return json(data, 200, answerHeaders(ttl, stale));
   }
 
   if (path === '/search') {
     const q = (url.searchParams.get('q') || '').trim().slice(0, 100);
     if (q.length < 2) return json({ error: 'q must be at least 2 characters' }, 400);
-    return json(await listPosts(host, q), 200, cacheHeaders(ttl));
+    const { data, stale } = await cached(env, 'search:' + q.toLowerCase(), ttl, () => listPosts(host, q, env), false);
+    return json(data, 200, answerHeaders(ttl, stale));
   }
 
   const m = /^\/post\/([A-Za-z0-9][A-Za-z0-9_-]{0,200})$/.exec(path);
   if (m) {
-    const post = await getPost(host, m[1]);
-    return post ? json(post, 200, cacheHeaders(ttl)) : json({ error: 'no such post' }, 404);
+    const slug = m[1];
+    let hit;
+    try {
+      hit = await cached(env, 'post:' + slug, POST_FRESH_SECONDS, async () => {
+        const p = await getPost(host, slug);
+        if (!p) { const e = new Error('no such post'); e.notFound = true; throw e; }
+        return p;
+      }, true);
+    } catch (err) {
+      if (err.notFound) return json({ error: 'no such post' }, 404);
+      throw err;
+    }
+    return json(hit.data, 200, answerHeaders(ttl, hit.stale));
   }
 
   return json({ error: 'not found', endpoints: ['/index', '/post/<slug>', '/search?q=', '/health'] }, 404);
 }
 
+function answerHeaders(ttl, stale) {
+  return stale
+    ? { 'Cache-Control': 'public, max-age=60', 'X-Served-Stale': '1' }
+    : cacheHeaders(ttl);
+}
+
+// ----------------------------------------------------------- last good copy
+//
+// Substack can answer 429 ("too many requests") or 403 to a Worker at any time,
+// because Workers share Cloudflare's outgoing addresses with every other Worker.
+// So every good answer is also kept as a "last good copy", and when Substack
+// refuses, that copy is served instead of an error.
+//
+// Where it is kept: in a Workers KV namespace if one is bound as STORE (shared
+// by every Cloudflare location, survives for weeks), otherwise in Cloudflare's
+// cache, which is local to one location but needs no setup.
+
+const stashKey = key => new Request('https://stash.invalid/' + encodeURIComponent(key));
+
+async function recall(env, key, useKV) {
+  try {
+    if (useKV && env.STORE) return await env.STORE.get(key, 'json');
+    if (typeof caches === 'undefined') return null;
+    const r = await caches.default.match(stashKey(key));
+    return r ? await r.json() : null;
+  } catch (_) { return null; }
+}
+
+async function stash(env, key, data, useKV) {
+  const v = { at: Date.now(), data };
+  try {
+    if (useKV && env.STORE) {
+      await env.STORE.put(key, JSON.stringify(v), { expirationTtl: STALE_KEEP_SECONDS });
+    } else if (typeof caches !== 'undefined') {
+      await caches.default.put(stashKey(key), new Response(JSON.stringify(v), {
+        headers: { 'Cache-Control': 'max-age=' + STALE_KEEP_SECONDS }
+      }));
+    }
+  } catch (_) { /* keeping a copy is a courtesy; never fail the request over it */ }
+}
+
+/**
+ * Fresh copy if there is one; else ask Substack; else, if Substack refuses,
+ * whatever was kept last time. `stale` tells the caller which of those it got.
+ */
+async function cached(env, key, freshSeconds, produce, useKV) {
+  const kept = await recall(env, key, useKV);
+  if (kept && Date.now() - kept.at < freshSeconds * 1000) return { data: kept.data, stale: false };
+  try {
+    const data = await produce();
+    await stash(env, key, data, useKV);
+    return { data, stale: false };
+  } catch (err) {
+    if (err.notFound) throw err;
+    if (kept) return { data: kept.data, stale: true };
+    throw err;
+  }
+}
+
+// Background refresh, run by the Cron Trigger. Needs the STORE namespace.
+async function warm(env) {
+  const host = cleanHost(env.SUBSTACK_HOST);
+  if (!host || !env.STORE) return;
+  const index = await listPosts(host, '', env);
+  await stash(env, 'index', index, true);
+
+  // Bodies are fetched only for posts not yet kept, a few per run, so a first
+  // run fills the store over several visits to Substack rather than all at once.
+  let fetched = 0;
+  for (const p of index.posts) {
+    if (fetched >= WARM_POSTS) break;
+    if (await recall(env, 'post:' + p.slug, true)) continue;
+    try {
+      const post = await getPost(host, p.slug);
+      if (post) { await stash(env, 'post:' + p.slug, post, true); fetched++; }
+    } catch (_) { break; }      // refused: stop pestering, try again next run
+  }
+}
+
 // ------------------------------------------------------------- upstream
 
 async function upstream(url, accept) {
-  const r = await fetch(url, {
-    headers: { 'User-Agent': UA, 'Accept': accept, 'Accept-Language': 'en-US,en;q=0.9' },
-    signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-    // Cloudflare's own cache in front of Substack, for the edge rather than
-    // the browser.
-    cf: { cacheTtl: 300, cacheEverything: true }
-  });
-  if (!r.ok) throw new Error('Substack answered ' + r.status + ' for ' + new URL(url).pathname);
-  return r;
+  let last;
+  for (let attempt = 0; attempt <= RETRIES; attempt++) {
+    const r = await fetch(url, {
+      headers: { 'User-Agent': UA, 'Accept': accept, 'Accept-Language': 'en-US,en;q=0.9' },
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      // Cloudflare's own cache in front of Substack, for the edge rather than
+      // the browser.
+      cf: { cacheTtl: 300, cacheEverything: true }
+    });
+    if (r.ok) return r;
+    last = new Error('Substack answered ' + r.status + ' for ' + new URL(url).pathname);
+    last.status = r.status;
+    // Only the refusals a second try can change are worth one: too many
+    // requests, and the server being momentarily unwell. A 403 or 404 is a
+    // decision.
+    if (r.status !== 429 && r.status < 500) break;
+    if (attempt < RETRIES) {
+      const wait = Math.min(Number(r.headers.get('Retry-After')) * 1000 || 700 * (attempt + 1), 2500);
+      await new Promise(res => setTimeout(res, wait));
+    }
+  }
+  throw last;
 }
 
 const ymd = s => {
@@ -142,7 +274,7 @@ function cardFromApi(p, host, publication) {
 
 // --------------------------------------------------------------- listing
 
-async function listPosts(host, q) {
+async function listPosts(host, q, env = {}) {
   let posts;
   let publication = '';
   try {
@@ -155,7 +287,7 @@ async function listPosts(host, q) {
       posts.push(...batch);
       if (batch.length < PAGE || q) break;      // a search is one page of best matches
     }
-    publication = await publicationName(host);
+    publication = env.PUBLICATION_NAME || await publicationName(host);
     posts = posts.filter(p => p.slug).map(p => cardFromApi(p, host, publication));
   } catch (archiveErr) {
     // The JSON API is the nicer route; the RSS feed carries the same posts.
@@ -318,7 +450,7 @@ function firstParagraph(body) {
 
 // ---------------------------------------------------------------- health
 
-async function health(host, cors) {
+async function health(host, cors, env) {
   const probe = async (label, path, accept) => {
     const started = Date.now();
     try {
@@ -336,11 +468,23 @@ async function health(host, cors) {
     probe('RSS feed (fallback)', '/feed', 'application/rss+xml')
   ]);
   const working = checks.some(c => c.ok);
+  const throttled = !working && checks.some(c => c.status === 429);
+  const kept = await recall(env, 'index', true);
+  const copy = kept
+    ? 'a last good copy of the feed from ' + new Date(kept.at).toISOString() + ' is being kept'
+    : 'no last good copy is kept yet';
+  const where = env.STORE ? 'in KV' : 'in this location\'s cache (add the KV store from worker/README.md to make it shared and durable)';
+
+  let verdict;
+  if (working) verdict = 'OK — this Worker can read ' + host;
+  else if (throttled) verdict = 'RATE LIMITED (429) — Substack is temporarily throttling the Cloudflare address this Worker uses. This is usually temporary: reload this page in a few minutes. Visitors are served the last good copy when there is one.';
+  else verdict = 'BLOCKED — Substack refused this Worker. See the troubleshooting section of worker/README.md';
+
   return json({
     host,
-    verdict: working
-      ? 'OK — this Worker can read ' + host
-      : 'BLOCKED — Substack refused this Worker. See the troubleshooting section of worker/README.md',
+    verdict,
+    lastGoodCopy: copy + ' ' + where,
+    kvBound: !!env.STORE,
     checks
   }, working ? 200 : 502, { ...cors, 'Cache-Control': 'no-store' });
 }

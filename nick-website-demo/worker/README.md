@@ -21,8 +21,8 @@ and a Worker can add the permission header browsers need. So the chain is:
 
 ```
 visitor's browser  →  your Worker  →  Substack
-                      (caches answers for 10 minutes, so Substack is
-                       asked once per few minutes, not once per visitor)
+                      (caches answers for 30 minutes, so Substack is
+                       asked a few times an hour, not once per visitor)
 ```
 
 ## Setup (about 10 minutes, no software to install)
@@ -89,18 +89,50 @@ otherwise the post uses Foundry.
   than copied into the repository.
 - **Cost:** the free Cloudflare plan allows 100,000 requests a day. Answers are
   cached, so a small publication will not come near that.
-- **Changed a setting and nothing happened?** Answers are cached for up to 10
+- **Changed a setting and nothing happened?** Answers are cached for up to 30
   minutes. Wait, or add `?x=1` to the address to bypass it while testing.
+- **Substack sometimes refuses with "429 — too many requests".** Workers share
+  Cloudflare's outgoing addresses with other people's Workers, so Substack can
+  throttle that address for a while. The Worker retries, and if Substack keeps
+  refusing it serves the last good copy it kept. If you see 429 on `/health`,
+  see [If Substack keeps saying 429](#if-substack-keeps-saying-429).
 - Substack's data endpoints are public but not officially documented, so
   Substack *could* change them someday. The Worker tries the JSON interface
   first and falls back to the RSS feed, and the site falls back to the saved
   copy, so a change degrades the experience instead of breaking it.
+
+## If Substack keeps saying 429
+
+`/health` showing `RATE LIMITED (429)` means Substack is throttling the address
+the Worker happens to be using, not that anything is broken. Try, in order:
+
+1. **Wait and reload `/health`** a few times over 10–15 minutes. It often clears
+   by itself, and once one request gets through the Worker keeps that answer.
+2. **Set `PUBLICATION_NAME`** (Settings → Variables, for example `TBH Press`).
+   One less request to Substack each refresh.
+3. **Add the KV store and a schedule** (5 minutes, free). This is the durable
+   fix: a background job refreshes a copy of your posts every 30 minutes and
+   visitors only ever read the copy, so Substack is asked only a few times an
+   hour and one refusal changes nothing.
+   1. Cloudflare dashboard → **Storage & Databases → KV → Create** a namespace,
+      named for example `substack-store`.
+   2. Open the Worker → **Settings → Bindings → Add → KV namespace**. Variable
+      name **`STORE`** (exactly, capitals), pick the namespace, save.
+   3. Worker → **Settings → Triggers → Cron Triggers → Add**, and enter
+      `*/30 * * * *`.
+   4. Wait up to 30 minutes (or reload `/index` once Substack answers). `/health`
+      then says `kvBound: true` and shows when the last good copy was kept.
+
+While it is throttled, the website keeps working: the Worker serves the last good
+copy if it has one, and the site falls back to the saved copy in
+`posts/substack/` if the Worker has nothing.
 
 ## Troubleshooting
 
 | You see | Meaning | Try |
 |---|---|---|
 | `/health` says `SUBSTACK_HOST is not set` | Step 4 is missing | Add the variable and deploy |
+| `/health` says `RATE LIMITED (429)` | Substack is throttling the Worker's shared address | See [above](#if-substack-keeps-saying-429) |
 | `/health` says `BLOCKED` with status `403` | Substack refused the Worker | Check the address is exactly `name.substack.com` (or the custom domain); try again in a few minutes. If it persists, the snapshot fallback keeps the site working — ask for the feed to be routed differently |
 | `/health` is OK but the site shows old posts | The `substack-api` line is empty, has a typo, or has a trailing slash/space | Re-check step 6; open the browser console (F12) and look for messages starting `[posts]` |
 | Search finds nothing new | Only matches titles/intros | Needs the Worker; confirm `/search?q=word` returns posts when opened directly |
