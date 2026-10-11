@@ -4,6 +4,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  # Substack sends no CORS headers, so the browser cannot read the feed
+  # directly and it is pulled in here instead.
+  #
+  # Currently a no-op: Cloudflare refuses this fetch from GitHub's runner
+  # address ranges (403), so the build publishes the snapshot committed to the
+  # repo. Kept daily rather than removed so it heals itself the moment the
+  # fetch can reach Substack — see the Substack section of
+  # nick-website-demo/README.md for what would make that work.
+  schedule:
+    - cron: '17 6 * * *'
 
 permissions:
   contents: read
@@ -23,6 +33,12 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+
+      - name: Refresh the Substack snapshot
+        # No continue-on-error: the script exits 0 and raises a warning
+        # annotation when the feed is simply unreachable, so an actual bug in it
+        # still fails this step instead of being swallowed.
+        run: python3 nick-website-demo/tools/fetch-substack.py
 
       - name: Prepare site artifact
         env:
