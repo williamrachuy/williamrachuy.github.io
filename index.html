@@ -826,7 +826,7 @@
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
           const baseVisible = !(p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15);
           if (!baseVisible) continue;
-          const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
+          const pulse  = 0.5; // background particles hold steady; only orbs pulse
           const twinkle = soundOrbTwinkleAt(p.x, p.y, p.tw, now, activeAudioOrbs, soundOrbReach, soundOrbReach2);
           const twinkleLift = clamp(1 + twinkle * 0.85, 0.35, 2.2);
           const alpha  = ((p.alpha * 0.59) + local * (0.32 + pulse * 0.18)) * clamp(1 + twinkle * 0.72, 0.45, 2.1);
