@@ -530,13 +530,20 @@
     const canvas = document.getElementById('c');
     const ctx = canvas.getContext('2d');
     const FONT = '"DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", "Segoe UI Symbol", "Noto Sans Symbols 2", monospace';
-    let vw = 0, vh = 0, cellW = 12, cellH = 16, dpr = 1;
+    let vw = 0, vh = 0, cellW = 12, cellH = 16, dpr = 1, zoom = 1;
+    function setZoom(z) { z = clamp(z, 0.6, 1.9); if (Math.abs(z - zoom) < 0.005) return; zoom = z; resize(); }
+    function camera() {
+      const viewC = vw / cellW, viewR = vh / cellH;
+      const camX = W > viewC ? clamp(Math.round(player.x + 0.5 - viewC / 2), 0, Math.ceil(W - viewC)) : Math.round((W - viewC) / 2);
+      const camY = H > viewR ? clamp(Math.round(player.y + 0.5 - viewR / 2), 0, Math.ceil(H - viewR)) : Math.round((H - viewR) / 2);
+      return { camX, camY };
+    }
     function resize() {
       dpr = Math.min(2, window.devicePixelRatio || 1);
       vw = window.innerWidth; vh = window.innerHeight;
       canvas.width = Math.round(vw * dpr); canvas.height = Math.round(vh * dpr);
       canvas.style.width = vw + 'px'; canvas.style.height = vh + 'px';
-      cellH = clamp(Math.round(Math.min(vh / 30, vw / 24)), 16, 24);
+      cellH = clamp(Math.round(clamp(Math.min(vh / 30, vw / 24), 16, 24) * zoom), 10, 44);
       cellW = Math.round(cellH * 0.78);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       dirty = true;
@@ -622,9 +629,7 @@
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, vw, vh);
       const cols = Math.ceil(vw / cellW) + 1, rows = Math.ceil(vh / cellH) + 1;
-      const viewC = vw / cellW, viewR = vh / cellH;
-      const camX = W > viewC ? clamp(Math.round(player.x + 0.5 - viewC / 2), 0, Math.ceil(W - viewC)) : Math.round((W - viewC) / 2);
-      const camY = H > viewR ? clamp(Math.round(player.y + 0.5 - viewR / 2), 0, Math.ceil(H - viewR)) : Math.round((H - viewR) / 2);
+      const { camX, camY } = camera();
       ctx.font = Math.round(cellH * 0.86) + 'px ' + FONT;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -692,6 +697,18 @@
         const s = 0.5 + 0.5 * Math.sin(t / 640);
         ctx.fillStyle = rgb([120 + 90 * s, 190 + 50 * s, 226 + 29 * s], 1, 1, 1);
         ctx.fillText('@', qx, qy);
+      }
+      // A soft frame around usable things within reach
+      if (!pages) {
+        for (const [dx, dy] of DIRS) {
+          const x = player.x + dx, y = player.y + dy;
+          if (!usable(x, y) || !vis[idx(x, y)]) continue;
+          const fresh = unused(x, y);
+          const a = (fresh ? 0.45 : 0.18) + (fresh ? 0.3 : 0.08) * Math.sin(t / 330);
+          ctx.strokeStyle = fresh ? `rgba(240,214,150,${a})` : `rgba(180,170,150,${a})`;
+          ctx.lineWidth = 1;
+          ctx.strokeRect((x - camX) * cellW + 1.5, (y - camY) * cellH + 1.5, cellW - 3, cellH - 3);
+        }
       }
       // The chronicler
       const [qx, qy] = at(player.x, player.y);
@@ -835,7 +852,8 @@
 
     function showPages(list, done) {
       pages = list; pageAt = 0; pageDone = done || null;
-      autoPath = null;
+      autoPath = null; run = null; gest = null;
+      if (useHintShown) hideHint();
       renderPage();
       panel.classList.add('on');
       panelOpenedAt = performance.now();
@@ -845,7 +863,7 @@
       ptitle.textContent = p.title || '';
       pbody.className = p.cls || '';
       pbody.innerHTML = p.html != null ? p.html : withGaps(p.body || '');
-      pmore.textContent = pageAt < pages.length - 1 ? '▾' : '·';
+      pmore.textContent = panelsSeen < 3 ? HINTS.next : pageAt < pages.length - 1 ? '▾' : '·';
       panel.scrollTop = 0;
     }
     function advance() {
@@ -855,6 +873,7 @@
       closePanel();
     }
     function closePanel() {
+      panelsSeen++;
       panel.classList.remove('on');
       const done = pageDone;
       pages = null; pageDone = null;
@@ -976,9 +995,10 @@
       if (interact(nx, ny)) return false;
       if (!canStep(player.x, player.y, dx, dy)) return false;
       player.x = nx; player.y = ny;
-      if (!moved) { moved = true; hintEl.classList.add('off'); }
+      if (!moved) { moved = true; hideHint(); }
       computeFOV();
       pickUp();
+      checkUseHint();
       dirty = true;
       return true;
     }
@@ -1016,36 +1036,133 @@
       return out;
     }
 
-    // ─── Input ─────────────────────────────────────────────────────────────
+    // ─── Things you can use ────────────────────────────────────────────────
+    const USABLE = new Set([INSCR, LECTERN, TAPESTRY, NICHE, SHELF, MENHIR]);
+    const isStranger = (x, y) => !!stranger && stranger.x === x && stranger.y === y;
+    const usable = (x, y) => inb(x, y) && (isStranger(x, y) || USABLE.has(tile[idx(x, y)]));
+    function unused(x, y) {
+      if (isStranger(x, y)) return true;
+      const t = tile[idx(x, y)];
+      if (t === INSCR || t === LECTERN || t === TAPESTRY) return !state.read.includes(frag.get(idx(x, y)));
+      if (t === NICHE) return !state.read.includes('S');
+      return false;
+    }
+    // The most interesting usable thing next to the chronicler, if any.
+    function adjacentUsable() {
+      let best = null;
+      for (const [dx, dy] of DIRS) {
+        const x = player.x + dx, y = player.y + dy;
+        if (!usable(x, y)) continue;
+        const score = unused(x, y) ? 2 : 1;
+        if (!best || score > best.score) best = { dx, dy, score };
+      }
+      return best;
+    }
+    function useAdjacent() {
+      const a = adjacentUsable();
+      if (a) interact(player.x + a.dx, player.y + a.dy);
+      return !!a;
+    }
+
+    // ─── Hints (shown once each, only when they would help) ────────────────
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    const HINTS = touch
+      ? { move: 'tap · swipe · hold', use: 'tap it', next: 'tap ▾' }
+      : { move: '← ↑ → ↓', use: 'walk into it · space', next: 'space ▾' };
+    let hintTimer = 0, useHintShown = state.read.length > 0, panelsSeen = 0;
+    function showHint(text, ms) {
+      hintEl.textContent = text;
+      hintEl.classList.remove('off');
+      clearTimeout(hintTimer);
+      if (ms) hintTimer = setTimeout(hideHint, ms);
+    }
+    function hideHint() { clearTimeout(hintTimer); hintEl.classList.add('off'); }
+    function checkUseHint() {
+      if (useHintShown || pages) return;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+        const x = player.x + dx, y = player.y + dy;
+        if (usable(x, y) && unused(x, y) && vis[idx(x, y)]) { useHintShown = true; showHint(HINTS.use, 7000); return; }
+      }
+    }
+
+    // ─── Running (flick or shift+direction) ────────────────────────────────
+    let run = null;
+    function startRun(dx, dy) { autoPath = null; run = { dx, dy, left: 40 }; }
+    function freshBeside() {
+      const out = new Set();
+      for (const [dx, dy] of DIRS) if (usable(player.x + dx, player.y + dy) && unused(player.x + dx, player.y + dy)) out.add(idx(player.x + dx, player.y + dy));
+      return out;
+    }
+    function runStep() {
+      const before = freshBeside();
+      // Follow a winding way: if straight ahead is blocked, slide 45° either side.
+      let d = [run.dx, run.dy];
+      if (!usable(player.x + d[0], player.y + d[1]) && !canStep(player.x, player.y, d[0], d[1])) {
+        const o = Math.round(Math.atan2(run.dy, run.dx) / (Math.PI / 4));
+        const side = k => [Math.round(Math.cos((o + k) * Math.PI / 4)), Math.round(Math.sin((o + k) * Math.PI / 4))];
+        const opts = [side(1), side(-1)].filter(([dx, dy]) => canStep(player.x, player.y, dx, dy));
+        if (opts.length !== 1) { run = null; return; } // a dead end or a fork: stop and let them choose
+        d = opts[0];
+      }
+      const wasIndoors = playerIndoors();
+      if (!tryMove(d[0], d[1])) { run = null; return; }
+      if (playerIndoors() !== wasIndoors) { run = null; return; } // pause at thresholds
+      // Stop when something new worth a look comes within reach.
+      const now = freshBeside();
+      let fresh = false;
+      for (const i of now) if (!before.has(i)) fresh = true;
+      if (--run.left <= 0 || fresh) run = null;
+    }
+
+    // ─── Keyboard ──────────────────────────────────────────────────────────
     const KEYS = {
       ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
       w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], q: [-1, -1], e: [1, -1], z: [-1, 1], c: [1, 1],
       8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0], 7: [-1, -1], 9: [1, -1], 1: [-1, 1], 3: [1, 1],
       Home: [-1, -1], PageUp: [1, -1], End: [-1, 1], PageDown: [1, 1],
     };
+    const skipVision = () => { if (performance.now() - visionStart > 3000) visionStart = performance.now() - VISION_LEN + 1200; };
     window.addEventListener('keydown', ev => {
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
       const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
-      if (mode === 'vision') { if (performance.now() - visionStart > 3000) visionStart = performance.now() - VISION_LEN + 1200; ev.preventDefault(); return; }
+      if (mode === 'vision') { skipVision(); ev.preventDefault(); return; }
       if (pages) {
-        if (k === 'Enter' || k === ' ' || k === 'Escape' || k in KEYS) { ev.preventDefault(); advance(); }
+        if (k === 'Enter' || k === ' ' || k === 'Escape' || k in KEYS) { ev.preventDefault(); if (!ev.repeat) advance(); }
         return;
       }
-      if (k === 'j' || k === 'J') { openJournal(); return; }
-      if (k === ' ' || k === '.' || k === '5') { ev.preventDefault(); return; }
+      if (k === 'j') { openJournal(); return; }
+      if (k === '+' || k === '=') { setZoom(zoom * 1.15); return; }
+      if (k === '-' || k === '_') { setZoom(zoom / 1.15); return; }
+      if (k === ' ' || k === 'Enter' || k === '5' || k === '.') { ev.preventDefault(); if (!ev.repeat) useAdjacent(); return; }
       const d = KEYS[k];
-      if (d) { ev.preventDefault(); autoPath = null; tryMove(d[0], d[1]); }
-    });
-    canvas.addEventListener('pointerdown', ev => {
+      if (!d) return;
       ev.preventDefault();
-      if (mode === 'vision') { if (performance.now() - visionStart > 3000) visionStart = performance.now() - VISION_LEN + 1200; return; }
-      if (pages) { advance(); return; }
-      const viewC = vw / cellW, viewR = vh / cellH;
-      const camX = W > viewC ? clamp(Math.round(player.x + 0.5 - viewC / 2), 0, Math.ceil(W - viewC)) : Math.round((W - viewC) / 2);
-      const camY = H > viewR ? clamp(Math.round(player.y + 0.5 - viewR / 2), 0, Math.ceil(H - viewR)) : Math.round((H - viewR) / 2);
-      const tx = camX + Math.floor(ev.clientX / cellW), ty = camY + Math.floor(ev.clientY / cellH);
+      autoPath = null; run = null;
+      if (ev.shiftKey) startRun(d[0], d[1]);
+      else tryMove(d[0], d[1]);
+    });
+
+    // ─── Touch & mouse: tap, swipe-and-hold, flick, pinch ──────────────────
+    // tap        → walk to that spot (tap something to use it; tap yourself to use what's beside you)
+    // hold+drag  → walk in that direction for as long as you hold
+    // flick      → run in that direction until something interesting
+    // pinch      → zoom
+    const pointers = new Map();
+    let gest = null, pinch = null;
+    const DRAG_PX = 18, FLICK_MS = 240, HOLD_DELAY = 150, HOLD_STEP = 115;
+    function dir8(dx, dy) {
+      const o = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+      return [Math.round(Math.cos(o * Math.PI / 4)), Math.round(Math.sin(o * Math.PI / 4))];
+    }
+    function screenToTile(cx, cy) {
+      const { camX, camY } = camera();
+      return [camX + Math.floor(cx / cellW), camY + Math.floor(cy / cellH)];
+    }
+    function tapAt(cx, cy) {
+      const [tx, ty] = screenToTile(cx, cy);
       if (!inb(tx, ty)) return;
-      if (tx === player.x && ty === player.y) return;
+      if (tx === player.x && ty === player.y) { useAdjacent(); return; }
+      if (Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y)) === 1) { tryMove(tx - player.x, ty - player.y); return; }
       if (!seen[idx(tx, ty)]) {
         // Unknown ground: head for the last known tile on the way there.
         const steps = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
@@ -1056,7 +1173,64 @@
         return;
       }
       autoPath = findPath(tx, ty);
+    }
+    canvas.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (mode === 'vision') { skipVision(); return; }
+      if (pages) { advance(); return; }
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      autoPath = null; run = null;
+      if (pointers.size === 2) {
+        const [a, b] = [...pointers.values()];
+        pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, z0: zoom };
+        gest = null;
+        return;
+      }
+      if (pointers.size > 2) return;
+      try { canvas.setPointerCapture(ev.pointerId); } catch (e) {}
+      gest = { id: ev.pointerId, x0: ev.clientX, y0: ev.clientY, x: ev.clientX, y: ev.clientY, t0: performance.now(), drag: false, dir: null, steps: 0, lastStep: 0 };
     });
+    canvas.addEventListener('pointermove', ev => {
+      if (!pointers.has(ev.pointerId)) return;
+      pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      if (pinch && pointers.size >= 2) {
+        const [a, b] = [...pointers.values()];
+        setZoom(pinch.z0 * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d0);
+        return;
+      }
+      if (!gest || gest.id !== ev.pointerId) return;
+      gest.x = ev.clientX; gest.y = ev.clientY;
+      const dx = gest.x - gest.x0, dy = gest.y - gest.y0;
+      if (Math.hypot(dx, dy) > DRAG_PX) { gest.drag = true; gest.dir = dir8(dx, dy); }
+    });
+    function pointerEnd(ev) {
+      if (!pointers.has(ev.pointerId)) return;
+      pointers.delete(ev.pointerId);
+      if (pinch) { if (pointers.size < 2) pinch = null; return; }
+      if (!gest || gest.id !== ev.pointerId) return;
+      const g = gest; gest = null;
+      if (ev.type === 'pointercancel') return;
+      const dt = performance.now() - g.t0;
+      if (!g.drag) { tapAt(g.x0, g.y0); return; }
+      if (dt < FLICK_MS + 60 && g.steps === 0) {
+        // A quick flick: one step if something is right there, otherwise run.
+        const d = dir8(g.x - g.x0, g.y - g.y0);
+        if (usable(player.x + d[0], player.y + d[1])) tryMove(d[0], d[1]);
+        else startRun(d[0], d[1]);
+      }
+    }
+    canvas.addEventListener('pointerup', pointerEnd);
+    canvas.addEventListener('pointercancel', pointerEnd);
+    canvas.addEventListener('wheel', ev => { ev.preventDefault(); setZoom(zoom * (ev.deltaY < 0 ? 1.08 : 1 / 1.08)); }, { passive: false });
+    canvas.addEventListener('contextmenu', ev => ev.preventDefault());
+    // Holding a drag keeps the chronicler walking that way.
+    function holdStep(t) {
+      if (!gest || !gest.drag || !gest.dir || pages) return;
+      if (t - gest.t0 < HOLD_DELAY || t - gest.lastStep < HOLD_STEP) return;
+      gest.lastStep = t;
+      gest.steps++;
+      tryMove(gest.dir[0], gest.dir[1]);
+    }
     panel.addEventListener('pointerdown', ev => { ev.stopPropagation(); if (ev.target.closest('.entry')) return; advance(); });
 
     // ─── Ambient life ──────────────────────────────────────────────────────
@@ -1095,6 +1269,8 @@
         requestAnimationFrame(frame);
         return;
       }
+      holdStep(t);
+      if (run && !pages && t - lastStep > 72) { lastStep = t; runStep(); }
       if (autoPath && !pages && t - lastStep > 72) {
         lastStep = t;
         const step = autoPath.shift();
@@ -1115,9 +1291,8 @@
     resize();
     computeFOV();
     updateCount();
-    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    hintEl.textContent = touch ? 'tap to walk' : '← ↑ → ↓';
-    setTimeout(() => hintEl.classList.add('off'), 9000);
+    showHint(HINTS.move);
+    if (location.hash === '#debug') window.__chronicler = { player, state, get zoom() { return zoom; }, get cellH() { return cellH; }, teleport(x, y) { player.x = x; player.y = y; computeFOV(); dirty = true; } };
     requestAnimationFrame(t => { lastDraw = t; frame(t); });
     setTimeout(() => document.getElementById('veil').classList.add('off'), 120);
   })();
