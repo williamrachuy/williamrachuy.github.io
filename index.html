@@ -724,79 +724,10 @@
         for (const p of particles) {
           p.tw += dt * 0.00045;
 
-          // All heating sources deposit energy into one material model. Lights
-          // are substrate disturbances: proximity alone is not temperature;
-          // only the force they actually exert contributes frictional heat.
+          // Particles are non-interactive: no pressure forces act on them, so
+          // they simply float. Only arc energy (p.thermalInput) heats them.
           let thermalInput = p.thermalInput || 0;
           p.thermalInput = 0;
-          for (const l of lights) {
-            const dx = p.x - l.x, dy = p.y - l.y;
-            const d    = Math.hypot(dx, dy) || 1;
-            const pressureField = slowExpPressureFeather(d, 140);
-            const pressureScale = l.pressureScale === undefined ? 1 : l.pressureScale;
-            const force = pressureField * l.strength * pressureScale;
-            if (p.mass > 0.01) {
-              p.vx += (dx / d) * force * 0.057 / p.mass;
-              p.vy += (dy / d) * force * 0.057 / p.mass;
-              thermalInput = Math.max(thermalInput, force);
-            }
-          }
-
-          // User substrate pressure: click/tap initiation is the radial pulse
-          // above. Sustained pressure exists only while the pointer is moving,
-          // and pushes substrate in the movement direction.
-          if (pointerPressure.amp > 0.001 && p.mass > 0.01) {
-            const dx = p.x - pointerPressure.x, dy = p.y - pointerPressure.y;
-            const d  = Math.hypot(dx, dy) || 1;
-            const reach = 165;
-            if (d < reach) {
-              const prox = Math.max(0, 1 - d / reach);
-              const force = Math.pow(prox, 1.75) * pointerPressure.amp;
-              p.vx += pointerPressure.dirX * force * 0.046 / p.mass;
-              p.vy += pointerPressure.dirY * force * 0.046 / p.mass;
-              thermalInput = Math.max(thermalInput, force * 0.62);
-            }
-          }
-
-          // Moving VE pressure: the VE pushes substrate through its projected 2D
-          // footprint. Intensity is feathered and strongest near the center, with
-          // projected edges contributing the shape boundary.
-          const veMoveSpeed = Math.hypot(ve.pressureVX || 0, ve.pressureVY || 0);
-          if (veMoveSpeed > 0.0015 && ve.alpha > 0.01 && ve.scaleCurrent > 3 && p.mass > 0.01) {
-            const veField = vectorEquilibriumSubstrateFieldAt(p.x, p.y);
-            if (veField > 0.001) {
-              const mvx = (ve.pressureVX || 0) / veMoveSpeed;
-              const mvy = (ve.pressureVY || 0) / veMoveSpeed;
-              const dx = p.x - ve.x;
-              const dy = p.y - ve.y;
-              const d = Math.hypot(dx, dy) || 1;
-              const rx = dx / d;
-              const ry = dy / d;
-
-              const pressure = veField
-                * clamp(veMoveSpeed * 0.86, 0, 0.52)
-                * ve.alpha
-                * (0.42 + clamp(ve.scaleP, 0, 1) * 0.58);
-
-              p.vx += (mvx * 0.78 + rx * 0.22) * pressure * 0.060 / p.mass;
-              p.vy += (mvy * 0.78 + ry * 0.22) * pressure * 0.060 / p.mass;
-              thermalInput = Math.max(thermalInput, pressure * 0.46);
-            }
-          }
-
-          // Orbs do not heat the substrate; they simply shove nearby particles aside.
-          for (const ap of appParticles) {
-            if (p.mass <= 0.01) continue;
-            const dx = p.x - ap.x, dy = p.y - ap.y;
-            const d  = Math.hypot(dx, dy) || 1;
-            const reach = ap.r0 * 4.4;
-            if (d >= reach) continue;
-            const pressureField = slowExpPressureFeather(d, reach);
-            const speed = Math.hypot(ap.vx, ap.vy);
-            const push = pressureField * (0.0018 + Math.min(0.0042, speed * 0.14));
-            p.vx += (dx / d) * push / p.mass;
-            p.vy += (dy / d) * push / p.mass;
-          }
 
           // Shared thermal response: force and arc energy heat identically;
           // absence of either cools the material back toward ambient.
@@ -1977,21 +1908,6 @@
         // Translational impulse — each edge death nudges the VE center so it drifts
         ve.vx = clamp(ve.vx + (Math.random() * 2 - 1) * 0.018, -2.2, 2.2);
         ve.vy = clamp(ve.vy + (Math.random() * 2 - 1) * 0.018, -2.2, 2.2);
-        // Outward pressure wave from edge midpoint into substrate
-        const [vi, vj] = VE_E[ei];
-        const ni = ve.vertNodes ? ve.vertNodes[vi] : null;
-        const nj = ve.vertNodes ? ve.vertNodes[vj] : null;
-        const midX = ni && nj ? (ni.x + nj.x) * 0.5 : ve.x;
-        const midY = ni && nj ? (ni.y + nj.y) * 0.5 : ve.y;
-        for (const p of particles) {
-          if (p.r < 0.05) continue;
-          const pdx = p.x - midX, pdy = p.y - midY;
-          const pd = Math.hypot(pdx, pdy) || 1;
-          if (pd < 130) {
-            const f = (1 - pd / 130) * 0.14 / Math.max(p.mass, 0.05);
-            p.vx += (pdx / pd) * f; p.vy += (pdy / pd) * f;
-          }
-        }
       }
 
       function updateVE(dt) {
@@ -2705,14 +2621,6 @@
         // Infecting state: never run traversal arc code regardless of liberation status
         if (volta.state === 'infecting') {
           if (!ve.liberated && ve.vertNodes) {
-            // Particle pressure: blow particles outward from VE as energy is consumed
-            if (Math.random() < 0.3) {
-              for (const p of particles) {
-                const dx = p.x - ve.x, dy = p.y - ve.y;
-                const d  = Math.hypot(dx, dy) || 1;
-                if (d < 160) { const f = volta.charge * (1 - d/160) * 0.025 / Math.max(p.mass, 0.05); p.vx += (dx/d)*f; p.vy += (dy/d)*f; }
-              }
-            }
             // Internal VE arcs only
             if (volta.arcs.length < VOLTA_MAX_ARCS) {
               const internalNodes = ve.centerNode ? [...ve.vertNodes, ve.centerNode] : ve.vertNodes;
