@@ -1,0 +1,1126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>The Chronicler · Adividiardi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      color-scheme: dark;
+      --mono: "DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", "Courier New", monospace;
+      --fell: "IM Fell English", Georgia, "Times New Roman", serif;
+    }
+    html, body {
+      height: 100%;
+      background: #000;
+      color: #d8ccb2;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    canvas { position: fixed; inset: 0; display: block; }
+    #home, #count {
+      position: fixed;
+      z-index: 5;
+      font: 13px/1 var(--mono);
+      color: #4f4738;
+      text-decoration: none;
+      padding: 12px 14px;
+      transition: color .3s, opacity .6s;
+    }
+    #home { top: env(safe-area-inset-top, 0); left: env(safe-area-inset-left, 0); font-size: 18px; }
+    #count {
+      bottom: env(safe-area-inset-bottom, 0);
+      right: env(safe-area-inset-right, 0);
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+    }
+    #count.on { opacity: 1; pointer-events: auto; }
+    #home:hover, #count:hover { color: #a8977a; }
+    #hint {
+      position: fixed;
+      left: 0; right: 0;
+      top: calc(16px + env(safe-area-inset-top, 0));
+      text-align: center;
+      font: 12px/1 var(--mono);
+      letter-spacing: .25em;
+      color: #5a5040;
+      pointer-events: none;
+      transition: opacity 1.6s;
+    }
+    #hint.off { opacity: 0; }
+    #veil {
+      position: fixed; inset: 0;
+      background: #000;
+      pointer-events: none;
+      transition: opacity 2.4s ease;
+      z-index: 8;
+    }
+    #veil.off { opacity: 0; }
+    #panel {
+      position: fixed;
+      left: 50%;
+      bottom: calc(28px + env(safe-area-inset-bottom, 0));
+      transform: translateX(-50%) translateY(8px);
+      width: min(560px, calc(100vw - 32px));
+      max-height: 72vh;
+      overflow-y: auto;
+      background: rgba(9, 8, 6, 0.95);
+      border: 1px solid #3a3226;
+      box-shadow: 0 0 0 4px rgba(0,0,0,.6), 0 12px 40px rgba(0,0,0,.8);
+      padding: 18px 22px 14px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .35s, transform .35s;
+      z-index: 10;
+    }
+    #panel.on { opacity: 1; transform: translateX(-50%) translateY(0); pointer-events: auto; }
+    #ptitle {
+      font: 11px/1.4 var(--mono);
+      letter-spacing: .18em;
+      text-transform: lowercase;
+      color: #6f634e;
+      margin-bottom: 12px;
+    }
+    #ptitle:empty { display: none; }
+    #pbody {
+      font: 19px/1.55 var(--fell);
+      color: #e4d8bd;
+      white-space: pre-line;
+    }
+    #pbody .gap { color: #3b342a; font-family: var(--mono); font-size: .8em; letter-spacing: -.02em; }
+    #pbody.speech { font-style: italic; color: #cfe0e6; text-align: center; padding: 6px 0; }
+    #pbody.note { font: 14px/1.6 var(--mono); color: #8d8068; text-align: center; padding: 4px 0; }
+    #pbody .art { font: 13px/1 var(--mono); white-space: pre; display: block; text-align: center; margin: 4px 0 2px; }
+    #pbody .entry { margin-bottom: 22px; }
+    #pbody .entry:last-child { margin-bottom: 4px; }
+    #pbody .entry .src { font: 10px/1.4 var(--mono); letter-spacing: .18em; color: #5d5342; display: block; margin-bottom: 4px; }
+    #pmore {
+      font: 11px/1 var(--mono);
+      color: #5a4f3e;
+      text-align: right;
+      margin-top: 10px;
+      animation: blink 1.6s ease-in-out infinite;
+    }
+    @keyframes blink { 50% { opacity: .25; } }
+    @media (max-width: 520px) {
+      #pbody { font-size: 17px; }
+      #pbody .art { font-size: 10px; }
+      #panel { padding: 16px 16px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c"></canvas>
+  <a id="home" href="/" aria-label="back">‹</a>
+  <div id="count" role="button" aria-label="journal"></div>
+  <div id="hint"></div>
+  <div id="panel" role="dialog" aria-live="polite"><div id="ptitle"></div><div id="pbody"></div><div id="pmore">▾</div></div>
+  <div id="veil"></div>
+  <noscript><p style="color:#776;font:14px monospace;padding:24px">…</p></noscript>
+  <script>
+  (() => {
+    'use strict';
+
+    // ─── Utilities ─────────────────────────────────────────────────────────
+    function mulberry32(a) {
+      return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+      };
+    }
+    const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+    function valueNoise(seed) {
+      const r = mulberry32(seed), N = 64, g = new Float32Array(N * N);
+      for (let i = 0; i < g.length; i++) g[i] = r();
+      return (x, y) => {
+        const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+        const x0 = xi & 63, x1 = (xi + 1) & 63, y0 = (yi & 63) * N, y1 = ((yi + 1) & 63) * N;
+        const a = g[y0 + x0], b = g[y0 + x1], c = g[y1 + x0], d = g[y1 + x1];
+        const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf);
+        return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+      };
+    }
+    const fbm = (n, x, y) => n(x, y) * 0.6 + n(x * 2.03 + 17, y * 2.03 + 5) * 0.3 + n(x * 4.1 + 3, y * 4.1 + 29) * 0.1;
+    const hash = (a, b) => { let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35); h ^= h >>> 15; return (h >>> 0) / 4294967296; };
+
+    // ─── Tiles ─────────────────────────────────────────────────────────────
+    const GRASS = 0, TALL = 1, FLOWER = 2, TREE = 3, PINE = 4, PATH = 5, WATER = 6, SHALLOW = 7, BRIDGE = 8,
+          ROCK = 9, BOULDER = 10, FLOOR = 11, OPEN = 12, WALL = 13, RUBBLE = 14, DEBRIS = 15, COLUMN = 16,
+          BROKEN = 17, SHELF = 18, DOOR = 19, MOSAIC = 20, INSCR = 21, LECTERN = 22, TAPESTRY = 23, NICHE = 24,
+          MENHIR = 25, CAIRN = 26, TRAIL = 27, REED = 28, SHARD = 29;
+    const WALKABLE = new Set([GRASS, TALL, FLOWER, PATH, SHALLOW, BRIDGE, FLOOR, OPEN, DEBRIS, DOOR, MOSAIC, TRAIL, REED, SHARD]);
+    const OPAQUE = new Set([TREE, PINE, ROCK, WALL, INSCR, TAPESTRY, NICHE]);
+
+    const W = 112, H = 74;
+    const N = W * H;
+    const tile = new Uint8Array(N), vr = new Uint8Array(N), roof = new Uint8Array(N);
+    const seen = new Uint8Array(N), vis = new Uint8Array(N);
+    const frag = new Map(); // tile index → fragment id
+    const idx = (x, y) => y * W + x;
+    const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+
+    // ─── Writings ──────────────────────────────────────────────────────────
+    const TAPESTRY_ART = [
+      '  .   ░       .      ░  .',
+      '         ▒▒▒▒▒▒▒         ',
+      '   ░   ▒▒▒~▓▓▓~▒▒▒   .   ',
+      '      ▒▒~▓▓███▓▓~▒▒      ',
+      ' .    ▒▒▓▓█████▓▓▒▒  ░░  ',
+      '      ▒▒~▓▓███▓▓~▒▒      ',
+      '   ░░  ▒▒▒~▓▓▓~▒▒▒       ',
+      '         ▒▒▒▒▒▒▒     .   ',
+      '                         ',
+      '  ░   i   i  i   i  ░░   ',
+      '=====░░========░=========',
+    ];
+    const ART_COLORS = { '▒': '#cfc6ad', '▓': '#8b8474', '█': '#4a2550', '~': '#6b3a72', 'i': '#b08a5a', '░': '#2e2619', '.': '#6a6458', '=': '#5a4632' };
+    function artHTML(lines) {
+      return '<span class="art">' + lines.map(l => [...l].map(ch => {
+        const c = ART_COLORS[ch];
+        return c ? `<span style="color:${c}">${ch}</span>` : ch;
+      }).join('')).join('\n') + '</span>';
+    }
+
+    const FRAGMENTS = {
+      '1': { src: 'cut above the door', text:
+        'WHAT IS KEPT HERE CAME DOWN WITH US.\nREAD IT. ▒▒▒ NOT ▒▒▒▒▒ IT OUT.' },
+      '7': { src: 'carved in the wall', text:
+        'We came down from the Vessel in the ▒▒▒▒▒▒ generation.\nThe Vessel had watched this world a hundred years before it let anyone ▒▒▒▒.' },
+      '8': { src: 'carved in the wall', text:
+        'They made the air thicker so that we could breathe it.\nNothing that already lived here ▒▒▒▒▒▒▒▒. Nothing here had ever ▒▒▒▒▒▒ back.' },
+      '4': { src: 'carved in the wall', text:
+        'There was a small moon that was not a moon.\nSomething slept on it, older than ▒▒▒▒▒▒▒▒▒▒▒▒.' },
+      'a': { src: 'a book on a lectern', text:
+        '…and the Makers went up to look at it, and it woke.\nWe do not write who went first. ▒▒▒▒▒ ▒▒ ▒▒▒▒.\nIt is enough to know that we woke it.' },
+      '5': { src: 'carved in the wall, cracked', text:
+        'They fought it above the sky for ▒▒▒ days.\nAt the end they used the ▒▒▒▒▒ fire, and the sky went white.\nAfter that the Makers’ Shore was not fit ▒▒▒ ▒▒▒▒▒▒▒▒.\nThe Vessel ▒▒▒▒▒. It did not come back for us.' },
+      'b': { src: 'a burned book', text:
+        '▒▒▒▒▒▒▒ ▒▒▒ the old records ▒▒▒▒▒ ▒▒ kept in the east ▒▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ who ▒▒ not ▒▒▒▒▒ us to ▒▒▒▒▒▒▒▒.' },
+      'y': { src: 'a tapestry, mostly rotted', art: TAPESTRY_ART, text: '' },
+      '2': { src: 'carved in the wall', text:
+        'It fell to us, ▒▒▒▒▒ ▒▒ ▒▒▒ ▒▒▒▒▒ ▒▒▒▒▒. It did not die.\nIt sleeps, and it is full.\nEach of its young holds a stone no larger than a grain of ▒▒▒▒▒▒.' },
+      '3': { src: 'carved in the wall', text:
+        'The stones see a little way ahead. Not far. A breath. A step.\nSet in the unborn, the child grows around the stone,\nin the ▒▒▒▒▒▒▒ chambers.' },
+      '6': { src: 'carved in a broken wall, open to the sky', text:
+        'The stone-children grew tall and quiet, and saw a little ahead of the rest of us.\nThey gave the world a new name: Adividiardi.\nWe let the old one go. It was ▒▒▒▒▒▒▒▒.' },
+      '9': { src: 'carved in the wall', text:
+        'The narrow land in the east still runs to the Makers’ Shore.\nThose who ▒▒▒▒▒ it come back ▒▒▒▒▒▒.\nDo not ▒▒▒▒ what you find ▒▒▒▒▒.' },
+      'S': { src: 'inside the niche', text:
+        'We wrote it all down because we knew we would forget.\nWe forgot anyway. Only the stone remembers, and only some of it.\n\nWhoever reads this: carry it now.\nYou are the chronicler.' },
+    };
+    const FRAG_TOTAL = Object.keys(FRAGMENTS).length;
+    const NEED_FOR_STRANGER = 5;
+    const SHELF_LINES = ['Dust.', 'Ash.', 'The spines crumble.', 'A spine, blank where the title was.', 'Nothing legible.', 'Pages fused to stone.'];
+
+    // ─── State (lightly persisted) ─────────────────────────────────────────
+    const SAVE_KEY = 'chronicler.v1';
+    const state = { read: [], hasShard: false, nicheOpen: false, visionDone: false, shardTaken: false };
+    try {
+      const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+      if (s && Array.isArray(s.read)) Object.assign(state, s, { read: s.read.filter(k => FRAGMENTS[k]) });
+    } catch (e) {}
+    function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }
+
+    // ─── World generation (deterministic) ──────────────────────────────────
+    const rng = mulberry32(0xAD1D1A);
+    const n1 = valueNoise(11), n2 = valueNoise(23), n3 = valueNoise(37);
+    const nc = valueNoise(51);
+
+    const LX = 41, LY = 12;
+    const LIB = [
+      '           #####S#####      ',
+      '           2.........3      ',
+      '           #.........9      ',
+      '     ######...........#%,%###',
+      '     #HH.H#......__...#__,__#',
+      '     4....#.O....._.O.#_T___%',
+      '     #.a..+...........#___%__',
+      '     #....#...........+_,___#',
+      '     y....#...........#%__T_6',
+      '     #.b..#...........#_,___#',
+      '     5....#...........#__%%__',
+      '     #HH.H#.O.......o.#_%_%%#',
+      '     ######...........###_###',
+      '          7...........8      ',
+      '          #.O.......O.#      ',
+      '          #...........#      ',
+      '          ####1...#####      ',
+    ];
+    const MOSAIC_C = { x: LX + 16, y: LY + 8 };
+    const GROVE = { x: 96, y: 43 };
+    const START = { x: 57, y: H - 9 };
+
+    function carve(x, y, t) { if (inb(x, y)) tile[idx(x, y)] = t; }
+
+    function generate() {
+      for (let i = 0; i < N; i++) vr[i] = (rng() * 256) | 0;
+      // Meadow, forest, flowers
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = idx(x, y);
+        const edge = Math.min(x, y, W - 1 - x, H - 1 - y);
+        let f = fbm(n1, x * 0.075, y * 0.075);
+        if (x > 77 && y > 24 && y < 60) f += 0.32;               // the deep east wood
+        const band = 3 + n3(x * 0.2, y * 0.2) * 5;
+        let t = GRASS;
+        if (edge < band || f > 0.6) t = n3(x * 0.11 + 40, y * 0.11) > 0.52 ? PINE : TREE;
+        else {
+          const m = fbm(n2, x * 0.09, y * 0.09);
+          if (m > 0.6 && rng() < 0.35) t = FLOWER;
+          else if (m < 0.36 && rng() < 0.5) t = TALL;
+          else if (f > 0.52 && rng() < 0.25) t = TALL;
+          else if (rng() < 0.012) t = FLOWER;
+        }
+        tile[i] = t;
+      }
+      // Crags to the north-east
+      for (let y = 0; y < 26; y++) for (let x = 76; x < W; x++) {
+        const d = Math.hypot((x - 93) / 1.3, y - 11);
+        if (d < 8 + n3(x * 0.3, y * 0.3) * 4) {
+          const r = n2(x * 0.35 + 9, y * 0.35);
+          tile[idx(x, y)] = r > 0.5 ? ROCK : r > 0.42 ? BOULDER : (rng() < 0.4 ? TALL : GRASS);
+        }
+      }
+      // Stream
+      const stream = [[14, 0], [17, 12], [25, 28], [38, 38], [51, 43], [65, 47], [80, 53], [95, 58], [111, 61]];
+      stampPolyline(stream, (x, y, d) => {
+        const i = idx(x, y);
+        if (d < 1.3) tile[i] = WATER;
+        else if (d < 2.1 && tile[i] !== WATER) tile[i] = SHALLOW;
+        else if (d < 3.2 && !OPAQUE.has(tile[i]) && tile[i] !== WATER && tile[i] !== SHALLOW && rng() < 0.35) tile[i] = REED;
+      }, 3.3);
+      // Pond
+      for (let y = 44; y < 61; y++) for (let x = 12; x < 38; x++) {
+        const d = Math.hypot((x - 24) / 6.5, (y - 52) / 3.6);
+        const i = idx(x, y);
+        if (d < 0.72) tile[i] = WATER;
+        else if (d < 1.0) tile[i] = SHALLOW;
+        else if (d < 1.35 && tile[i] !== WATER && tile[i] !== SHALLOW) tile[i] = rng() < 0.45 ? REED : (rng() < 0.3 ? FLOWER : GRASS);
+      }
+      // Standing stones
+      const ss = { x: 22, y: 21 };
+      for (let y = ss.y - 6; y <= ss.y + 6; y++) for (let x = ss.x - 9; x <= ss.x + 9; x++) {
+        if (!inb(x, y)) continue;
+        const d = Math.hypot((x - ss.x) / 1.4, y - ss.y);
+        const i = idx(x, y);
+        if (d < 6 && (tile[i] === TREE || tile[i] === PINE)) tile[i] = d < 4 ? GRASS : TALL;
+      }
+      for (let k = 0; k < 7; k++) {
+        const a = k / 7 * Math.PI * 2 + 0.3;
+        const x = Math.round(ss.x + Math.cos(a) * 4.4), y = Math.round(ss.y + Math.sin(a) * 2.6);
+        tile[idx(x, y)] = k === 4 ? RUBBLE : MENHIR;
+      }
+      tile[idx(ss.x, ss.y)] = FLOWER;
+      // Library clearing
+      for (let y = LY - 5; y <= LY + 21; y++) for (let x = LX - 3; x <= LX + 34; x++) {
+        if (!inb(x, y)) continue;
+        const i = idx(x, y);
+        if (tile[i] === TREE || tile[i] === PINE || tile[i] === ROCK || tile[i] === BOULDER) tile[i] = rng() < 0.3 ? TALL : GRASS;
+      }
+      // The library
+      for (let r = 0; r < LIB.length; r++) {
+        const row = LIB[r];
+        for (let c = 0; c < row.length; c++) {
+          const ch = row[c];
+          if (ch === ' ') continue;
+          const x = LX + c, y = LY + r, i = idx(x, y);
+          let t, rf = 1;
+          switch (ch) {
+            case '#': t = WALL; rf = 3; break;
+            case '.': t = FLOOR; break;
+            case '_': t = OPEN; rf = 0; break;
+            case ',': t = DEBRIS; rf = 0; break;
+            case '%': t = RUBBLE; rf = 0; break;
+            case 'O': t = COLUMN; break;
+            case 'o': t = BROKEN; break;
+            case 'H': t = SHELF; break;
+            case '+': t = DOOR; break;
+            case 'T': t = TREE; rf = 0; break;
+            case 'a': case 'b': t = LECTERN; frag.set(i, ch); break;
+            case 'y': t = TAPESTRY; rf = 3; frag.set(i, ch); break;
+            case 'S': t = NICHE; rf = 3; frag.set(i, ch); break;
+            default: t = INSCR; rf = 3; frag.set(i, ch); break; // digits
+          }
+          tile[i] = t; roof[i] = rf;
+        }
+      }
+      // Mosaic floor in the nave
+      for (let y = MOSAIC_C.y - 3; y <= MOSAIC_C.y + 3; y++) for (let x = MOSAIC_C.x - 5; x <= MOSAIC_C.x + 5; x++) {
+        const i = idx(x, y);
+        if (tile[i] !== FLOOR) continue;
+        if (Math.hypot((x - MOSAIC_C.x) / 4.8, (y - MOSAIC_C.y) / 2.9) <= 1) tile[i] = MOSAIC;
+      }
+      // Fallen stone around the outer walls
+      for (let y = LY - 3; y <= LY + 19; y++) for (let x = LX + 2; x <= LX + 32; x++) {
+        const i = idx(x, y);
+        if (roof[i] || ![GRASS, TALL, FLOWER].includes(tile[i])) continue;
+        let near = 99;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+          const j = idx(x + dx, y + dy);
+          if (inb(x + dx, y + dy) && (tile[j] === WALL || tile[j] === RUBBLE)) near = Math.min(near, Math.hypot(dx, dy));
+        }
+        if (near < 3.5) {
+          const r = rng();
+          if (r < 0.10) tile[i] = BOULDER;
+          else if (r < 0.38) tile[i] = DEBRIS;
+        }
+      }
+      // The deep wood: a hidden grove ringed in trees
+      for (let y = GROVE.y - 9; y <= GROVE.y + 9; y++) for (let x = GROVE.x - 12; x <= GROVE.x + 12; x++) {
+        if (!inb(x, y)) continue;
+        const d = Math.hypot((x - GROVE.x) / 1.35, y - GROVE.y);
+        const i = idx(x, y);
+        if (d < 2.9) tile[i] = rng() < 0.25 ? TALL : (rng() < 0.12 ? FLOWER : GRASS);
+        else if (d < 8) tile[i] = n3(x * 0.3, y * 0.3) > 0.5 ? PINE : TREE;
+      }
+      tile[idx(GROVE.x + 3, GROVE.y - 1)] = WATER;
+      tile[idx(GROVE.x + 3, GROVE.y)] = WATER;
+      tile[idx(GROVE.x + 2, GROVE.y)] = SHALLOW;
+      tile[idx(GROVE.x - 1, GROVE.y + 1)] = BOULDER;
+      // A deer trail from the ruin's east side to the grove
+      const trail = [[75, 21], [78, 24], [81, 23], [84, 27], [86, 31], [89, 33], [90, 37], [93, 40], [GROVE.x - 1, GROVE.y]];
+      for (let k = 0; k < trail.length - 1; k++) carveLine4(trail[k], trail[k + 1], (x, y) => {
+        const i = idx(x, y);
+        if (Math.hypot((x - GROVE.x) / 1.35, y - GROVE.y) < 2.9) return;
+        tile[i] = TRAIL;
+      });
+      tile[idx(74, 19)] = CAIRN;
+      // The road in from the south
+      for (let y = H - 1; y >= LY + 17; y--) {
+        const calm = clamp(Math.abs(y - 44) / 6 - 0.4, 0, 1); // run straight across the river
+        let x = Math.round(57 + calm * (2.2 * Math.sin(y * 0.17) + 1.3 * Math.sin(y * 0.05 + 1)));
+        let w = 2;
+        if (y < LY + 23) { x = LX + 15; w = 3; }
+        for (let k = -4; k <= w + 3; k++) {
+          const i = idx(x + k, y);
+          const t = tile[i];
+          if (k < 0 || k >= w) {
+            if ((t === TREE || t === PINE) && (k === -1 || k === w || hash(i, 3) < 0.6)) tile[i] = hash(i, 4) < 0.5 ? TALL : GRASS;
+            continue;
+          }
+          tile[i] = (t === WATER || t === SHALLOW || t === BRIDGE) ? BRIDGE : PATH;
+        }
+      }
+      // Bridges need clean banks: widen water crossing to fully bridged
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = idx(x, y);
+        if (tile[i] !== BRIDGE) continue;
+        for (const [dx, dy] of [[0, -1], [0, 1]]) {
+          const j = idx(x + dx, y + dy);
+          if (inb(x + dx, y + dy) && tile[j] === WATER) tile[j] = BRIDGE;
+        }
+      }
+    }
+
+    function stampPolyline(pts, fn, rad) {
+      const best = new Float32Array(N).fill(99);
+      for (let k = 0; k < pts.length - 1; k++) {
+        const [ax, ay] = pts[k], [bx, by] = pts[k + 1];
+        const minx = Math.max(0, Math.min(ax, bx) - 5), maxx = Math.min(W - 1, Math.max(ax, bx) + 5);
+        const miny = Math.max(0, Math.min(ay, by) - 5), maxy = Math.min(H - 1, Math.max(ay, by) + 5);
+        const vx = bx - ax, vy = by - ay, L2 = vx * vx + vy * vy;
+        for (let y = miny; y <= maxy; y++) for (let x = minx; x <= maxx; x++) {
+          let t = ((x - ax) * vx + (y - ay) * vy) / L2;
+          t = clamp(t, 0, 1);
+          const wob = (n3(x * 0.25, y * 0.25) - 0.5) * 1.4;
+          const d = Math.hypot(x - (ax + vx * t), y - (ay + vy * t)) + wob;
+          const i = idx(x, y);
+          if (d < best[i]) best[i] = d;
+        }
+      }
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = best[idx(x, y)];
+        if (d < rad) fn(x, y, d);
+      }
+    }
+    function carveLine4([x0, y0], [x1, y1], fn) {
+      let x = x0, y = y0;
+      fn(x, y);
+      while (x !== x1 || y !== y1) {
+        const dx = x1 - x, dy = y1 - y;
+        if (Math.abs(dx) > Math.abs(dy) || (Math.abs(dx) === Math.abs(dy) && hash(x, y) < 0.5)) x += Math.sign(dx);
+        else y += Math.sign(dy);
+        fn(x, y);
+      }
+    }
+
+    generate();
+
+    // ─── Actors ────────────────────────────────────────────────────────────
+    const player = { x: START.x, y: START.y };
+    const stranger = state.visionDone ? null : { x: GROVE.x, y: GROVE.y };
+    if (state.visionDone && !state.shardTaken) tile[idx(GROVE.x, GROVE.y)] = SHARD;
+    if (state.nicheOpen) { /* rendered as open via state */ }
+    let strangerTalks = 0;
+
+    const birds = [];
+    for (let k = 0; k < 7; k++) {
+      for (let tries = 0; tries < 200; tries++) {
+        const x = 30 + Math.floor(rng() * 50), y = 30 + Math.floor(rng() * 38);
+        const t = tile[idx(x, y)];
+        if ((t === GRASS || t === TALL || t === FLOWER) && !roof[idx(x, y)]) { birds.push({ x, y, away: 0 }); break; }
+      }
+    }
+    const fireflies = [];
+
+    const walkable = (x, y) => inb(x, y) && WALKABLE.has(tile[idx(x, y)]) && !(stranger && stranger.x === x && stranger.y === y);
+    const opaque = (x, y) => OPAQUE.has(tile[idx(x, y)]);
+
+    // ─── Field of view (recursive shadowcasting) ──────────────────────────
+    const MULT = [[1, 0, 0, -1, -1, 0, 0, 1], [0, 1, -1, 0, 0, -1, 1, 0], [0, 1, 1, 0, 0, -1, -1, 0], [1, 0, 0, 1, -1, 0, 0, -1]];
+    function castLight(cx, cy, row, start, end, radius, xx, xy, yx, yy) {
+      if (start < end) return;
+      const r2 = radius * radius;
+      let newStart = 0;
+      for (let j = row; j <= radius; j++) {
+        let dx = -j - 1;
+        const dy = -j;
+        let blocked = false;
+        while (dx <= 0) {
+          dx++;
+          const X = cx + dx * xx + dy * xy, Y = cy + dx * yx + dy * yy;
+          const lSlope = (dx - 0.5) / (dy + 0.5), rSlope = (dx + 0.5) / (dy - 0.5);
+          if (start < rSlope) continue;
+          if (end > lSlope) break;
+          const ok = inb(X, Y);
+          if (ok && dx * dx + dy * dy < r2) vis[idx(X, Y)] = 1;
+          const op = !ok || opaque(X, Y);
+          if (blocked) {
+            if (op) { newStart = rSlope; continue; }
+            blocked = false; start = newStart;
+          } else if (op && j < radius) {
+            blocked = true;
+            castLight(cx, cy, j + 1, start, lSlope, radius, xx, xy, yx, yy);
+            newStart = rSlope;
+          }
+        }
+        if (blocked) break;
+      }
+    }
+    const R_IN = 7.5;
+    const rOut = () => state.visionDone ? 12 : 19;
+    const playerIndoors = () => roof[idx(player.x, player.y)] === 1;
+    const treatAsRoofed = (i, indoors) => roof[i] === 1 || (roof[i] === 3 && indoors);
+    function computeFOV() {
+      vis.fill(0);
+      vis[idx(player.x, player.y)] = 1;
+      const R = rOut();
+      for (let o = 0; o < 8; o++) castLight(player.x, player.y, 1, 1.0, 0.0, R, MULT[0][o], MULT[1][o], MULT[2][o], MULT[3][o]);
+      const indoors = playerIndoors();
+      const x0 = Math.max(0, player.x - R - 1), x1 = Math.min(W - 1, player.x + R + 1);
+      const y0 = Math.max(0, player.y - R - 1), y1 = Math.min(H - 1, player.y + R + 1);
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const i = idx(x, y);
+        if (!vis[i]) continue;
+        if (treatAsRoofed(i, indoors) && Math.hypot(x - player.x, y - player.y) > R_IN) { vis[i] = 0; continue; }
+        seen[i] = 1;
+      }
+    }
+
+    // ─── Rendering ─────────────────────────────────────────────────────────
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    const FONT = '"DejaVu Sans Mono", Menlo, Consolas, "Liberation Mono", "Segoe UI Symbol", "Noto Sans Symbols 2", monospace';
+    let vw = 0, vh = 0, cellW = 12, cellH = 16, dpr = 1;
+    function resize() {
+      dpr = Math.min(2, window.devicePixelRatio || 1);
+      vw = window.innerWidth; vh = window.innerHeight;
+      canvas.width = Math.round(vw * dpr); canvas.height = Math.round(vh * dpr);
+      canvas.style.width = vw + 'px'; canvas.style.height = vh + 'px';
+      cellH = clamp(Math.round(Math.min(vh / 30, vw / 24)), 16, 24);
+      cellW = Math.round(cellH * 0.78);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      dirty = true;
+    }
+
+    const TREE_CH = '♣︎', PINE_CH = '♠︎';
+    // Block glyphs vary wildly between fonts; draw them as shaded cells instead.
+    const BLOCK = { '█': 1, '▓': 0.72, '▒': 0.48, '░': 0.26 };
+    const GRASS_CH = [',', '"', '`', '\'', ',', '.'];
+    const FLOWER_COL = [[214, 196, 92], [196, 112, 158], [150, 146, 214], [226, 222, 212], [214, 120, 80]];
+
+    // Returns [glyph, fg[r,g,b], bg[r,g,b]|null]
+    function look(i, x, y, t) {
+      const v = vr[i];
+      switch (tile[i]) {
+        case GRASS: {
+          const sway = hash(i, Math.floor(t / 1400 + (x * 0.21 + y * 0.09))) < 0.03;
+          return [sway ? '"' : GRASS_CH[v % 6], [78 + v % 40, 138 + (v >> 2) % 54, 52 + v % 22], null];
+        }
+        case TALL: return ['"', [104 + v % 28, 160 + v % 34, 62], null];
+        case FLOWER: return [v & 1 ? '*' : '·', FLOWER_COL[v % 5], null];
+        case TREE: return [TREE_CH, [40 + v % 30, 104 + v % 44, 44 + v % 12], null];
+        case PINE: return [PINE_CH, [28 + v % 14, 82 + v % 26, 52 + v % 14], null];
+        case PATH: return [v % 3 ? '·' : '.', [172 + v % 20, 146 + v % 14, 100], [24, 19, 12]];
+        case TRAIL: return [v % 4 ? '·' : ',', [118 + v % 16, 138 + v % 14, 92], null];
+        case WATER: {
+          const ph = hash(i, Math.floor(t / 700 + v * 0.05)) < 0.5;
+          return [ph ? '≈' : '~', ph ? [74, 124, 192] : [112, 158, 214], [10, 24, 48]];
+        }
+        case SHALLOW: return [hash(i, Math.floor(t / 900 + v)) < 0.5 ? '~' : '-', [96, 148, 172], [14, 32, 44]];
+        case REED: return [v % 3 === 0 ? '⌠' : v % 3 === 1 ? '|' : '¦', [118 + v % 20, 148, 70], null];
+        case BRIDGE: return ['=', [156, 146, 124], [34, 30, 24]];
+        case ROCK: return ['▲', [118 + v % 16, 116 + v % 14, 110], null];
+        case BOULDER: return ['●', [108, 104, 98], null];
+        case FLOOR: return [v % 7 === 0 ? '·' : '.', [112, 106, 96], [12, 11, 10]];
+        case DOOR: return ['.', [138, 108, 74], [16, 12, 9]];
+        case OPEN: return [v % 3 === 0 ? '"' : v % 3 === 1 ? ',' : '.', [88 + v % 18, 122, 72], null];
+        case WALL: return ['#', [158 + v % 12, 150 + v % 10, 138], [34, 32, 30]];
+        case RUBBLE: return ['%', [132, 120, 102], null];
+        case DEBRIS: return [v & 1 ? ',' : '`', [122, 114, 102], null];
+        case COLUMN: return ['O', [206, 200, 184], [18, 17, 15]];
+        case BROKEN: return ['o', [158, 150, 138], null];
+        case SHELF: return ['≡', [138, 94, 52], [20, 14, 9]];
+        case MOSAIC: return mosaicLook(i, x, y);
+        case INSCR: {
+          const read = state.read.includes(frag.get(i));
+          if (read) return ['Ξ', [138, 122, 90], [34, 32, 28]];
+          const pulse = state.hasShard ? 0.65 + 0.35 * Math.sin(t / 380 + v) : 1;
+          return ['Ξ', [214 * pulse + 30 * (1 - pulse), 184 * pulse + 40 * (1 - pulse), 110], [40, 36, 30]];
+        }
+        case LECTERN: return ['¶', state.read.includes(frag.get(i)) ? [146, 134, 112] : [226, 210, 172], [30, 22, 14]];
+        case TAPESTRY: return ['§', state.read.includes('y') ? [124, 60, 54] : [178, 72, 62], [40, 30, 26]];
+        case NICHE: return state.nicheOpen ? ['○', [132, 200, 214], [16, 22, 24]] : ['◘', [176, 170, 160], [40, 38, 35]];
+        case MENHIR: return ['Π', [150, 150, 162], null];
+        case CAIRN: return ['Δ', [146, 140, 128], null];
+        case SHARD: {
+          const s = 0.6 + 0.4 * Math.sin(t / 220);
+          return ['◊', [120 + 120 * s, 210 + 40 * s, 240], null];
+        }
+      }
+      return ['?', [255, 0, 255], null];
+    }
+    function mosaicLook(i, x, y) {
+      if (vr[i] < 34) return [',', [110, 104, 94], [12, 11, 10]]; // lost tesserae
+      const dx = (x - MOSAIC_C.x) / 4.8, dy = (y - MOSAIC_C.y) / 2.9;
+      const r = Math.hypot(dx, dy), a = Math.atan2(dy, dx);
+      if (r < 0.3) return ['●', [96, 46, 110], [14, 6, 18]];
+      if (r > 0.82) return ['░', [150, 122, 62], [30, 24, 12]];
+      if (Math.sin(a * 5 + r * 7.5) > 0.45) return ['~', [112, 64, 124], [20, 10, 24]];
+      return ['·', [86, 104, 150], [12, 16, 30]];
+    }
+
+    let dirty = true;
+    let duskBlend = state.visionDone ? 1 : 0;
+    function rgb(c, k0, k1, k2) {
+      return 'rgb(' + (clamp(c[0] * k0, 0, 255) | 0) + ',' + (clamp(c[1] * k1, 0, 255) | 0) + ',' + (clamp(c[2] * k2, 0, 255) | 0) + ')';
+    }
+    function dim(c) {
+      return 'rgb(' + ((c[0] * 0.17 + 12) | 0) + ',' + ((c[1] * 0.17 + 14) | 0) + ',' + ((c[2] * 0.19 + 24) | 0) + ')';
+    }
+
+    function drawWorld(t) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, vw, vh);
+      const cols = Math.ceil(vw / cellW) + 1, rows = Math.ceil(vh / cellH) + 1;
+      const viewC = vw / cellW, viewR = vh / cellH;
+      const camX = W > viewC ? clamp(Math.round(player.x + 0.5 - viewC / 2), 0, Math.ceil(W - viewC)) : Math.round((W - viewC) / 2);
+      const camY = H > viewR ? clamp(Math.round(player.y + 0.5 - viewR / 2), 0, Math.ceil(H - viewR)) : Math.round((H - viewR) / 2);
+      ctx.font = Math.round(cellH * 0.86) + 'px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const indoors = playerIndoors();
+      const day = 1 - duskBlend * 0.5;
+      const dayTint = [1 - duskBlend * 0.4, 1 - duskBlend * 0.3, 1];
+      const flicker = 0.94 + 0.06 * Math.sin(t / 97) * Math.sin(t / 151);
+      const tx = t * 0.00011;
+      for (let sy = 0; sy < rows; sy++) {
+        const y = camY + sy;
+        if (y < 0 || y >= H) continue;
+        const py = sy * cellH;
+        for (let sx = 0; sx < cols; sx++) {
+          const x = camX + sx;
+          if (x < 0 || x >= W) continue;
+          const i = idx(x, y);
+          if (!seen[i]) continue;
+          const px = sx * cellW;
+          const L = look(i, x, y, t);
+          if (vis[i]) {
+            const d = Math.hypot(x - player.x, y - player.y);
+            const lan = clamp(1 - d / R_IN, 0, 1);
+            let k0, k1, k2;
+            if (treatAsRoofed(i, indoors)) {
+              const f = Math.pow(lan, 0.9) * flicker * 1.08 + 0.04;
+              k0 = f; k1 = f * 0.86; k2 = f * 0.68;
+            } else {
+              const cloud = 0.84 + 0.16 * clamp((nc(x * 0.06 + tx, y * 0.06 + tx * 0.6) - 0.3) * 2.6, 0, 1);
+              const dl = day * cloud;
+              const ll = lan * 0.7 * duskBlend * flicker;
+              k0 = dl * dayTint[0] + ll; k1 = dl * dayTint[1] + ll * 0.82; k2 = dl * dayTint[2] + ll * 0.6;
+            }
+            if (L[2]) { ctx.fillStyle = rgb(L[2], k0, k1, k2); ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5); }
+            ctx.fillStyle = rgb(L[1], k0, k1, k2);
+          } else {
+            if (L[2]) { ctx.fillStyle = 'rgb(' + ((L[2][0] * 0.3) | 0) + ',' + ((L[2][1] * 0.3) | 0) + ',' + ((L[2][2] * 0.35 + 4) | 0) + ')'; ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5); }
+            ctx.fillStyle = dim(L[1]);
+          }
+          const blk = BLOCK[L[0]];
+          if (blk) { ctx.globalAlpha = blk; ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5); ctx.globalAlpha = 1; }
+          else ctx.fillText(L[0], px + cellW / 2, py + cellH / 2 + 1);
+        }
+      }
+      const at = (x, y) => [(x - camX) * cellW + cellW / 2, (y - camY) * cellH + cellH / 2 + 1];
+      // Birds
+      for (const b of birds) {
+        if (!inb(b.x, b.y) || !vis[idx(b.x, b.y)]) continue;
+        const [qx, qy] = at(b.x, b.y);
+        ctx.fillStyle = rgb([176, 146, 106], 1 - duskBlend * 0.4, 1 - duskBlend * 0.4, 1 - duskBlend * 0.3);
+        ctx.fillText(b.away > 0 ? '^' : 'v', qx, qy);
+      }
+      // Fireflies
+      for (const f of fireflies) {
+        const fx = Math.round(f.x), fy = Math.round(f.y);
+        if (!inb(fx, fy) || !vis[idx(fx, fy)] || roof[idx(fx, fy)]) continue;
+        const b = Math.max(0, Math.sin(t / 260 + f.ph));
+        if (b < 0.2) continue;
+        const [qx, qy] = at(f.x, f.y);
+        ctx.fillStyle = `rgba(214,236,120,${b})`;
+        ctx.fillText('·', qx, qy);
+      }
+      // The stranger
+      if (stranger && vis[idx(stranger.x, stranger.y)]) {
+        const [qx, qy] = at(stranger.x, stranger.y);
+        const s = 0.5 + 0.5 * Math.sin(t / 640);
+        ctx.fillStyle = rgb([120 + 90 * s, 190 + 50 * s, 226 + 29 * s], 1, 1, 1);
+        ctx.fillText('@', qx, qy);
+      }
+      // The chronicler
+      const [qx, qy] = at(player.x, player.y);
+      ctx.fillStyle = 'rgb(255,234,176)';
+      ctx.fillText('@', qx, qy);
+    }
+
+    // ─── The vision ────────────────────────────────────────────────────────
+    let visionStart = 0;
+    const VISION_LEN = 16000;
+    let visionStars = null;
+    function prepVision() {
+      const r = mulberry32(777);
+      const cols = Math.ceil(vw / cellW) + 1, rows = Math.ceil(vh / cellH) + 1;
+      visionStars = [];
+      const count = Math.floor(cols * rows * 0.05);
+      for (let k = 0; k < count; k++) visionStars.push({ x: Math.floor(r() * cols), y: Math.floor(r() * rows * 0.8), ph: r() * 6.28, ch: r() < 0.12 ? '*' : r() < 0.5 ? '·' : '.' });
+      visionShips = [];
+      for (let k = 0; k < 14; k++) visionShips.push({ a: r() * 6.28, d0: 0.9 + r() * 0.8, sp: 0.6 + r() * 0.6, ph: r() * 6.28 });
+    }
+    let visionShips = [];
+    function drawVision(t) {
+      const e = t - visionStart;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, vw, vh);
+      ctx.font = Math.round(cellH * 0.86) + 'px ' + FONT;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const cols = Math.ceil(vw / cellW) + 1, rows = Math.ceil(vh / cellH) + 1;
+      const fadeIn = clamp(e / 2200, 0, 1), fadeOut = clamp((VISION_LEN - e) / 1800, 0, 1);
+      const A = fadeIn * fadeOut;
+      const put = (x, y, ch, r, g, b, a = 1) => {
+        if (x < 0 || y < 0 || x >= cols || y >= rows) return;
+        const blk = BLOCK[ch];
+        ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${a * A * (blk || 1)})`;
+        if (blk) ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+        else ctx.fillText(ch, x * cellW + cellW / 2, y * cellH + cellH / 2 + 1);
+      };
+      const hy = Math.floor(rows * 0.8);
+      // Stars
+      for (const s of visionStars) {
+        if (s.y >= hy) continue;
+        const tw = 0.45 + 0.55 * Math.abs(Math.sin(e / 900 + s.ph));
+        put(s.x, s.y, s.ch, 190, 196, 220, tw * 0.8);
+      }
+      // Horizon
+      for (let x = 0; x < cols; x++) {
+        const hh = Math.floor(2.4 * n2(x * 0.08, 3) + 1.4 * n3(x * 0.2, 7));
+        for (let y = hy - hh; y < rows; y++) {
+          const top = y === hy - hh;
+          put(x, y, top ? '▲' : (hash(x, y) < 0.3 ? '.' : ' '), 34, 40, 62, 1);
+        }
+      }
+      // The small moon
+      const asp = cellH / cellW;
+      const mx = cols * 0.34, my = rows * 0.26, mr = Math.max(3, Math.min(cols / asp, rows) * 0.1);
+      const crack = e > 9000;
+      const moonA = clamp((e - 1800) / 1600, 0, 1);
+      for (let y = Math.floor(my - mr - 1); y <= my + mr + 1; y++) for (let x = Math.floor(mx - mr * asp - 1); x <= mx + mr * asp + 1; x++) {
+        const d = Math.hypot((x - mx) / asp, y - my) / mr;
+        if (d > 1) continue;
+        if (crack && hash(x * 3, y * 7) < 0.35 * clamp((e - 9000) / 800, 0, 1)) continue;
+        put(x, y, d > 0.82 ? '░' : '▒', 200, 194, 172, moonA * (crack ? 0.6 : 1));
+      }
+      // What slept on it
+      const awake = clamp((e - 3400) / 1500, 0, 1);
+      const falling = e > 10000;
+      let ax = mx + mr * asp * 0.25, ay = my + mr * 0.15;
+      if (falling) {
+        const p = clamp((e - 10000) / 3000, 0, 1);
+        const tx = cols * 0.82, ty = hy - 1;
+        ax = ax + (tx - ax) * p; ay = ay + (ty - ay) * (p * p);
+        if (p < 1) {
+          for (let k = 1; k < 26; k++) {
+            const q = clamp(p - k * 0.012, 0, 1);
+            const sx = mx + mr * asp * 0.25 + (tx - mx - mr * asp * 0.25) * q;
+            const sy = my + mr * 0.15 + (ty - my - mr * 0.15) * q * q;
+            put(Math.round(sx + (hash(k, Math.floor(e / 90)) - 0.5) * 2), Math.round(sy), k < 6 ? '*' : '·', 240, 120 + k * 3, 60, (1 - k / 26) * 0.9);
+          }
+        }
+      }
+      if (awake > 0 && !(falling && e > 13000)) {
+        for (let y = -2; y <= 2; y++) for (let x = -3; x <= 3; x++) {
+          const d = Math.hypot(x / 1.6, y);
+          if (d > 1.9) continue;
+          put(Math.round(ax + x), Math.round(ay + y), d < 1 ? '█' : '▓', 70, 30, 82, awake);
+        }
+        for (let k = 0; k < 7; k++) {
+          const base = k / 7 * 6.28 + e / 1400;
+          for (let s = 2; s < 7; s++) {
+            const a = base + Math.sin(e / 500 + k + s * 0.6) * 0.5;
+            put(Math.round(ax + Math.cos(a) * s * asp * 0.55), Math.round(ay + Math.sin(a) * s * 0.55), '~', 110, 56, 124, awake * (1 - s / 8));
+          }
+        }
+      }
+      // The Makers' ships, fire
+      if (e > 4600 && e < 9400) {
+        const p = (e - 4600) / 4800;
+        for (const s of visionShips) {
+          const d = (s.d0 - p * s.sp * 0.9) * mr * 3;
+          const a = s.a + p * 1.4 * s.sp;
+          const sx = mx + Math.cos(a) * Math.max(mr * 1.3, d) * asp, sy = my + Math.sin(a) * Math.max(mr * 1.3, d);
+          put(Math.round(sx), Math.round(sy), '+', 210, 226, 240, 0.9);
+          if (hash(Math.floor(e / 120), s.ph * 100) < 0.22) {
+            for (let q = 0.15; q < 0.95; q += 0.12) {
+              put(Math.round(sx + (ax - sx) * q), Math.round(sy + (ay - sy) * q), '·', 255, 220, 160, 0.8);
+            }
+            put(Math.round(ax + (hash(e, 1) - 0.5) * 6), Math.round(ay + (hash(e, 2) - 0.5) * 4), '*', 255, 240, 200, 1);
+          }
+        }
+      }
+      // White sky
+      if (e > 8600 && e < 11400) {
+        const p = e < 9000 ? (e - 8600) / 400 : 1 - (e - 9000) / 2400;
+        ctx.fillStyle = `rgba(255,252,240,${clamp(p, 0, 1) * 0.95 * A})`;
+        ctx.fillRect(0, 0, vw, vh);
+      }
+      // Impact glow beyond the hills
+      if (e > 12800) {
+        const p = clamp((e - 12800) / 600, 0, 1) * clamp(1 - (e - 13600) / 2200, 0.25, 1);
+        const cx = cols * 0.82;
+        for (let y = hy - 6; y < hy + 1; y++) for (let x = Math.floor(cx - 14); x < cx + 14; x++) {
+          const d = Math.hypot((x - cx) / 2.2, (y - hy) * 1.2) / 7;
+          if (d > 1) continue;
+          put(x, y, '░', 230, 120, 60, (1 - d) * p * 0.8);
+        }
+      }
+    }
+
+    // ─── Panel & text ──────────────────────────────────────────────────────
+    const panel = document.getElementById('panel');
+    const ptitle = document.getElementById('ptitle');
+    const pbody = document.getElementById('pbody');
+    const pmore = document.getElementById('pmore');
+    const countEl = document.getElementById('count');
+    const hintEl = document.getElementById('hint');
+    let pages = null, pageAt = 0, pageDone = null, panelOpenedAt = 0;
+
+    const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const withGaps = s => esc(s).replace(/▒+/g, m => `<span class="gap">${m}</span>`);
+
+    function showPages(list, done) {
+      pages = list; pageAt = 0; pageDone = done || null;
+      autoPath = null;
+      renderPage();
+      panel.classList.add('on');
+      panelOpenedAt = performance.now();
+    }
+    function renderPage() {
+      const p = pages[pageAt];
+      ptitle.textContent = p.title || '';
+      pbody.className = p.cls || '';
+      pbody.innerHTML = p.html != null ? p.html : withGaps(p.body || '');
+      pmore.textContent = pageAt < pages.length - 1 ? '▾' : '·';
+      panel.scrollTop = 0;
+    }
+    function advance() {
+      if (!pages) return;
+      if (performance.now() - panelOpenedAt < 180) return;
+      if (pageAt < pages.length - 1) { pageAt++; renderPage(); panelOpenedAt = performance.now(); return; }
+      closePanel();
+    }
+    function closePanel() {
+      panel.classList.remove('on');
+      const done = pageDone;
+      pages = null; pageDone = null;
+      if (done) done();
+    }
+    function fragPage(id) {
+      const f = FRAGMENTS[id];
+      const html = (f.art ? artHTML(f.art) : '') + withGaps(f.text);
+      return { title: f.src, html };
+    }
+    function markRead(id) {
+      if (!state.read.includes(id)) { state.read.push(id); save(); }
+      updateCount();
+    }
+    function updateCount() {
+      const n = state.read.length;
+      countEl.textContent = '¶ ' + n;
+      countEl.classList.toggle('on', n > 0);
+    }
+    function openJournal() {
+      if (!state.read.length) return;
+      const html = state.read.map(id => {
+        const f = FRAGMENTS[id];
+        return `<div class="entry"><span class="src">${esc(f.src)}</span>${f.art ? artHTML(f.art) : ''}${withGaps(f.text)}</div>`;
+      }).join('');
+      showPages([{ title: state.read.length + ' / ' + FRAG_TOTAL, html }]);
+    }
+    countEl.addEventListener('click', e => { e.stopPropagation(); if (pages) closePanel(); else openJournal(); });
+
+    // ─── Interaction ───────────────────────────────────────────────────────
+    function interact(x, y) {
+      const i = idx(x, y);
+      const t = tile[i];
+      if (stranger && stranger.x === x && stranger.y === y) { talkToStranger(); return true; }
+      if (t === INSCR || t === LECTERN || t === TAPESTRY) {
+        const id = frag.get(i);
+        markRead(id);
+        showPages([fragPage(id)]);
+        return true;
+      }
+      if (t === NICHE) {
+        if (state.nicheOpen) { markRead('S'); showPages([fragPage('S')]); return true; }
+        if (!state.hasShard) { showPages([{ cls: 'note', body: 'A sealed niche.\nIn its face, a small socket. Empty.' }]); return true; }
+        state.nicheOpen = true; state.hasShard = false; save();
+        dirty = true;
+        showPages([{ cls: 'note', body: 'The shard fits.\nStone grinds aside.' }, fragPage('S')]);
+        markRead('S');
+        return true;
+      }
+      if (t === SHELF) { showPages([{ cls: 'note', body: SHELF_LINES[Math.floor(hash(i, shelfBumps++) * SHELF_LINES.length)] }]); return true; }
+      if (t === MENHIR) { showPages([{ cls: 'note', body: 'Worn smooth.' }]); return true; }
+      return false;
+    }
+    let shelfBumps = 0;
+
+    function talkToStranger() {
+      const n = state.read.length;
+      if (n < NEED_FOR_STRANGER) {
+        const lines = strangerTalks === 0
+          ? ['…', 'Not yet.', 'Go and read what is left of it. I’ll still be here.']
+          : strangerTalks === 1 ? ['I know what you’re going to ask.', 'Not yet.'] : ['…'];
+        strangerTalks++;
+        showPages(lines.map(body => ({ cls: 'speech', body })));
+        return;
+      }
+      showPages([
+        { cls: 'speech', body: '…' },
+        { cls: 'speech', body: 'You took the long way. Everyone does.' },
+        { cls: 'speech', body: 'Sit. I’ll show you what they saw.' },
+      ], startVision);
+    }
+
+    let mode = 'world';
+    function startVision() {
+      mode = 'vision';
+      autoPath = null;
+      prepVision();
+      visionStart = performance.now();
+      setHUD(false);
+    }
+    function endVision() {
+      if (mode !== 'vision') return;
+      mode = 'world';
+      state.visionDone = true; save();
+      setHUD(true);
+      duskTarget = 1;
+      computeFOV(); dirty = true;
+      showPages([{ cls: 'speech', body: 'It is still down there, dreaming a little way ahead.' }], () => {
+        const sx = stranger.x, sy = stranger.y;
+        strangerGone();
+        tile[idx(sx, sy)] = SHARD;
+        dirty = true;
+      });
+    }
+    function strangerGone() { if (stranger) { stranger.x = -99; stranger.y = -99; } }
+    function setHUD(on) {
+      for (const el of [countEl, document.getElementById('home')]) el.style.visibility = on ? 'visible' : 'hidden';
+    }
+
+    function pickUp() {
+      const i = idx(player.x, player.y);
+      if (tile[i] === SHARD) {
+        tile[i] = GRASS;
+        state.hasShard = true; state.shardTaken = true; save();
+        showPages([{ cls: 'note', body: 'A shard of dark crystal.\nIt is warm.' }]);
+      }
+    }
+
+    // ─── Movement ──────────────────────────────────────────────────────────
+    let autoPath = null, lastStep = 0, moved = false;
+    function canStep(x, y, dx, dy) {
+      if (!walkable(x + dx, y + dy)) return false;
+      if (dx && dy && !walkable(x + dx, y) && !walkable(x, y + dy)) return false;
+      return true;
+    }
+    function tryMove(dx, dy) {
+      const nx = player.x + dx, ny = player.y + dy;
+      if (!inb(nx, ny)) return false;
+      if (interact(nx, ny)) return false;
+      if (!canStep(player.x, player.y, dx, dy)) return false;
+      player.x = nx; player.y = ny;
+      if (!moved) { moved = true; hintEl.classList.add('off'); }
+      computeFOV();
+      pickUp();
+      dirty = true;
+      return true;
+    }
+
+    const DIRS = [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+    function findPath(tx, ty) {
+      const isTarget = (x, y) => x === tx && y === ty;
+      const targetBlocked = !walkable(tx, ty);
+      const prev = new Int32Array(N).fill(-1);
+      const s = idx(player.x, player.y);
+      prev[s] = s;
+      const q = [s];
+      let found = -1;
+      for (let h = 0; h < q.length; h++) {
+        const c = q[h], cx = c % W, cy = (c - cx) / W;
+        if (isTarget(cx, cy)) { found = c; break; }
+        if (targetBlocked && Math.max(Math.abs(cx - tx), Math.abs(cy - ty)) === 1) { found = c; break; }
+        for (const [dx, dy] of DIRS) {
+          const nx = cx + dx, ny = cy + dy;
+          if (!inb(nx, ny) || !seen[idx(nx, ny)]) continue;
+          if (!canStep(cx, cy, dx, dy)) continue;
+          const j = idx(nx, ny);
+          if (prev[j] !== -1) continue;
+          prev[j] = c; q.push(j);
+        }
+      }
+      if (found < 0) return null;
+      const steps = [];
+      for (let c = found; c !== s; c = prev[c]) steps.push(c);
+      steps.reverse();
+      const out = [];
+      let px = player.x, py = player.y;
+      for (const c of steps) { const cx = c % W, cy = (c - cx) / W; out.push([cx - px, cy - py]); px = cx; py = cy; }
+      if (targetBlocked) out.push([tx - px, ty - py]); // the final bump
+      return out;
+    }
+
+    // ─── Input ─────────────────────────────────────────────────────────────
+    const KEYS = {
+      ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0], q: [-1, -1], e: [1, -1], z: [-1, 1], c: [1, 1],
+      8: [0, -1], 2: [0, 1], 4: [-1, 0], 6: [1, 0], 7: [-1, -1], 9: [1, -1], 1: [-1, 1], 3: [1, 1],
+      Home: [-1, -1], PageUp: [1, -1], End: [-1, 1], PageDown: [1, 1],
+    };
+    window.addEventListener('keydown', ev => {
+      if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+      const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+      if (mode === 'vision') { if (performance.now() - visionStart > 3000) visionStart = performance.now() - VISION_LEN + 1200; ev.preventDefault(); return; }
+      if (pages) {
+        if (k === 'Enter' || k === ' ' || k === 'Escape' || k in KEYS) { ev.preventDefault(); advance(); }
+        return;
+      }
+      if (k === 'j' || k === 'J') { openJournal(); return; }
+      if (k === ' ' || k === '.' || k === '5') { ev.preventDefault(); return; }
+      const d = KEYS[k];
+      if (d) { ev.preventDefault(); autoPath = null; tryMove(d[0], d[1]); }
+    });
+    canvas.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (mode === 'vision') { if (performance.now() - visionStart > 3000) visionStart = performance.now() - VISION_LEN + 1200; return; }
+      if (pages) { advance(); return; }
+      const viewC = vw / cellW, viewR = vh / cellH;
+      const camX = W > viewC ? clamp(Math.round(player.x + 0.5 - viewC / 2), 0, Math.ceil(W - viewC)) : Math.round((W - viewC) / 2);
+      const camY = H > viewR ? clamp(Math.round(player.y + 0.5 - viewR / 2), 0, Math.ceil(H - viewR)) : Math.round((H - viewR) / 2);
+      const tx = camX + Math.floor(ev.clientX / cellW), ty = camY + Math.floor(ev.clientY / cellH);
+      if (!inb(tx, ty)) return;
+      if (tx === player.x && ty === player.y) return;
+      if (!seen[idx(tx, ty)]) {
+        // Unknown ground: head for the last known tile on the way there.
+        const steps = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
+        for (let k = 0; k < steps; k++) {
+          const x = Math.round(tx + (player.x - tx) * k / steps), y = Math.round(ty + (player.y - ty) * k / steps);
+          if (seen[idx(x, y)] && walkable(x, y)) { autoPath = findPath(x, y); return; }
+        }
+        return;
+      }
+      autoPath = findPath(tx, ty);
+    });
+    panel.addEventListener('pointerdown', ev => { ev.stopPropagation(); if (ev.target.closest('.entry')) return; advance(); });
+
+    // ─── Ambient life ──────────────────────────────────────────────────────
+    let lastAmbient = 0, duskTarget = state.visionDone ? 1 : 0;
+    function ambient(t) {
+      for (const b of birds) {
+        const d = Math.hypot(b.x - player.x, b.y - player.y);
+        if (b.away > 0) { b.away--; }
+        if (d < 3.5) {
+          const dx = Math.sign(b.x - player.x) || (Math.random() < 0.5 ? 1 : -1);
+          const dy = Math.sign(b.y - player.y) || (Math.random() < 0.5 ? 1 : -1);
+          const nx = b.x + dx * 2, ny = b.y + dy * 2;
+          if (inb(nx, ny) && !roof[idx(nx, ny)] && tile[idx(nx, ny)] !== WALL) { b.x = nx; b.y = ny; b.away = 3; }
+        } else if (Math.random() < 0.18) {
+          const [dx, dy] = DIRS[Math.floor(Math.random() * 8)];
+          const nx = b.x + dx, ny = b.y + dy;
+          const tt = inb(nx, ny) ? tile[idx(nx, ny)] : -1;
+          if (tt === GRASS || tt === TALL || tt === FLOWER || tt === PATH) { b.x = nx; b.y = ny; }
+        }
+      }
+      if (duskBlend > 0.5) {
+        while (fireflies.length < 22) fireflies.push({ x: player.x + (Math.random() - 0.5) * 24, y: player.y + (Math.random() - 0.5) * 18, ph: Math.random() * 6.28 });
+        for (const f of fireflies) {
+          f.x += (Math.random() - 0.5) * 0.9; f.y += (Math.random() - 0.5) * 0.7;
+          if (Math.abs(f.x - player.x) > 14 || Math.abs(f.y - player.y) > 11) { f.x = player.x + (Math.random() - 0.5) * 24; f.y = player.y + (Math.random() - 0.5) * 18; }
+        }
+      }
+    }
+
+    // ─── Loop ──────────────────────────────────────────────────────────────
+    let lastDraw = 0;
+    function frame(t) {
+      if (mode === 'vision') {
+        drawVision(t);
+        if (t - visionStart > VISION_LEN) endVision();
+        requestAnimationFrame(frame);
+        return;
+      }
+      if (autoPath && !pages && t - lastStep > 72) {
+        lastStep = t;
+        const step = autoPath.shift();
+        if (!step || !tryMove(step[0], step[1])) autoPath = null;
+        if (autoPath && !autoPath.length) autoPath = null;
+      }
+      if (t - lastAmbient > 380) { lastAmbient = t; ambient(t); dirty = true; }
+      if (duskBlend !== duskTarget) { duskBlend += Math.sign(duskTarget - duskBlend) * 0.006; if (Math.abs(duskBlend - duskTarget) < 0.01) duskBlend = duskTarget; dirty = true; }
+      if (dirty || t - lastDraw > 90) {
+        drawWorld(t);
+        lastDraw = t; dirty = false;
+      }
+      requestAnimationFrame(frame);
+    }
+
+    // ─── Begin ─────────────────────────────────────────────────────────────
+    window.addEventListener('resize', resize);
+    resize();
+    computeFOV();
+    updateCount();
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    hintEl.textContent = touch ? 'tap to walk' : '← ↑ → ↓';
+    setTimeout(() => hintEl.classList.add('off'), 9000);
+    requestAnimationFrame(t => { lastDraw = t; frame(t); });
+    setTimeout(() => document.getElementById('veil').classList.add('off'), 120);
+  })();
+  </script>
+</body>
+</html>
