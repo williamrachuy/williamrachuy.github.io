@@ -3092,19 +3092,19 @@
       }
 
       // Camera for the current frame, or null when not zoomed.
+      // A pure zoom about a fixed screen-space anchor A, chosen so the orb lands
+      // exactly on its target spot (tx,ty) at full zoom. There is no separate pan:
+      // the recentering is a by-product of the same accelerating zoom curve.
       function focusCamera() {
         if (focus.state === 'none' || !focus.ap) return null;
-        const p = focus.p;
-        const z = Math.exp(Math.log(focus.zMax) * Math.pow(p, 2.4))   // accelerating
+        const z = Math.exp(Math.log(focus.zMax) * Math.pow(focus.p, 2.4))   // accelerating
                 * Math.exp(3.2 * focus.dive * focus.dive);
-        const e = 1 - Math.pow(1 - p, 3);                                // pan settles early
         const cx = stage.clientWidth * 0.5, cy = stage.clientHeight * 0.5;
         const ap = focus.ap;
-        return {
-          z, cx, cy,
-          fx: cx * (1 - e) + (ap.x - (focus.tx - cx) / z) * e,
-          fy: cy * (1 - e) + (ap.y - (focus.ty - cy) / z) * e,
-        };
+        const zRef = Math.max(z, focus.zMax);
+        const ax = (focus.tx - ap.x * zRef) / (1 - zRef);
+        const ay = (focus.ty - ap.y * zRef) / (1 - zRef);
+        return { z, cx, cy, fx: ax + (cx - ax) / z, fy: ay + (cy - ay) / z };
       }
 
       function pointInsideFocusedOrb(clientX, clientY) {
