@@ -66,6 +66,50 @@
       text-shadow: 0 1px 0 rgba(255,255,255,0.02);
       will-change: color, text-shadow;
     }
+  #orb-panel {
+    position: absolute;
+    z-index: 5;
+    left: 0; top: 0;
+    width: min(360px, calc(100vw - 32px));
+    padding: 22px 24px 20px;
+    border: 1px solid rgba(232,224,209,0.14);
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(14,17,24,0.78), rgba(8,10,15,0.84));
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
+    color: rgba(232,224,209,0.88);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity 320ms ease, transform 420ms cubic-bezier(.2,.7,.2,1);
+    touch-action: manipulation;
+  }
+  #orb-panel.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  #orb-panel .op-kicker {
+    font-size: 11px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: rgba(232,224,209,0.42); margin-bottom: 8px;
+  }
+  #orb-panel .op-title {
+    margin: 0 0 10px; font-weight: 400; font-size: 26px; letter-spacing: 0.04em;
+    color: rgba(240,233,220,0.96); text-shadow: 0 0 18px rgba(232,224,209,0.12);
+  }
+  #orb-panel .op-desc { margin: 0; font-size: 15px; line-height: 1.55; color: rgba(232,224,209,0.72); }
+  #orb-panel .op-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  #orb-panel .op-actions:empty { display: none; }
+  #orb-panel .op-btn {
+    font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
+    padding: 9px 16px; border-radius: 999px; cursor: pointer;
+    color: rgba(240,233,220,0.92); background: rgba(232,224,209,0.06);
+    border: 1px solid rgba(232,224,209,0.24);
+    transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+  }
+  #orb-panel .op-btn:hover, #orb-panel .op-btn:focus-visible {
+    background: rgba(232,224,209,0.13); border-color: rgba(232,224,209,0.5);
+    box-shadow: 0 0 16px rgba(232,224,209,0.14); outline: none;
+  }
+  #orb-panel .op-note { margin: 14px 0 0; font-size: 12px; letter-spacing: 0.06em; color: rgba(232,224,209,0.38); font-style: italic; }
+  #particles { transition: opacity 0ms; }
   #ver-stamp {
     position: fixed;
     bottom: max(12px, env(safe-area-inset-bottom, 12px));
@@ -84,6 +128,7 @@
   <main id="stage" aria-label="Interactive Adividiardi landing page">
     <canvas id="particles"></canvas>
     <div id="veil"></div>
+    <aside id="orb-panel" role="dialog" aria-live="polite"><div class="op-kicker"></div><h2 class="op-title"></h2><p class="op-desc"></p><div class="op-actions"></div><p class="op-note"></p></aside>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
   <script>
@@ -137,6 +182,7 @@
       const gebCoverImg = new Image(); gebCoverImg.src = 'assets/geb-cover.jpg';
       const paleBlueDotCoverImg = new Image(); paleBlueDotCoverImg.src = 'assets/pale-blue-dot-cover.jpg';
       const chroniclerGlyphImg = new Image(); chroniclerGlyphImg.src = 'chronicler/orb.svg';
+      const demoGlyphImg = new Image(); demoGlyphImg.src = 'assets/demo-orb.svg';
       const qrCodeImg = new Image(); qrCodeImg.src = 'assets/adividiardi-qr.png';
       const eveningHorseImg = new Image(); eveningHorseImg.src = 'assets/evening-horse-head.png';
       const catMeowAudio = new Audio('meow.mp3');
@@ -488,6 +534,7 @@
           { path: 'blog',            color: '#5c3333' }, // dark dusty rose
           { path: 'about',            color: '#4a4258', overlayImg: aboutQuestionImg, speed: 0.96 }, // about orb
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
+          { demo: true,            color: '#2a5a6e', overlayImg: demoGlyphImg, speed: 0.97 }, // zoom-menu demonstration orb
           { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 10.0, speed: 0.97 }, // QR code orb
           { path: 'missile-command',  color: '#3a2410', speed: 1.02 }, // Missile Command arcade recreation
           { path: 'pyramid',          color: '#6b5a30', speed: 0.99 }, // Pyramid — houses, gems & the peak
@@ -765,7 +812,10 @@
       const MASS_THRESH = 0.15; // r ≈ 0.53; captures all small-variant particles
 
       function drawParticles(now) {
-        pctx.clearRect(0, 0, stage.clientWidth, stage.clientHeight);
+        pctx.save();
+        pctx.setTransform(1, 0, 0, 1, 0, 0);
+        pctx.clearRect(0, 0, particlesCanvas.width, particlesCanvas.height);
+        pctx.restore();
         const activeAudioOrbs = appParticles.filter(ap => ap.audioKey && ap.playing);
         const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.09246 : 0;
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
@@ -1060,6 +1110,10 @@
       }
 
       function refreshInteractiveCursor() {
+        if (focus.state !== 'none') {
+          stage.style.cursor = 'default';
+          return;
+        }
         if (hoverClientX === null || hoverClientY === null) {
           stage.style.cursor = 'default';
           return;
@@ -1113,15 +1167,24 @@
         catMeowAudio.play().catch(() => {});
       };
 
+      // Clicking any orb first descends into it (see the focus camera below);
+      // performOrbAction() is what the orb's panel button actually triggers.
       function activateAppParticle(ap, event) {
         if (!ap) return false;
+        if (focus.state !== 'none') return true;
+        beginFocus(ap);
+        return true;
+      }
+
+      function performOrbAction(ap) {
+        if (!ap) return;
         if (ap.resetOrb) {
-          softResetScene(event);
-          return true;
+          beginResetTransition();
+          return;
         }
         if (ap.audioKey) {
           const audio = getAudioElement(ap.audioKey);
-          if (!audio) return true;
+          if (!audio) return;
           if (audio.paused) {
             unloadOtherAudio(ap.audioKey);
             audio.play().catch(() => {
@@ -1131,17 +1194,10 @@
           } else {
             unloadAudioElement(ap.audioKey);
           }
-          return true;
+          return;
         }
-        if (ap.url) {
-          window.location.href = ap.url;
-          return true;
-        }
-        if (ap.path) {
-          window.location.href = '/' + ap.path;
-          return true;
-        }
-        return false;
+        const url = ap.url || (ap.path ? '/' + ap.path : null);
+        if (url) beginDive(url);
       }
 
       // ─── Title letters ──────────────────────────────────────────────────────
@@ -1783,7 +1839,7 @@
             const baseCardH = baseR * 2.75;
             const baseCardW = baseCardH * aspect;
             const texDpr = Math.min(window.devicePixelRatio || 1, 2);
-            const texScale = 4;
+            const texScale = (focus.ap === ap && focus.state !== 'none') ? 14 : 4;
             const texW = Math.max(2, Math.round(baseCardW * texScale * texDpr));
             const texH = Math.max(2, Math.round(baseCardH * texScale * texDpr));
 
@@ -2843,6 +2899,238 @@
         seedParticles();
       }
 
+      // ─── Orb focus camera & info panel ──────────────────────────────────────
+      // Clicking an orb "descends" into it: the canvas camera zooms along an
+      // accelerating (exponential-in) curve while the physics keeps running and
+      // the camera keeps tracking the orb. A small panel then explains the orb.
+      // Clicking anywhere outside the panel and orb climbs back out.
+
+      const orbPanel     = document.getElementById('orb-panel');
+      const panelKicker  = orbPanel.querySelector('.op-kicker');
+      const panelTitle   = orbPanel.querySelector('.op-title');
+      const panelDesc    = orbPanel.querySelector('.op-desc');
+      const panelActions = orbPanel.querySelector('.op-actions');
+      const panelNote    = orbPanel.querySelector('.op-note');
+      const wordmarkWrap = document.getElementById('wordmark-wrap');
+
+      let focusLastNow = 0;
+      const FOCUS_IN_MS   = 950;
+      const FOCUS_OUT_MS  = 700;
+      const FOCUS_DIVE_MS = 520;
+      const RESET_FADE_OUT_MS = 260;
+      const RESET_FADE_IN_MS  = 650;
+
+      const focus = {
+        state: 'none',   // none | in | open | out | dive
+        ap: null,
+        p: 0,            // 0 = normal view, 1 = fully descended
+        dive: 0,         // extra plunge when leaving the page via a link
+        zMax: 1, baseR: 1, tx: 0, ty: 0, R: 0,
+        diveUrl: null,
+      };
+
+      const AUDIO_TITLES = {
+        following_a_deviatioin: 'Following a Deviatioin',
+        lsd_1: 'LSD 1', lsd_2: 'LSD 2', msr_trimmed: 'MSR',
+        camerons_art: "Cameron's Art", portal_open: 'Portal Open',
+        spiral_observations: 'Spiral Observations', traversion_approach: 'Traversion Approach',
+      };
+      const prettyKey = key => AUDIO_TITLES[key]
+        || key.replace(/_/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
+
+      const PAGE_INFO = {
+        'berzerk':          { title: 'Berzerk', desc: 'A playable take on the arcade classic.' },
+        'blog':             { title: 'Blog', desc: 'Writing and notes.' },
+        'about':            { title: 'About', desc: 'Who is behind all of this, and what this place is.' },
+        'meowdividiardi':   { title: 'Meowdividiardi', desc: 'The cat has its own page. It is, predictably, mostly about the cat.' },
+        'qr':               { title: 'QR', desc: 'A scannable code that points back to this site. Handy for hopping to a phone.' },
+        'missile-command':  { title: 'Missile Command', desc: 'An arcade recreation: defend the cities, conserve your missiles.' },
+        'pyramid':          { title: 'Pyramid', desc: 'A card game of houses, gems and the coherent pyramid, played against three AI houses.' },
+        'chronicler/':      { title: 'The Chronicler', desc: 'An ASCII ruined-library demo. Wander the stacks and see what survived.' },
+        'library/#schilds-ladder':       { title: "Schild's Ladder", desc: "Greg Egan's novel, shelved in the library.", kicker: 'Library' },
+        'library/#godel-escher-bach':    { title: 'Gödel, Escher, Bach', desc: "Hofstadter's braid of logic, art and music, shelved in the library.", kicker: 'Library' },
+        'library/#pale-blue-dot':        { title: 'Pale Blue Dot', desc: "Carl Sagan's meditation on our place in the cosmos, shelved in the library.", kicker: 'Library' },
+        'battlebox/':       { title: 'Battlebox', desc: 'The Magic: The Gathering game server. Invite-only.', kicker: 'Game server' },
+      };
+
+      function orbInfo(ap) {
+        if (ap.demo) return {
+          kicker: 'Demonstration', title: 'Descent',
+          desc: 'This orb only exists to show off the new interaction. Tap any orb and the view accelerates toward it while the field keeps moving; a short card explains what you found and offers its controls.',
+          action: null, note: 'Click outside the card and the orb to climb back out.',
+        };
+        if (ap.resetOrb) return {
+          kicker: 'Control', title: 'Reset',
+          desc: 'Gently reshuffles the field: the current orbs fade away and a fresh set drifts in.',
+          action: 'Reset the field',
+        };
+        if (ap.audioKey) return {
+          kicker: 'Sound', title: prettyKey(ap.audioKey),
+          desc: 'A piece of music. While it plays the orb holds its place and the nearby particles shimmer.',
+          action: 'audio',
+        };
+        const info = PAGE_INFO[ap.path] || { title: ap.path || 'Orb', desc: '' };
+        return { kicker: info.kicker || 'Page', title: info.title, desc: info.desc, action: 'Open ' + info.title };
+      }
+
+      function focusGeometry(ap) {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        const narrow = w < 700;
+        focus.R  = narrow ? Math.min(w * 0.30, h * 0.20) : Math.min(w, h) * 0.20;
+        focus.tx = narrow ? w * 0.5 : w * 0.40;
+        focus.ty = narrow ? h * 0.30 : h * 0.5;
+        focus.baseR = ap.r0 * (ap.orbImg ? 1.9 : ap.cardImg ? 1.45 : 1.3);
+        focus.zMax = Math.max(2, focus.R / focus.baseR);
+      }
+
+      function layoutPanel() {
+        const w = stage.clientWidth, h = stage.clientHeight;
+        const pw = Math.min(360, w - 32);
+        orbPanel.style.width = pw + 'px';
+        if (w < 700) {
+          orbPanel.style.left = ((w - pw) / 2) + 'px';
+          orbPanel.style.top  = Math.min(h - 40, focus.ty + focus.R * 0.55) + 'px';
+        } else {
+          const left = Math.min(focus.tx + focus.R * 0.55, w - pw - 16);
+          orbPanel.style.left = left + 'px';
+          orbPanel.style.top  = Math.max(16, h * 0.5 - orbPanel.offsetHeight * 0.5) + 'px';
+        }
+      }
+
+      function buildPanel(ap) {
+        const info = orbInfo(ap);
+        panelKicker.textContent = info.kicker;
+        panelTitle.textContent  = info.title;
+        panelDesc.textContent   = info.desc;
+        panelNote.textContent   = info.note || '';
+        panelNote.style.display = info.note ? '' : 'none';
+        panelActions.textContent = '';
+        if (info.action) {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'op-btn';
+          btn.dataset.kind = info.action === 'audio' ? 'audio' : 'action';
+          btn.textContent = info.action === 'audio' ? 'Play' : info.action;
+          btn.addEventListener('click', ev => {
+            ev.stopPropagation();
+            performOrbAction(focus.ap);
+          });
+          panelActions.appendChild(btn);
+        }
+        refreshPanelControls();
+      }
+
+      function refreshPanelControls() {
+        const btn = panelActions.querySelector('[data-kind="audio"]');
+        if (!btn || !focus.ap) return;
+        const label = focus.ap.playing ? 'Pause' : 'Play';
+        if (btn.textContent !== label) btn.textContent = label;
+      }
+
+      function beginFocus(ap) {
+        if (focus.state !== 'none') return;
+        focus.ap = ap;
+        focusGeometry(ap);
+        buildPanel(ap);
+        layoutPanel();
+        focus.state = 'in';
+        focus.p = 0;
+        focus.dive = 0;
+        // Cancel anything the press may have started on the world layer.
+        holdActive = false;
+        orbInteractionActive = false;
+        veInteractionSuppressedByObject = false;
+        vePointerActiveUntil = 0;
+        veActivationPendingFrame = false;
+        if (!ve.voltaHeld) ve.active = false;
+        endPointerPressure();
+      }
+
+      function beginZoomOut() {
+        if (focus.state !== 'in' && focus.state !== 'open') return;
+        focus.state = 'out';
+        orbPanel.classList.remove('open');
+      }
+
+      function beginDive(url) {
+        if (focus.state !== 'open' && focus.state !== 'in') return;
+        focus.state = 'dive';
+        focus.diveUrl = url;
+        orbPanel.classList.remove('open');
+      }
+
+      function beginResetTransition() {
+        if (focus.resetting) return;
+        focus.state = 'out';
+        orbPanel.classList.remove('open');
+        focus.resetting = true;
+        particlesCanvas.style.transition = `opacity ${RESET_FADE_OUT_MS}ms ease-in`;
+        particlesCanvas.style.opacity = '0';
+        setTimeout(() => {
+          focus.resetting = false;
+          focus.state = 'none'; focus.ap = null; focus.p = 0; focus.dive = 0;
+          wordmarkWrap.style.opacity = '';
+          softResetScene(null);
+          particlesCanvas.style.transition = `opacity ${RESET_FADE_IN_MS}ms ease-out`;
+          particlesCanvas.style.opacity = '1';
+        }, RESET_FADE_OUT_MS + 20);
+      }
+
+      function updateFocus(dt) {
+        if (focus.state === 'none') return;
+        if (focus.state === 'in') {
+          focus.p = Math.min(1, focus.p + dt / FOCUS_IN_MS);
+          if (focus.p >= 1) {
+            focus.state = 'open';
+            layoutPanel();
+            orbPanel.classList.add('open');
+          }
+        } else if (focus.state === 'out') {
+          focus.p = Math.max(0, focus.p - dt / FOCUS_OUT_MS);
+          if (focus.p <= 0 && !focus.resetting) {
+            focus.state = 'none'; focus.ap = null;
+            wordmarkWrap.style.opacity = '';
+          }
+        } else if (focus.state === 'dive') {
+          focus.dive = Math.min(1, focus.dive + dt / FOCUS_DIVE_MS);
+          particlesCanvas.style.opacity = String(1 - Math.pow(focus.dive, 1.6));
+          if (focus.dive >= 1 && focus.diveUrl) {
+            const url = focus.diveUrl;
+            focus.diveUrl = null;
+            window.location.href = url;
+          }
+        }
+        if (focus.state !== 'none') {
+          wordmarkWrap.style.opacity = String(Math.max(0, 1 - focus.p * 1.6));
+          refreshPanelControls();
+        }
+      }
+
+      // Camera for the current frame, or null when not zoomed.
+      function focusCamera() {
+        if (focus.state === 'none' || !focus.ap) return null;
+        const p = focus.p;
+        const z = Math.exp(Math.log(focus.zMax) * Math.pow(p, 2.4))   // accelerating
+                * Math.exp(3.2 * focus.dive * focus.dive);
+        const e = 1 - Math.pow(1 - p, 3);                                // pan settles early
+        const cx = stage.clientWidth * 0.5, cy = stage.clientHeight * 0.5;
+        const ap = focus.ap;
+        return {
+          z, cx, cy,
+          fx: cx * (1 - e) + (ap.x - (focus.tx - cx) / z) * e,
+          fy: cy * (1 - e) + (ap.y - (focus.ty - cy) / z) * e,
+        };
+      }
+
+      function pointInsideFocusedOrb(clientX, clientY) {
+        const cam = focusCamera();
+        if (!cam) return false;
+        const rect = stage.getBoundingClientRect();
+        const sx = cam.cx + (focus.ap.x - cam.fx) * cam.z;
+        const sy = cam.cy + (focus.ap.y - cam.fy) * cam.z;
+        return Math.hypot(clientX - rect.left - sx, clientY - rect.top - sy) <= focus.baseR * cam.z * 1.15;
+      }
+
       function frame(now) {
         const dt = Math.min(32, now - (lastFrame || now));
         lastFrame = now;
@@ -2860,16 +3148,32 @@
         for (const p of particles) {
           if (p.heat >= 0.3 && p.r >= 0.05) hotParticles.push(p);
         }
+        updateFocus(Math.min(100, now - (focusLastNow || now)));
+        focusLastNow = now;
+        const cam = focusCamera();
+        if (cam) {
+          pctx.save();
+          pctx.translate(cam.cx, cam.cy);
+          pctx.scale(cam.z, cam.z);
+          pctx.translate(-cam.fx, -cam.fy);
+        }
         drawParticles(now);
         drawAppParticles(now);
         drawVE();
         drawLiberatedNodes();
         drawVolta(now);
+        if (cam) pctx.restore();
         refreshInteractiveCursor();
         requestAnimationFrame(frame);
       }
 
       stage.addEventListener('pointerdown', e => {
+        if (focus.state !== 'none') {
+          // Descended into an orb: world interaction is off. Pressing inside the
+          // panel or on the orb does nothing; anywhere else climbs back out.
+          if (!e.target.closest('#orb-panel') && !pointInsideFocusedOrb(e.clientX, e.clientY)) beginZoomOut();
+          return;
+        }
         try { if (e.pointerId !== undefined) stage.setPointerCapture(e.pointerId); } catch (_) {}
         const touch = e.pointerType === 'touch';
         const primaryActivationEdge = e.isPrimary !== false && (e.button === 0 || touch);
@@ -2922,6 +3226,7 @@
         }
       });
       stage.addEventListener('pointermove', e => {
+        if (focus.state !== 'none') return;
         catCursorX = e.clientX; catCursorY = e.clientY;
         hoverClientX = e.clientX;
         hoverClientY = e.clientY;
@@ -3012,7 +3317,18 @@
         endPointerPressure();
         releasePointerLight();
       }, { passive: true });
-      window.addEventListener('resize', resize);
+      window.addEventListener('resize', () => {
+        resize();
+        if (focus.state !== 'none' && focus.ap) { focusGeometry(focus.ap); layoutPanel(); }
+      });
+      window.addEventListener('pageshow', e => {
+        if (!e.persisted) return;
+        focus.state = 'none'; focus.ap = null; focus.p = 0; focus.dive = 0; focus.diveUrl = null;
+        particlesCanvas.style.opacity = '1';
+        wordmarkWrap.style.opacity = '';
+        orbPanel.classList.remove('open');
+      });
+      window.addEventListener('keydown', e => { if (e.key === 'Escape') beginZoomOut(); });
 
       // Navigate/play only on a quick tap/click-release of an app particle.
       stage.addEventListener('click', e => {
