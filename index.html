@@ -70,13 +70,11 @@
     position: absolute;
     z-index: 5;
     left: 0; top: 0;
-    width: min(360px, calc(100vw - 32px));
-    padding: 22px 24px 20px;
+    width: min(300px, calc(100vw - 32px));
+    padding: 20px 22px;
     border: 1px solid rgba(232,224,209,0.14);
     border-radius: 14px;
-    background: linear-gradient(180deg, rgba(14,17,24,0.78), rgba(8,10,15,0.84));
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: linear-gradient(180deg, rgba(14,17,24,0.92), rgba(8,10,15,0.94));
     box-shadow: 0 18px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.04);
     color: rgba(232,224,209,0.88);
     opacity: 0;
@@ -91,11 +89,13 @@
     color: rgba(232,224,209,0.42); margin-bottom: 8px;
   }
   #orb-panel .op-title {
-    margin: 0 0 10px; font-weight: 400; font-size: 26px; letter-spacing: 0.04em;
+    margin: 0; font-weight: 400; font-size: 24px; letter-spacing: 0.04em;
     color: rgba(240,233,220,0.96); text-shadow: 0 0 18px rgba(232,224,209,0.12);
   }
+  #orb-panel .op-desc:empty, #orb-panel .op-kicker:empty { display: none; }
   #orb-panel .op-desc { margin: 0; font-size: 15px; line-height: 1.55; color: rgba(232,224,209,0.72); }
-  #orb-panel .op-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  #orb-panel .op-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  #orb-panel .op-title:only-child, #orb-panel .op-title[style*="none"] + .op-desc + .op-actions { margin-top: 0; }
   #orb-panel .op-actions:empty { display: none; }
   #orb-panel .op-btn {
     font: inherit; font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
@@ -821,6 +821,7 @@
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
+          if (viewCull && (p.x < viewCull.x0 || p.x > viewCull.x1 || p.y < viewCull.y0 || p.y > viewCull.y1)) continue;
           const local = lightAt(p.x, p.y, now);
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
           const baseVisible = !(p.mass < MASS_THRESH && local < 0.06 && p.heat < 0.15);
@@ -1797,6 +1798,7 @@
 
       function drawAppParticles(now) {
         for (const ap of appParticles) {
+          if (viewCull && ap !== focus.ap && (ap.x < viewCull.x0 - 60 || ap.x > viewCull.x1 + 60 || ap.y < viewCull.y0 - 60 || ap.y > viewCull.y1 + 60)) continue;
           const local  = lightAt(ap.x, ap.y, now);
           const unstable = ap.audioKey && ap.playing;
           const vibration = unstable
@@ -1839,7 +1841,7 @@
             const baseCardH = baseR * 2.75;
             const baseCardW = baseCardH * aspect;
             const texDpr = Math.min(window.devicePixelRatio || 1, 2);
-            const texScale = (focus.ap === ap && focus.state !== 'none') ? 14 : 4;
+            const texScale = (focus.ap === ap && focus.state !== 'none') ? 8 : 4;
             const texW = Math.max(2, Math.round(baseCardW * texScale * texDpr));
             const texH = Math.max(2, Math.round(baseCardH * texScale * texDpr));
 
@@ -2914,11 +2916,12 @@
       const wordmarkWrap = document.getElementById('wordmark-wrap');
 
       let focusLastNow = 0;
-      const FOCUS_IN_MS   = 950;
-      const FOCUS_OUT_MS  = 700;
-      const FOCUS_DIVE_MS = 520;
-      const RESET_FADE_OUT_MS = 260;
-      const RESET_FADE_IN_MS  = 650;
+      let viewCull = null; // world-space visible rect while zoomed; null when not
+      const FOCUS_IN_MS   = 520;
+      const FOCUS_OUT_MS  = 420;
+      const FOCUS_DIVE_MS = 320;
+      const RESET_FADE_OUT_MS = 200;
+      const RESET_FADE_IN_MS  = 450;
 
       const focus = {
         state: 'none',   // none | in | open | out | dive
@@ -2938,39 +2941,20 @@
       const prettyKey = key => AUDIO_TITLES[key]
         || key.replace(/_/g, ' ').replace(/\b[a-z]/g, c => c.toUpperCase());
 
+      // Deliberately terse: a name to latch onto, never an explanation.
       const PAGE_INFO = {
-        'berzerk':          { title: 'Berzerk', desc: 'A playable take on the arcade classic.' },
-        'blog':             { title: 'Blog', desc: 'Writing and notes.' },
-        'about':            { title: 'About', desc: 'Who is behind all of this, and what this place is.' },
-        'meowdividiardi':   { title: 'Meowdividiardi', desc: 'The cat has its own page. It is, predictably, mostly about the cat.' },
-        'qr':               { title: 'QR', desc: 'A scannable code that points back to this site. Handy for hopping to a phone.' },
-        'missile-command':  { title: 'Missile Command', desc: 'An arcade recreation: defend the cities, conserve your missiles.' },
-        'pyramid':          { title: 'Pyramid', desc: 'A card game of houses, gems and the coherent pyramid, played against three AI houses.' },
-        'chronicler/':      { title: 'The Chronicler', desc: 'An ASCII ruined-library demo. Wander the stacks and see what survived.' },
-        'library/#schilds-ladder':       { title: "Schild's Ladder", desc: "Greg Egan's novel, shelved in the library.", kicker: 'Library' },
-        'library/#godel-escher-bach':    { title: 'Gödel, Escher, Bach', desc: "Hofstadter's braid of logic, art and music, shelved in the library.", kicker: 'Library' },
-        'library/#pale-blue-dot':        { title: 'Pale Blue Dot', desc: "Carl Sagan's meditation on our place in the cosmos, shelved in the library.", kicker: 'Library' },
-        'battlebox/':       { title: 'Battlebox', desc: 'The Magic: The Gathering game server. Invite-only.', kicker: 'Game server' },
+        'berzerk': 'Berzerk', 'blog': 'Blog', 'about': 'About', 'meowdividiardi': 'Meow',
+        'qr': 'QR', 'missile-command': 'Missile Command', 'pyramid': 'Pyramid',
+        'chronicler/': 'The Chronicler', 'library/#schilds-ladder': "Schild's Ladder",
+        'library/#godel-escher-bach': 'Gödel, Escher, Bach', 'library/#pale-blue-dot': 'Pale Blue Dot',
+        'battlebox/': 'Battlebox',
       };
 
       function orbInfo(ap) {
-        if (ap.demo) return {
-          kicker: 'Demonstration', title: 'Descent',
-          desc: 'This orb only exists to show off the new interaction. Tap any orb and the view accelerates toward it while the field keeps moving; a short card explains what you found and offers its controls.',
-          action: null, note: 'Click outside the card and the orb to climb back out.',
-        };
-        if (ap.resetOrb) return {
-          kicker: 'Control', title: 'Reset',
-          desc: 'Gently reshuffles the field: the current orbs fade away and a fresh set drifts in.',
-          action: 'Reset the field',
-        };
-        if (ap.audioKey) return {
-          kicker: 'Sound', title: prettyKey(ap.audioKey),
-          desc: 'A piece of music. While it plays the orb holds its place and the nearby particles shimmer.',
-          action: 'audio',
-        };
-        const info = PAGE_INFO[ap.path] || { title: ap.path || 'Orb', desc: '' };
-        return { kicker: info.kicker || 'Page', title: info.title, desc: info.desc, action: 'Open ' + info.title };
+        if (ap.demo) return { title: 'Ψ', action: null };
+        if (ap.resetOrb) return { title: '', action: 'Reset' };
+        if (ap.audioKey) return { title: prettyKey(ap.audioKey), action: 'audio' };
+        return { title: PAGE_INFO[ap.path] || ap.path || '', action: 'Open' };
       }
 
       function focusGeometry(ap) {
@@ -2985,7 +2969,7 @@
 
       function layoutPanel() {
         const w = stage.clientWidth, h = stage.clientHeight;
-        const pw = Math.min(360, w - 32);
+        const pw = Math.min(300, w - 32);
         orbPanel.style.width = pw + 'px';
         if (w < 700) {
           orbPanel.style.left = ((w - pw) / 2) + 'px';
@@ -2999,11 +2983,12 @@
 
       function buildPanel(ap) {
         const info = orbInfo(ap);
-        panelKicker.textContent = info.kicker;
+        panelKicker.textContent = '';
         panelTitle.textContent  = info.title;
-        panelDesc.textContent   = info.desc;
-        panelNote.textContent   = info.note || '';
-        panelNote.style.display = info.note ? '' : 'none';
+        panelTitle.style.display = info.title ? '' : 'none';
+        panelDesc.textContent   = '';
+        panelNote.textContent   = '';
+        panelNote.style.display = 'none';
         panelActions.textContent = '';
         if (info.action) {
           const btn = document.createElement('button');
@@ -3142,7 +3127,7 @@
         updateCat(dt, now);
         applyOrbToOrbPressure();
         updateLiberatedNodes(dt, now);
-        updateTitle(dt);
+        if (focus.state === 'none' || focus.p < 0.6) updateTitle(dt);
         // Rebuild hot-particle list once per frame (avoids O(N²) in lightAt)
         hotParticles.length = 0;
         for (const p of particles) {
@@ -3152,6 +3137,8 @@
         focusLastNow = now;
         const cam = focusCamera();
         if (cam) {
+          const hw = stage.clientWidth * 0.5 / cam.z + 40, hh = stage.clientHeight * 0.5 / cam.z + 40;
+          viewCull = { x0: cam.fx - hw, x1: cam.fx + hw, y0: cam.fy - hh, y1: cam.fy + hh };
           pctx.save();
           pctx.translate(cam.cx, cam.cy);
           pctx.scale(cam.z, cam.z);
@@ -3163,6 +3150,7 @@
         drawLiberatedNodes();
         drawVolta(now);
         if (cam) pctx.restore();
+        viewCull = null;
         refreshInteractiveCursor();
         requestAnimationFrame(frame);
       }
