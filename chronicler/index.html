@@ -170,23 +170,39 @@
     const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
 
     // ─── Writings ──────────────────────────────────────────────────────────
-    const TAPESTRY_ART = [
-      '  .   ░       .      ░  .',
-      '         ▒▒▒▒▒▒▒         ',
-      '   ░   ▒▒▒~▓▓▓~▒▒▒   .   ',
-      '      ▒▒~▓▓███▓▓~▒▒      ',
-      ' .    ▒▒▓▓█████▓▓▒▒  ░░  ',
-      '      ▒▒~▓▓███▓▓~▒▒      ',
-      '   ░░  ▒▒▒~▓▓▓~▒▒▒       ',
-      '         ▒▒▒▒▒▒▒     .   ',
-      '                         ',
-      '  ░   i   i  i   i  ░░   ',
+    // Sources: the Adividiardi compendium. The carvings follow its kernel
+    // (canon); the tribute roll ('k') and the late scratching ('x') draw on its
+    // generated, non-canon history (sim branch 106). None of this is canon.
+    const MOONS_ART = [
+      '  .    ░        .     ░  ',
+      '     ▒▒▒▒▒             . ',
+      '   ▒▒▒▒▒▒▒▒▒       ~ ~   ',
+      '  ▒▒▓▒▒▒▒▒▒▒▒     ~█~    ',
+      '  ▒▒▒▒▒▒▓▓▒▒▒    ~███~   ',
+      '  ▒▒▒▒▒▒▒▒▒▒▒     ~█~    ',
+      '   ▒▒▒▓▒▒▒▒▒       ~ ~   ',
+      '     ▒▒▒▒▒      ░        ',
+      '  ░                  .   ',
+      '   i   i  i   i   ░░     ',
       '=====░░========░=========',
     ];
-    const ART_COLORS = { '▒': '#cfc6ad', '▓': '#8b8474', '█': '#4a2550', '~': '#6b3a72', 'i': '#b08a5a', '░': '#2e2619', '.': '#6a6458', '=': '#5a4632' };
-    function artHTML(lines) {
+    const MOONS_COLORS = { '▒': '#cfc6ad', '▓': '#8b8474', '█': '#4a2550', '~': '#6b3a72', 'i': '#b08a5a', '░': '#2e2619', '.': '#6a6458', '=': '#5a4632' };
+    const FALLS_ART = [
+      ' ^^^^^^   ░       ^^^^^^ ',
+      '^^^^^^^▓▓▓▓▓▓▓▓▓▓^^^^^^^^',
+      '  ░    ▓▓|||||||▓▓   ░   ',
+      '   i   ▓▓|||||||▓▓       ',
+      '       ▓▓|||||||▓▓    i  ',
+      '  ░      |||||||   ░     ',
+      '       * ~~~·~~~ *       ',
+      '     ~~~~·~*~~~·~~~~     ',
+      '  ░  ~~~~~~~~~~~~~~~  ░░ ',
+      '~~~~~~~~~░░~~~~~~~~~~~~~~',
+    ];
+    const FALLS_COLORS = { '^': '#5f5a55', '▓': '#3a352e', '|': '#7fa6c8', '~': '#4f77a0', '*': '#bfeaf2', '·': '#9fd6e2', 'i': '#b08a5a', '░': '#2e2619' };
+    function artHTML(lines, colors) {
       return '<span class="art">' + lines.map(l => [...l].map(ch => {
-        const c = ART_COLORS[ch];
+        const c = colors[ch];
         return c ? `<span style="color:${c}">${ch}</span>` : ch;
       }).join('')).join('\n') + '</span>';
     }
@@ -199,31 +215,43 @@
       '8': { src: 'carved in the wall', text:
         'They made the air thicker so that we could breathe it.\nNothing that already lived here ▒▒▒▒▒▒▒▒. Nothing here had ever ▒▒▒▒▒▒ back.' },
       '4': { src: 'carved in the wall', text:
-        'There was a small moon that was not a moon.\nSomething slept on it, older than ▒▒▒▒▒▒▒▒▒▒▒▒.' },
+        'There are two moons: the great pale one,\nand a small dark one that runs the wrong way across the sky.\nSomething slept on the small one, older than ▒▒▒▒▒▒▒▒▒▒▒▒.' },
+      'y': { src: 'a tapestry, mostly rotted', art: MOONS_ART, colors: MOONS_COLORS, text: '' },
       'a': { src: 'a book on a lectern', text:
         '…and the Makers went up to look at it, and it woke.\nWe do not write who went first. ▒▒▒▒▒ ▒▒ ▒▒▒▒.\nIt is enough to know that we woke it.' },
       '5': { src: 'carved in the wall, cracked', text:
         'They fought it above the sky for ▒▒▒ days.\nAt the end they used the ▒▒▒▒▒ fire, and the sky went white.\nAfter that the Makers’ Shore was not fit ▒▒▒ ▒▒▒▒▒▒▒▒.\nThe Vessel ▒▒▒▒▒. It did not come back for us.' },
-      'b': { src: 'a burned book', text:
-        '▒▒▒▒▒▒▒ ▒▒▒ the old records ▒▒▒▒▒ ▒▒ kept in the east ▒▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ who ▒▒ not ▒▒▒▒▒ us to ▒▒▒▒▒▒▒▒.' },
-      'y': { src: 'a tapestry, mostly rotted', art: TAPESTRY_ART, text: '' },
+      'g': { src: 'carved in a wall open to the sky', text:
+        'After the white sky it rained glass for ▒▒▒ nights.\nWhere it fell thickest, in the Wild, things began to become each other.\nThose who go in come back ▒▒▒▒▒▒▒, or do not come back.' },
       '2': { src: 'carved in the wall', text:
-        'It fell to us, ▒▒▒▒▒ ▒▒ ▒▒▒ ▒▒▒▒▒ ▒▒▒▒▒. It did not die.\nIt sleeps, and it is full.\nEach of its young holds a stone no larger than a grain of ▒▒▒▒▒▒.' },
+        'It fell to us, ▒▒▒▒▒ ▒▒ ▒▒▒ ▒▒▒▒▒ ▒▒▒▒▒. It did not die.\nIt has no young. It cuts away pieces of itself, and the pieces grow,\nand in each piece is a stone no larger than a grain of ▒▒▒▒▒▒.' },
       '3': { src: 'carved in the wall', text:
-        'The stones see a little way ahead. Not far. A breath. A step.\nSet in the unborn, the child grows around the stone,\nin the ▒▒▒▒▒▒▒ chambers.' },
+        'The stones see a little way ahead. Not far. A breath. A step.\nSet one in the unborn, and the child grows around it.' },
       '6': { src: 'carved in a broken wall, open to the sky', text:
-        'The stone-children grew tall and quiet, and saw a little ahead of the rest of us.\nThey gave the world a new name: Adividiardi.\nWe let the old one go. It was ▒▒▒▒▒▒▒▒.' },
+        'Out of the east, over the narrow land, came the ones who had kept the Makers’ rules.\nThey had the Makers’ craft and none of the Makers’ memory.\nTheir oldest name for themselves was ▒▒MINISTR▒▒▒▒▒. We did not know the word.\nThey named the world again, Adividiardi, and set us to work.' },
+      'r': { src: 'carved low in a broken wall', text:
+        'Some of us they tried to make less.\nThose ran into the Wild, and the Wild changed them again.\nThe west has a word for them now. It is not their word.' },
+      'b': { src: 'a burned book', text:
+        '▒▒▒ one of theirs, a girl, who loved one of the two brothers. She opened the ▒▒▒▒ ▒▒ night and ▒▒▒▒ the seeing-glass from ▒▒▒▒ ▒▒▒▒▒, and we went west, ▒▒▒ of us, ▒▒▒▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒▒▒…' },
+      'd': { src: 'carved in the wall', text:
+        'At the high pass, the sleepers in the mountain named a price.\nIt was paid. It is paid still, each time they wake.\nThe ones from the east would not pay it. That is why they did not follow.' },
+      'k': { src: 'a roll cut into the wall, in many hands', text:
+        'THE SLEEPERS WOKE. THE PRICE WAS PAID AT THE PASS.\nturns from the Founding:\n180 · 306 · 445 · 578 · 749 · 876 · 1036 · 1209 · 1346 · 1467 · ▒▒▒▒' },
+      'w': { src: 'a second tapestry, water-stained', art: FALLS_ART, colors: FALLS_COLORS, text:
+        'AT THE FALLS THE SEEING-GLASS BROKE.\nONE BROTHER GATHERED THE PIECES TO WEAR. ONE SWORE THEM OFF,\nAND ▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒.' },
       '9': { src: 'carved in the wall', text:
-        'The narrow land in the east still runs to the Makers’ Shore.\nThose who ▒▒▒▒▒ it come back ▒▒▒▒▒▒.\nDo not ▒▒▒▒ what you find ▒▒▒▒▒.' },
+        'The narrow land in the east still runs to the Makers’ Shore.\nThose who cross it come back ▒▒▒▒▒▒. Do not ▒▒▒▒ what you find ▒▒▒▒▒.\nOne of the Makers’ lights still crosses the night. It does not answer.' },
+      'x': { src: 'scratched into the outer wall, later, by another hand', late: true, text:
+        'Turn 14▒▒. The eastern families came by here, going west and south toward Karpeth.\nThe raids out of the Wastelands are worse every year, and nobody knows why.\nThe Empire’s men write it down as savage incursions.\nThe families did not leave before.' },
       'S': { src: 'inside the niche', text:
-        'We wrote it all down because we knew we would forget.\nWe forgot anyway. Only the stone remembers, and only some of it.\n\nWhoever reads this: carry it now.\nYou are the chronicler.' },
+        'We wrote it all down because we knew we would forget.\nWe forgot anyway. Only the stone remembers, and only some of it.\n\nThe west will tell you one story and the east another.\nWrite them all down. You are the chronicler.' },
     };
     const FRAG_TOTAL = Object.keys(FRAGMENTS).length;
-    const NEED_FOR_STRANGER = 5;
+    const NEED_FOR_STRANGER = 6;
     const SHELF_LINES = ['Dust.', 'Ash.', 'The spines crumble.', 'A spine, blank where the title was.', 'Nothing legible.', 'Pages fused to stone.'];
 
     // ─── State (lightly persisted) ─────────────────────────────────────────
-    const SAVE_KEY = 'chronicler.v1';
+    const SAVE_KEY = 'chronicler.v2'; // v2: the writings were revised
     const state = { read: [], hasShard: false, nicheOpen: false, visionDone: false, shardTaken: false };
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
@@ -241,7 +269,7 @@
       '           #####S#####      ',
       '           2.........3      ',
       '           #.........9      ',
-      '     ######...........#%,%###',
+      '     ###w##...........#%,%g##',
       '     #HH.H#......__...#__,__#',
       '     4....#.O....._.O.#_T___%',
       '     #.a..+...........#___%__',
@@ -250,11 +278,11 @@
       '     #.b..#...........#_,___#',
       '     5....#...........#__%%__',
       '     #HH.H#.O.......o.#_%_%%#',
-      '     ######...........###_###',
+      '     ######...........#r#_###',
       '          7...........8      ',
       '          #.O.......O.#      ',
-      '          #...........#      ',
-      '          ####1...#####      ',
+      '          d...........#      ',
+      '          ##x#1...#k###      ',
     ];
     const MOSAIC_C = { x: LX + 16, y: LY + 8 };
     const GROVE = { x: 96, y: 43 };
@@ -346,7 +374,7 @@
             case '+': t = DOOR; break;
             case 'T': t = TREE; rf = 0; break;
             case 'a': case 'b': t = LECTERN; frag.set(i, ch); break;
-            case 'y': t = TAPESTRY; rf = 3; frag.set(i, ch); break;
+            case 'y': case 'w': t = TAPESTRY; rf = 3; frag.set(i, ch); break;
             case 'S': t = NICHE; rf = 3; frag.set(i, ch); break;
             default: t = INSCR; rf = 3; frag.set(i, ch); break; // digits
           }
@@ -589,13 +617,14 @@
         case SHELF: return ['≡', [138, 94, 52], [20, 14, 9]];
         case MOSAIC: return mosaicLook(i, x, y);
         case INSCR: {
-          const read = state.read.includes(frag.get(i));
+          const id = frag.get(i), read = state.read.includes(id);
+          if (FRAGMENTS[id].late) return ['‡', read ? [104, 112, 122] : [168, 182, 198], [34, 32, 30]]; // a later, rougher hand
           if (read) return ['Ξ', [138, 122, 90], [34, 32, 28]];
           const pulse = state.hasShard ? 0.65 + 0.35 * Math.sin(t / 380 + v) : 1;
           return ['Ξ', [214 * pulse + 30 * (1 - pulse), 184 * pulse + 40 * (1 - pulse), 110], [40, 36, 30]];
         }
         case LECTERN: return ['¶', state.read.includes(frag.get(i)) ? [146, 134, 112] : [226, 210, 172], [30, 22, 14]];
-        case TAPESTRY: return ['§', state.read.includes('y') ? [124, 60, 54] : [178, 72, 62], [40, 30, 26]];
+        case TAPESTRY: return ['§', state.read.includes(frag.get(i)) ? [124, 60, 54] : [178, 72, 62], [40, 30, 26]];
         case NICHE: return state.nicheOpen ? ['○', [132, 200, 214], [16, 22, 24]] : ['◘', [176, 170, 160], [40, 38, 35]];
         case MENHIR: return ['Π', [150, 150, 162], null];
         case CAIRN: return ['Δ', [146, 140, 128], null];
@@ -635,7 +664,8 @@
       ctx.textBaseline = 'middle';
       const indoors = playerIndoors();
       const day = 1 - duskBlend * 0.5;
-      const dayTint = [1 - duskBlend * 0.4, 1 - duskBlend * 0.3, 1];
+      // K-type sun: daylight runs a little orange-gold; dusk goes deep and blue.
+      const dayTint = [1.04 - duskBlend * 0.44, 0.98 - duskBlend * 0.28, 0.86 + duskBlend * 0.14];
       const flicker = 0.94 + 0.06 * Math.sin(t / 97) * Math.sin(t / 151);
       const tx = t * 0.00011;
       for (let sy = 0; sy < rows; sy++) {
@@ -669,7 +699,7 @@
             ctx.fillStyle = dim(L[1]);
           }
           const blk = BLOCK[L[0]];
-          if (blk) { ctx.globalAlpha = blk; ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5); ctx.globalAlpha = 1; }
+          if (blk) { ctx.globalAlpha = blk; ctx.fillRect(px, py, cellW, cellH); ctx.globalAlpha = 1; }
           else ctx.fillText(L[0], px + cellW / 2, py + cellH / 2 + 1);
         }
       }
@@ -717,21 +747,33 @@
     }
 
     // ─── The vision ────────────────────────────────────────────────────────
+    // Wordless: the big pale moon, the small dark one that runs the wrong way,
+    // the Makers' ships, the white sky, the rain of glass, the fall, and one
+    // light that is still up there.
     let visionStart = 0;
-    const VISION_LEN = 16000;
-    let visionStars = null;
+    const VISION_LEN = 19000;
+    let visionStars = null, visionShips = [], visionGlass = [];
     function prepVision() {
       const r = mulberry32(777);
       const cols = Math.ceil(vw / cellW) + 1, rows = Math.ceil(vh / cellH) + 1;
       visionStars = [];
       const count = Math.floor(cols * rows * 0.05);
-      for (let k = 0; k < count; k++) visionStars.push({ x: Math.floor(r() * cols), y: Math.floor(r() * rows * 0.8), ph: r() * 6.28, ch: r() < 0.12 ? '*' : r() < 0.5 ? '·' : '.' });
+      for (let k = 0; k < count; k++) visionStars.push({ x: r() * cols, y: Math.floor(r() * rows * 0.8), ph: r() * 6.28, ch: r() < 0.12 ? '*' : r() < 0.5 ? '·' : '.' });
       visionShips = [];
       for (let k = 0; k < 14; k++) visionShips.push({ a: r() * 6.28, d0: 0.9 + r() * 0.8, sp: 0.6 + r() * 0.6, ph: r() * 6.28 });
+      visionGlass = [];
+      for (let k = 0; k < 160; k++) {
+        const heavy = r() < 0.55; // most of it comes down in one place
+        visionGlass.push({
+          t0: 9.4 + r() * 3.2,
+          vx: heavy ? (r() - 0.5) * 3 : (r() - 0.5) * 22,
+          vy: 1 + r() * 3,
+          ph: r() * 6.28,
+        });
+      }
     }
-    let visionShips = [];
     function drawVision(t) {
-      const e = t - visionStart;
+      const e = t - visionStart, es = e / 1000;
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, vw, vh);
       ctx.font = Math.round(cellH * 0.86) + 'px ' + FONT;
@@ -741,100 +783,125 @@
       const fadeIn = clamp(e / 2200, 0, 1), fadeOut = clamp((VISION_LEN - e) / 1800, 0, 1);
       const A = fadeIn * fadeOut;
       const put = (x, y, ch, r, g, b, a = 1) => {
+        x = Math.round(x); y = Math.round(y);
         if (x < 0 || y < 0 || x >= cols || y >= rows) return;
         const blk = BLOCK[ch];
         ctx.fillStyle = `rgba(${r | 0},${g | 0},${b | 0},${a * A * (blk || 1)})`;
-        if (blk) ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
+        if (blk) ctx.fillRect(x * cellW, y * cellH, cellW, cellH);
         else ctx.fillText(ch, x * cellW + cellW / 2, y * cellH + cellH / 2 + 1);
       };
       const hy = Math.floor(rows * 0.8);
-      // Stars
+      const asp = cellH / cellW;
+      // Stars wheel slowly one way…
+      const drift = es * 0.35;
       for (const s of visionStars) {
         if (s.y >= hy) continue;
         const tw = 0.45 + 0.55 * Math.abs(Math.sin(e / 900 + s.ph));
-        put(s.x, s.y, s.ch, 190, 196, 220, tw * 0.8);
+        put((s.x + drift) % cols, s.y, s.ch, 190, 196, 220, tw * 0.8);
       }
-      // Horizon
+      // The big pale moon
+      const mx = cols * 0.2 + drift, my = rows * 0.3, mr = Math.max(3, Math.min(cols / asp, rows) * 0.09);
+      const moonA = clamp((e - 1200) / 1600, 0, 1);
+      for (let y = Math.floor(my - mr - 1); y <= my + mr + 1; y++) for (let x = Math.floor(mx - mr * asp - 1); x <= mx + mr * asp + 1; x++) {
+        const d = Math.hypot((x - mx) / asp, y - my) / mr;
+        if (d > 1) continue;
+        const mare = n2(x * 0.5 + 40, y * 0.5) > 0.62;
+        put(x, y, d > 0.84 ? '░' : mare ? '▓' : '▒', 214, 206, 186, moonA * (mare ? 0.55 : 1));
+      }
+      // …and the small dark one runs the other way, until it stops running.
+      const awake = clamp((e - 3600) / 1500, 0, 1);
+      const settle = clamp(es / 4.6, 0, 1);
+      let ax = cols * (0.86 - 0.26 * (1 - (1 - settle) * (1 - settle))), ay = rows * 0.2;
+      const falling = e > 10600;
+      if (falling) {
+        const p = clamp((e - 10600) / 3000, 0, 1);
+        const bx = ax, by = ay, tx = cols * 0.88, ty = hy - 1;
+        ax = bx + (tx - bx) * p; ay = by + (ty - by) * (p * p);
+        if (p < 1) {
+          for (let k = 1; k < 26; k++) {
+            const q = clamp(p - k * 0.012, 0, 1);
+            put(bx + (tx - bx) * q + (hash(k, Math.floor(e / 90)) - 0.5) * 2, by + (ty - by) * q * q, k < 6 ? '*' : '·', 240, 120 + k * 3, 60, (1 - k / 26) * 0.9);
+          }
+        }
+      }
+      const moonGone = e > 9200;
+      if (!moonGone) put(ax, ay, '●', 92, 84, 96, clamp(e / 1500, 0, 1) * (0.7 + 0.3 * Math.sin(e / 300)));
+      if (awake > 0 && !(falling && e > 13600)) {
+        const sz = falling ? 1 : 0.6;
+        for (let y = -1; y <= 1; y++) for (let x = -2; x <= 2; x++) {
+          if (Math.hypot(x / 1.6, y) > 1.3 * sz + 0.3) continue;
+          put(ax + x, ay + y, Math.hypot(x / 1.6, y) < 0.8 ? '█' : '▓', 70, 30, 82, awake);
+        }
+        for (let k = 0; k < 7; k++) {
+          const base = k / 7 * 6.28 + e / 1400;
+          for (let st = 2; st < 6; st++) {
+            const a = base + Math.sin(e / 500 + k + st * 0.6) * 0.5;
+            put(ax + Math.cos(a) * st * asp * 0.5, ay + Math.sin(a) * st * 0.5, '~', 110, 56, 124, awake * (1 - st / 7));
+          }
+        }
+      }
+      // The Makers' ships, and their fire
+      const bx0 = cols * 0.6, by0 = rows * 0.2;
+      if (e > 4800 && e < 9400) {
+        const p = (e - 4800) / 4600;
+        for (const sh of visionShips) {
+          const d = (sh.d0 - p * sh.sp * 0.9) * mr * 3.4;
+          const a = sh.a + p * 1.4 * sh.sp;
+          const sx = ax + Math.cos(a) * Math.max(mr * 0.9, d) * asp, sy = ay + Math.sin(a) * Math.max(mr * 0.9, d);
+          put(sx, sy, '+', 210, 226, 240, 0.9);
+          if (hash(Math.floor(e / 120), sh.ph * 100) < 0.22) {
+            for (let q = 0.15; q < 0.95; q += 0.12) put(sx + (ax - sx) * q, sy + (ay - sy) * q, '·', 255, 220, 160, 0.8);
+            put(ax + (hash(e, 1) - 0.5) * 6, ay + (hash(e, 2) - 0.5) * 4, '*', 255, 240, 200, 1);
+          }
+        }
+      }
+      // The rain of glass: most of it into one valley, the rest everywhere
+      for (const gl of visionGlass) {
+        const dt = es - gl.t0;
+        if (dt < 0) continue;
+        const x = bx0 + gl.vx * dt, y = by0 + gl.vy * dt + 2.2 * dt * dt;
+        if (y < hy - 1) {
+          const ch = Math.abs(gl.vx) < 3 ? '|' : gl.vx > 0 ? '\\' : '/';
+          put(x, y, ch, 170, 230, 240, 0.85);
+          put(x - gl.vx * 0.05, y - (gl.vy + 4.4 * dt) * 0.05 - 1, '·', 120, 200, 220, 0.4);
+        } else {
+          // Where a piece lands, it keeps glinting for a while.
+          const land = Math.sqrt(Math.max(0, (hy - 1 - by0) / 2.2 + (gl.vy / 4.4) ** 2)) - gl.vy / 4.4;
+          const lx = bx0 + gl.vx * land, since = dt - land;
+          const g = clamp(1 - since / 5, 0, 1) * (0.5 + 0.5 * Math.sin(e / 160 + gl.ph));
+          if (g > 0.05) put(lx, hy - 1 + (hash(gl.ph * 99, 1) < 0.5 ? 0 : 1), '·', 150, 230, 240, g);
+        }
+      }
+      // Horizon (drawn after the glass so it hides what falls behind the hills)
       for (let x = 0; x < cols; x++) {
         const hh = Math.floor(2.4 * n2(x * 0.08, 3) + 1.4 * n3(x * 0.2, 7));
         for (let y = hy - hh; y < rows; y++) {
           const top = y === hy - hh;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(x * cellW, y * cellH, cellW + 0.5, cellH + 0.5);
           put(x, y, top ? '▲' : (hash(x, y) < 0.3 ? '.' : ' '), 34, 40, 62, 1);
         }
       }
-      // The small moon
-      const asp = cellH / cellW;
-      const mx = cols * 0.34, my = rows * 0.26, mr = Math.max(3, Math.min(cols / asp, rows) * 0.1);
-      const crack = e > 9000;
-      const moonA = clamp((e - 1800) / 1600, 0, 1);
-      for (let y = Math.floor(my - mr - 1); y <= my + mr + 1; y++) for (let x = Math.floor(mx - mr * asp - 1); x <= mx + mr * asp + 1; x++) {
-        const d = Math.hypot((x - mx) / asp, y - my) / mr;
-        if (d > 1) continue;
-        if (crack && hash(x * 3, y * 7) < 0.35 * clamp((e - 9000) / 800, 0, 1)) continue;
-        put(x, y, d > 0.82 ? '░' : '▒', 200, 194, 172, moonA * (crack ? 0.6 : 1));
-      }
-      // What slept on it
-      const awake = clamp((e - 3400) / 1500, 0, 1);
-      const falling = e > 10000;
-      let ax = mx + mr * asp * 0.25, ay = my + mr * 0.15;
-      if (falling) {
-        const p = clamp((e - 10000) / 3000, 0, 1);
-        const tx = cols * 0.82, ty = hy - 1;
-        ax = ax + (tx - ax) * p; ay = ay + (ty - ay) * (p * p);
-        if (p < 1) {
-          for (let k = 1; k < 26; k++) {
-            const q = clamp(p - k * 0.012, 0, 1);
-            const sx = mx + mr * asp * 0.25 + (tx - mx - mr * asp * 0.25) * q;
-            const sy = my + mr * 0.15 + (ty - my - mr * 0.15) * q * q;
-            put(Math.round(sx + (hash(k, Math.floor(e / 90)) - 0.5) * 2), Math.round(sy), k < 6 ? '*' : '·', 240, 120 + k * 3, 60, (1 - k / 26) * 0.9);
-          }
-        }
-      }
-      if (awake > 0 && !(falling && e > 13000)) {
-        for (let y = -2; y <= 2; y++) for (let x = -3; x <= 3; x++) {
-          const d = Math.hypot(x / 1.6, y);
-          if (d > 1.9) continue;
-          put(Math.round(ax + x), Math.round(ay + y), d < 1 ? '█' : '▓', 70, 30, 82, awake);
-        }
-        for (let k = 0; k < 7; k++) {
-          const base = k / 7 * 6.28 + e / 1400;
-          for (let s = 2; s < 7; s++) {
-            const a = base + Math.sin(e / 500 + k + s * 0.6) * 0.5;
-            put(Math.round(ax + Math.cos(a) * s * asp * 0.55), Math.round(ay + Math.sin(a) * s * 0.55), '~', 110, 56, 124, awake * (1 - s / 8));
-          }
-        }
-      }
-      // The Makers' ships, fire
-      if (e > 4600 && e < 9400) {
-        const p = (e - 4600) / 4800;
-        for (const s of visionShips) {
-          const d = (s.d0 - p * s.sp * 0.9) * mr * 3;
-          const a = s.a + p * 1.4 * s.sp;
-          const sx = mx + Math.cos(a) * Math.max(mr * 1.3, d) * asp, sy = my + Math.sin(a) * Math.max(mr * 1.3, d);
-          put(Math.round(sx), Math.round(sy), '+', 210, 226, 240, 0.9);
-          if (hash(Math.floor(e / 120), s.ph * 100) < 0.22) {
-            for (let q = 0.15; q < 0.95; q += 0.12) {
-              put(Math.round(sx + (ax - sx) * q), Math.round(sy + (ay - sy) * q), '·', 255, 220, 160, 0.8);
-            }
-            put(Math.round(ax + (hash(e, 1) - 0.5) * 6), Math.round(ay + (hash(e, 2) - 0.5) * 4), '*', 255, 240, 200, 1);
-          }
-        }
-      }
       // White sky
-      if (e > 8600 && e < 11400) {
-        const p = e < 9000 ? (e - 8600) / 400 : 1 - (e - 9000) / 2400;
+      if (e > 8800 && e < 11600) {
+        const p = e < 9200 ? (e - 8800) / 400 : 1 - (e - 9200) / 2400;
         ctx.fillStyle = `rgba(255,252,240,${clamp(p, 0, 1) * 0.95 * A})`;
         ctx.fillRect(0, 0, vw, vh);
       }
       // Impact glow beyond the hills
-      if (e > 12800) {
-        const p = clamp((e - 12800) / 600, 0, 1) * clamp(1 - (e - 13600) / 2200, 0.25, 1);
-        const cx = cols * 0.82;
+      if (e > 13400) {
+        const p = clamp((e - 13400) / 600, 0, 1) * clamp(1 - (e - 14200) / 2400, 0.2, 1);
+        const cx = cols * 0.88;
         for (let y = hy - 6; y < hy + 1; y++) for (let x = Math.floor(cx - 14); x < cx + 14; x++) {
           const d = Math.hypot((x - cx) / 2.2, (y - hy) * 1.2) / 7;
           if (d > 1) continue;
           put(x, y, '░', 230, 120, 60, (1 - d) * p * 0.8);
         }
+      }
+      // One of their lights is still up there, crossing, not answering.
+      if (e > 14600) {
+        const p = (e - 14600) / 4400;
+        put(cols * (0.1 + 0.8 * p), rows * (0.12 + 0.05 * Math.sin(p * 3)), '•', 255, 244, 210, clamp((e - 14600) / 900, 0, 1) * (0.8 + 0.2 * Math.sin(e / 400)));
       }
     }
 
@@ -881,7 +948,7 @@
     }
     function fragPage(id) {
       const f = FRAGMENTS[id];
-      const html = (f.art ? artHTML(f.art) : '') + withGaps(f.text);
+      const html = (f.art ? artHTML(f.art, f.colors) : '') + withGaps(f.text);
       return { title: f.src, html };
     }
     function markRead(id) {
@@ -897,7 +964,7 @@
       if (!state.read.length) return;
       const html = state.read.map(id => {
         const f = FRAGMENTS[id];
-        return `<div class="entry"><span class="src">${esc(f.src)}</span>${f.art ? artHTML(f.art) : ''}${withGaps(f.text)}</div>`;
+        return `<div class="entry"><span class="src">${esc(f.src)}</span>${f.art ? artHTML(f.art, f.colors) : ''}${withGaps(f.text)}</div>`;
       }).join('');
       showPages([{ title: state.read.length + ' / ' + FRAG_TOTAL, html }]);
     }
@@ -916,7 +983,7 @@
       }
       if (t === NICHE) {
         if (state.nicheOpen) { markRead('S'); showPages([fragPage('S')]); return true; }
-        if (!state.hasShard) { showPages([{ cls: 'note', body: 'A sealed niche.\nIn its face, a small socket. Empty.' }]); return true; }
+        if (!state.hasShard) { showPages([{ cls: 'note', body: 'A sealed niche.\nIn its face, a small curved socket. Empty.' }]); return true; }
         state.nicheOpen = true; state.hasShard = false; save();
         dirty = true;
         showPages([{ cls: 'note', body: 'The shard fits.\nStone grinds aside.' }, fragPage('S')]);
@@ -949,6 +1016,7 @@
     let mode = 'world';
     function startVision() {
       mode = 'vision';
+      hideHint();
       autoPath = null;
       prepVision();
       visionStart = performance.now();
@@ -978,7 +1046,7 @@
       if (tile[i] === SHARD) {
         tile[i] = GRASS;
         state.hasShard = true; state.shardTaken = true; save();
-        showPages([{ cls: 'note', body: 'A shard of dark crystal.\nIt is warm.' }]);
+        showPages([{ cls: 'note', body: 'A curved shard of crystal, polished on one face,\nas if it came from something round.\nIt is warm.' }]);
       }
     }
 
