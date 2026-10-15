@@ -43,7 +43,14 @@
       pointer-events: none;
     }
     #count.on { opacity: 1; pointer-events: auto; }
-    #home:hover, #count:hover { color: #a8977a; }
+    #mapbtn {
+      position: fixed; z-index: 5;
+      left: env(safe-area-inset-left, 0); bottom: env(safe-area-inset-bottom, 0);
+      font: 14px/1 var(--mono); color: #4f4738; padding: 12px 14px; cursor: pointer;
+      opacity: 0; pointer-events: none; transition: opacity 1.2s, color .3s;
+    }
+    #mapbtn.on { opacity: 1; pointer-events: auto; }
+    #home:hover, #count:hover, #mapbtn:hover { color: #a8977a; }
     #hint {
       position: fixed;
       left: 0; right: 0;
@@ -121,6 +128,7 @@
   <canvas id="c"></canvas>
   <a id="home" href="/" aria-label="back">‹</a>
   <div id="count" role="button" aria-label="journal"></div>
+  <div id="mapbtn" role="button" aria-label="map">▦</div>
   <div id="hint"></div>
   <div id="panel" role="dialog" aria-live="polite"><div id="ptitle"></div><div id="pbody"></div><div id="pmore">▾</div></div>
   <div id="veil"></div>
@@ -157,11 +165,17 @@
     const GRASS = 0, TALL = 1, FLOWER = 2, TREE = 3, PINE = 4, PATH = 5, WATER = 6, SHALLOW = 7, BRIDGE = 8,
           ROCK = 9, BOULDER = 10, FLOOR = 11, OPEN = 12, WALL = 13, RUBBLE = 14, DEBRIS = 15, COLUMN = 16,
           BROKEN = 17, SHELF = 18, DOOR = 19, MOSAIC = 20, INSCR = 21, LECTERN = 22, TAPESTRY = 23, NICHE = 24,
-          MENHIR = 25, CAIRN = 26, TRAIL = 27, REED = 28, SHARD = 29;
-    const WALKABLE = new Set([GRASS, TALL, FLOWER, PATH, SHALLOW, BRIDGE, FLOOR, OPEN, DEBRIS, DOOR, MOSAIC, TRAIL, REED, SHARD]);
-    const OPAQUE = new Set([TREE, PINE, ROCK, WALL, INSCR, TAPESTRY, NICHE]);
+          MENHIR = 25, CAIRN = 26, TRAIL = 27, REED = 28, SHARD = 29,
+          SEA = 30, SURF = 31, SAND = 32, DRIFT = 33, HULL = 34, SCREE = 35, CRAG = 36, SNOW = 37, LEDGE = 38,
+          CAVE = 39, WILD = 40, WILDGROW = 41, WARN = 42, FIRE = 43, CART = 44;
+    const WALKABLE = new Set([GRASS, TALL, FLOWER, PATH, SHALLOW, BRIDGE, FLOOR, OPEN, DEBRIS, DOOR, MOSAIC, TRAIL, REED, SHARD,
+                              SAND, DRIFT, SCREE, LEDGE, WILD]);
+    const OPAQUE = new Set([TREE, PINE, ROCK, WALL, INSCR, TAPESTRY, NICHE, CRAG, SNOW, CAVE, WILDGROW]);
 
-    const W = 112, H = 74;
+    // The ruin and its meadow sit in the middle; around them: the western sea,
+    // the mountains to the north, and the edge of the Wild to the east.
+    const W = 168, H = 112;
+    const OX = 28, OY = 30; // where the original meadow sits in the larger map
     const N = W * H;
     const tile = new Uint8Array(N), vr = new Uint8Array(N), roof = new Uint8Array(N);
     const seen = new Uint8Array(N), vis = new Uint8Array(N);
@@ -264,7 +278,7 @@
     const n1 = valueNoise(11), n2 = valueNoise(23), n3 = valueNoise(37);
     const nc = valueNoise(51);
 
-    const LX = 41, LY = 12;
+    const LX = 41 + OX, LY = 12 + OY;
     const LIB = [
       '           #####S#####      ',
       '           2.........3      ',
@@ -285,8 +299,19 @@
       '          ##x#1...#k###      ',
     ];
     const MOSAIC_C = { x: LX + 16, y: LY + 8 };
-    const GROVE = { x: 96, y: 43 };
-    const START = { x: 57, y: H - 9 };
+    const GROVE = { x: 96 + OX, y: 43 + OY };
+    const LEDGE_AT = { x: 84, y: 12 };              // the cult's watch-post on the mountain
+    const CAVE_AT = { x: 90, y: 8 };
+    const CAMP_Y = 100;                              // families camped by the road south
+    const WRECK = { x: 17, y: 70 };
+    const MIMIC_HOME = { x: 153, y: 66 };
+    const roadX = y => { const oy = y - OY, calm = clamp(Math.abs(oy - 44) / 6 - 0.4, 0, 1);
+      return Math.round(57 + OX + calm * (2.2 * Math.sin(oy * 0.17) + 1.3 * Math.sin(oy * 0.05 + 1))); };
+    const CAMP = { x: roadX(CAMP_Y) + 6, y: CAMP_Y };
+    const START = { x: roadX(H - 5), y: H - 5 };
+    const shoreX = y => 13 + Math.round(6 * fbm(n2, y * 0.05, 3.3));
+    const ridgeY = x => 24 + Math.round(7 * fbm(n1, x * 0.04, 7.7));
+    const wildX = y => 141 + Math.round(6 * fbm(n3, y * 0.05, 11.1));
 
     function carve(x, y, t) { if (inb(x, y)) tile[idx(x, y)] = t; }
 
@@ -295,9 +320,10 @@
       // Meadow, forest, flowers
       for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const i = idx(x, y);
+        const ox = x - OX, oy = y - OY;
         const edge = Math.min(x, y, W - 1 - x, H - 1 - y);
-        let f = fbm(n1, x * 0.075, y * 0.075);
-        if (x > 77 && y > 24 && y < 60) f += 0.32;               // the deep east wood
+        let f = fbm(n1, ox * 0.075 + 64, oy * 0.075 + 64);
+        if (ox > 77 && ox < 116 && oy > 24 && oy < 60) f += 0.32;  // the deep east wood
         const band = 3 + n3(x * 0.2, y * 0.2) * 5;
         let t = GRASS;
         if (edge < band || f > 0.6) t = n3(x * 0.11 + 40, y * 0.11) > 0.52 ? PINE : TREE;
@@ -311,15 +337,17 @@
         tile[i] = t;
       }
       // Crags to the north-east
-      for (let y = 0; y < 26; y++) for (let x = 76; x < W; x++) {
-        const d = Math.hypot((x - 93) / 1.3, y - 11);
+      for (let y = OY; y < OY + 26; y++) for (let x = 76 + OX; x < 112 + OX; x++) {
+        const d = Math.hypot((x - 93 - OX) / 1.3, y - 11 - OY);
         if (d < 8 + n3(x * 0.3, y * 0.3) * 4) {
           const r = n2(x * 0.35 + 9, y * 0.35);
           tile[idx(x, y)] = r > 0.5 ? ROCK : r > 0.42 ? BOULDER : (rng() < 0.4 ? TALL : GRASS);
         }
       }
       // Stream
-      const stream = [[14, 0], [17, 12], [25, 28], [38, 38], [51, 43], [65, 47], [80, 53], [95, 58], [111, 61]];
+      // A stream out of the mountains, through the meadow, into the Wild.
+      const stream = [[36, 12], [40, 22], [14, 0], [17, 12], [25, 28], [38, 38], [51, 43], [65, 47], [80, 53], [95, 58], [111, 61], [126, 64], [142, 70]]
+        .map(([x, y], k) => k < 2 ? [x, y] : [x + OX, y + OY]);
       stampPolyline(stream, (x, y, d) => {
         const i = idx(x, y);
         if (d < 1.3) tile[i] = WATER;
@@ -327,15 +355,15 @@
         else if (d < 3.2 && !OPAQUE.has(tile[i]) && tile[i] !== WATER && tile[i] !== SHALLOW && rng() < 0.35) tile[i] = REED;
       }, 3.3);
       // Pond
-      for (let y = 44; y < 61; y++) for (let x = 12; x < 38; x++) {
-        const d = Math.hypot((x - 24) / 6.5, (y - 52) / 3.6);
+      for (let y = 44 + OY; y < 61 + OY; y++) for (let x = 12 + OX; x < 38 + OX; x++) {
+        const d = Math.hypot((x - 24 - OX) / 6.5, (y - 52 - OY) / 3.6);
         const i = idx(x, y);
         if (d < 0.72) tile[i] = WATER;
         else if (d < 1.0) tile[i] = SHALLOW;
         else if (d < 1.35 && tile[i] !== WATER && tile[i] !== SHALLOW) tile[i] = rng() < 0.45 ? REED : (rng() < 0.3 ? FLOWER : GRASS);
       }
       // Standing stones
-      const ss = { x: 22, y: 21 };
+      const ss = { x: 22 + OX, y: 21 + OY };
       for (let y = ss.y - 6; y <= ss.y + 6; y++) for (let x = ss.x - 9; x <= ss.x + 9; x++) {
         if (!inb(x, y)) continue;
         const d = Math.hypot((x - ss.x) / 1.4, y - ss.y);
@@ -415,17 +443,16 @@
       tile[idx(GROVE.x + 2, GROVE.y)] = SHALLOW;
       tile[idx(GROVE.x - 1, GROVE.y + 1)] = BOULDER;
       // A deer trail from the ruin's east side to the grove
-      const trail = [[75, 21], [78, 24], [81, 23], [84, 27], [86, 31], [89, 33], [90, 37], [93, 40], [GROVE.x - 1, GROVE.y]];
+      const trail = [[75, 21], [78, 24], [81, 23], [84, 27], [86, 31], [89, 33], [90, 37], [93, 40]].map(([x, y]) => [x + OX, y + OY]).concat([[GROVE.x - 1, GROVE.y]]);
       for (let k = 0; k < trail.length - 1; k++) carveLine4(trail[k], trail[k + 1], (x, y) => {
         const i = idx(x, y);
         if (Math.hypot((x - GROVE.x) / 1.35, y - GROVE.y) < 2.9) return;
         tile[i] = TRAIL;
       });
-      tile[idx(74, 19)] = CAIRN;
+      tile[idx(74 + OX, 19 + OY)] = CAIRN;
       // The road in from the south
       for (let y = H - 1; y >= LY + 17; y--) {
-        const calm = clamp(Math.abs(y - 44) / 6 - 0.4, 0, 1); // run straight across the river
-        let x = Math.round(57 + calm * (2.2 * Math.sin(y * 0.17) + 1.3 * Math.sin(y * 0.05 + 1)));
+        let x = roadX(y); // runs straight across the river
         let w = 2;
         if (y < LY + 23) { x = LX + 15; w = 3; }
         for (let k = -4; k <= w + 3; k++) {
@@ -446,6 +473,92 @@
           const j = idx(x + dx, y + dy);
           if (inb(x + dx, y + dy) && tile[j] === WATER) tile[j] = BRIDGE;
         }
+      }
+      generateMargins();
+    }
+
+    // ─── The wider country (sea, mountains, the Wild, the road south) ──────
+    function generateMargins() {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = idx(x, y);
+        // The western sea
+        const sx = shoreX(y);
+        if (x < sx - 3) { tile[i] = SEA; continue; }
+        if (x < sx) { tile[i] = SURF; continue; }
+        if (x < sx + 3 + (vr[i] & 1)) { tile[i] = rng() < 0.05 ? DRIFT : SAND; continue; }
+        if (x < sx + 6 && tile[i] !== WATER && tile[i] !== SHALLOW) { tile[i] = rng() < 0.5 ? TALL : GRASS; continue; }
+        // The mountains
+        const ry = ridgeY(x);
+        if (y < ry && tile[i] !== WATER && tile[i] !== SHALLOW) {
+          const h = ry - y + n3(x * 0.2, y * 0.2) * 4;
+          if (h > 17) tile[i] = SNOW;
+          else if (fbm(n2, x * 0.13 + 20, y * 0.13) > 0.56 - h * 0.008) tile[i] = CRAG;
+          else tile[i] = h < 3 && rng() < 0.3 ? BOULDER : SCREE;
+          continue;
+        }
+        // The edge of the Wild
+        const wx = wildX(y), depth = x - wx;
+        if (depth > 0) {
+          if (depth > 19) tile[i] = WILDGROW;
+          else tile[i] = fbm(n1, x * 0.16 + 9, y * 0.16) > 0.58 - depth * 0.006 ? WILDGROW : WILD;
+        }
+      }
+      // Stones stacked at the edge of the Wild
+      for (let y = 6; y < H - 6; y += 9) {
+        const x = wildX(y) - 1;
+        if (WALKABLE.has(tile[idx(x, y)])) tile[idx(x, y)] = WARN;
+      }
+      // A clearing in the Wild where someone lives
+      for (let y = MIMIC_HOME.y - 3; y <= MIMIC_HOME.y + 3; y++) for (let x = MIMIC_HOME.x - 5; x <= MIMIC_HOME.x + 5; x++)
+        if (Math.hypot((x - MIMIC_HOME.x) / 1.6, y - MIMIC_HOME.y) < 3) tile[idx(x, y)] = WILD;
+      // A trail up the mountain to the watch-post, and on to the cave
+      const climb = [[LX + 15, LY - 4], [LX + 13, LY - 9], [LX + 16, LY - 13], [LX + 12, LY - 18], [LX + 15, LY - 22], [LX + 11, LY - 26], [LEDGE_AT.x, LEDGE_AT.y]];
+      for (let k = 0; k < climb.length - 1; k++) carveLine4(climb[k], climb[k + 1], (x, y) => {
+        const t = tile[idx(x, y)];
+        if (t === WATER || t === SHALLOW) tile[idx(x, y)] = BRIDGE; else tile[idx(x, y)] = y < ridgeY(x) + 1 ? LEDGE : (t === TREE || t === PINE || t === ROCK ? GRASS : t);
+      });
+      for (let y = LEDGE_AT.y - 2; y <= LEDGE_AT.y + 1; y++) for (let x = LEDGE_AT.x - 3; x <= LEDGE_AT.x + 3; x++) tile[idx(x, y)] = LEDGE;
+      for (let y = CAVE_AT.y - 2; y <= CAVE_AT.y + 1; y++) for (let x = CAVE_AT.x - 2; x <= CAVE_AT.x + 2; x++) tile[idx(x, y)] = CRAG;
+      carveLine4([LEDGE_AT.x + 3, LEDGE_AT.y - 1], [CAVE_AT.x, CAVE_AT.y + 1], (x, y) => { tile[idx(x, y)] = LEDGE; });
+      tile[idx(CAVE_AT.x, CAVE_AT.y)] = CAVE;
+      // The families' camp by the road
+      for (let y = CAMP.y - 3; y <= CAMP.y + 3; y++) for (let x = CAMP.x - 6; x <= CAMP.x + 8; x++)
+        if (Math.hypot((x - CAMP.x - 1) / 2.2, y - CAMP.y) < 3.2 && tile[idx(x, y)] !== PATH) tile[idx(x, y)] = hash(x, y) < 0.3 ? DEBRIS : GRASS;
+      tile[idx(CAMP.x, CAMP.y)] = FIRE;
+      for (let x = CAMP.x + 4; x <= CAMP.x + 6; x++) tile[idx(x, CAMP.y - 2)] = CART;
+      // A wreck on the beach
+      for (let y = WRECK.y - 1; y <= WRECK.y + 1; y++) for (let x = WRECK.x - 3; x <= WRECK.x + 3; x++)
+        if (Math.hypot((x - WRECK.x) / 3.4, y - WRECK.y) < 1.15 && hash(x, y * 3) > 0.15) tile[idx(x, y)] = HULL;
+      for (let x = WRECK.x - 5; x <= WRECK.x + 5; x++) for (let y = WRECK.y - 2; y <= WRECK.y + 2; y++)
+        if (tile[idx(x, y)] === SAND && hash(x * 7, y) < 0.18) tile[idx(x, y)] = DRIFT;
+    }
+
+    // Make sure every place that matters can be walked to from the road.
+    function ensureReachable(targets) {
+      for (let pass = 0; pass < targets.length + 1; pass++) {
+        const reach = new Uint8Array(N);
+        const q = [idx(START.x, START.y)];
+        reach[q[0]] = 1;
+        for (let h = 0; h < q.length; h++) {
+          const c = q[h], cx = c % W, cy = (c - cx) / W;
+          for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) {
+            const nx = cx + dx, ny = cy + dy;
+            if (!inb(nx, ny)) continue;
+            const j = idx(nx, ny);
+            if (reach[j] || !WALKABLE.has(tile[j])) continue;
+            reach[j] = 1; q.push(j);
+          }
+        }
+        const lost = targets.find(([tx, ty]) => ![[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => inb(tx + dx, ty + dy) && reach[idx(tx + dx, ty + dy)]));
+        if (!lost) return;
+        let best = null, bd = 1e9;
+        for (const c of q) { const cx = c % W, cy = (c - cx) / W, d = Math.hypot(cx - lost[0], cy - lost[1]); if (d < bd) { bd = d; best = [cx, cy]; } }
+        carveLine4(best, lost, (x, y) => {
+          if (x === lost[0] && y === lost[1]) return;
+          const i = idx(x, y), t = tile[i];
+          if (WALKABLE.has(t) || roof[i] || frag.has(i) || [FIRE, CART, HULL, CAVE, WARN, MENHIR].includes(t)) return;
+          tile[i] = t === WATER || t === SHALLOW ? BRIDGE : t === WILDGROW ? WILD : (t === CRAG || t === SNOW) ? LEDGE : t === SEA || t === SURF ? SAND : TRAIL;
+        });
       }
     }
 
@@ -490,17 +603,44 @@
     if (state.nicheOpen) { /* rendered as open via state */ }
     let strangerTalks = 0;
 
+    // ─── People (few words each; nothing explained) ────────────────────────
+    const ORAL = { // what a child has heard of the writings, the way it's told around a fire
+      '4': 'Gran says the little moon goes backwards because it\u2019s running from something.',
+      '5': 'Gran says the sky went white once, because the moon got angry.',
+      '2': 'Gran says something sleeps under the hills, and dreams a little bit ahead of us.',
+      'g': 'Gran says it rained glass in the east. That\u2019s why we don\u2019t drink from streams that come out of there.',
+      'b': 'Gran says a girl stole a magic ball for a boy, and everybody got a piece.',
+      'w': 'Gran says one brother threw the pieces away, and then went looking for them.',
+      '9': 'Gran says there\u2019s a star that walks on its own. If you wave, it doesn\u2019t wave back.',
+      'd': 'Gran says you mustn\u2019t go up the pass when the mountain is breathing.',
+    };
+    const npcs = [
+      { id: 'woman', x: CAMP.x - 2, y: CAMP.y - 1, ch: '@', col: [204, 166, 122], lines: ['We go on at first light.', 'Three families from the eastern ranges. There were five.', 'No. We never saw who.'] },
+      { id: 'man', x: CAMP.x + 2, y: CAMP.y + 1, ch: '@', col: [180, 146, 108], lines: ['Karpeth didn\u2019t want us. We\u2019re going on south.', 'Their buyers took our best horses and wrote us down as unreliable.', 'The raids get worse every year. Nobody can say why.'] },
+      { id: 'child', x: CAMP.x - 1, y: CAMP.y + 2, ch: '@', col: [232, 200, 160], lines: null },
+      { id: 'horse', x: CAMP.x + 7, y: CAMP.y, ch: 'h', col: [172, 132, 92], lines: ['The horse leans its long head against you.', 'Its ears turn east, and stay there.'], note: true },
+      { id: 'keeper', x: LEDGE_AT.x + 1, y: LEDGE_AT.y - 1, ch: '@', col: [170, 72, 62], lines: ['They should have woken by now.', 'Every hundred turns, or two hundred. I keep the count.', 'When they wake, someone goes up to the pass. I\u2019ll know first.'] },
+      { id: 'mimic', x: MIMIC_HOME.x, y: MIMIC_HOME.y, ch: '@', col: null, lines: null },
+    ];
+    for (const n of npcs) n.talks = 0;
+    const npcAt = (x, y) => npcs.find(n => n.x === x && n.y === y) || null;
+    let lastLine = '';     // the last line the chronicler read; the Wild has a use for it
+    let spy = null, spyCooldown = 40;
+
+    ensureReachable([...[...frag.keys()].map(i => [i % W, (i - i % W) / W]), [GROVE.x, GROVE.y], [CAVE_AT.x, CAVE_AT.y],
+      [WRECK.x, WRECK.y], ...npcs.map(n => [n.x, n.y])]);
+
     const birds = [];
-    for (let k = 0; k < 7; k++) {
+    for (let k = 0; k < 12; k++) {
       for (let tries = 0; tries < 200; tries++) {
-        const x = 30 + Math.floor(rng() * 50), y = 30 + Math.floor(rng() * 38);
+        const x = 20 + Math.floor(rng() * 120), y = 32 + Math.floor(rng() * 76);
         const t = tile[idx(x, y)];
         if ((t === GRASS || t === TALL || t === FLOWER) && !roof[idx(x, y)]) { birds.push({ x, y, away: 0 }); break; }
       }
     }
     const fireflies = [];
 
-    const walkable = (x, y) => inb(x, y) && WALKABLE.has(tile[idx(x, y)]) && !(stranger && stranger.x === x && stranger.y === y);
+    const walkable = (x, y) => inb(x, y) && WALKABLE.has(tile[idx(x, y)]) && !(stranger && stranger.x === x && stranger.y === y) && !npcAt(x, y);
     const opaque = (x, y) => OPAQUE.has(tile[idx(x, y)]);
 
     // ─── Field of view (recursive shadowcasting) ──────────────────────────
@@ -628,12 +768,38 @@
         case NICHE: return state.nicheOpen ? ['○', [132, 200, 214], [16, 22, 24]] : ['◘', [176, 170, 160], [40, 38, 35]];
         case MENHIR: return ['Π', [150, 150, 162], null];
         case CAIRN: return ['Δ', [146, 140, 128], null];
+        case SEA: return [hash(i, Math.floor(t / 1100 + v * 0.07)) < 0.5 ? '≈' : '~', [44 + v % 16, 84 + v % 20, 146], [5, 14, 32]];
+        case SURF: return hash(i, Math.floor(t / 520 + v * 0.03)) < 0.45 ? ['~', [196, 214, 222], [12, 30, 46]] : ['≈', [92, 140, 176], [10, 24, 40]];
+        case SAND: return [v % 4 ? '.' : '·', [198 + v % 16, 178 + v % 12, 128], null];
+        case DRIFT: return [v & 1 ? ',' : '_', [146, 112, 80], null];
+        case HULL: return ['()=|'[v % 4], [128, 94, 64], [22, 16, 10]];
+        case SCREE: return [v % 3 ? ':' : '.', [138 + v % 14, 134 + v % 12, 126], null];
+        case CRAG: return ['▲', [116 + v % 18, 112 + v % 14, 108], [18, 17, 16]];
+        case SNOW: return [v % 3 ? '▲' : '^', [214 + v % 20, 222 + v % 16, 234], [28, 30, 34]];
+        case LEDGE: return [v % 3 ? '·' : '.', [168, 156, 138], null];
+        case CAVE: { const br = 0.5 + 0.5 * Math.sin(t / 2200); return ['∩', [60 + 60 * br, 36 + 20 * br, 30], [6, 3, 2]]; }
+        case WILD: case WILDGROW: return wildLook(i, x, y, t, tile[i] === WILDGROW);
+        case WARN: return ['Δ', [176, 164, 150], [26, 24, 22]];
+        case FIRE: { const f = hash(i, Math.floor(t / 130)); return [f < 0.33 ? '*' : f < 0.66 ? '+' : 'x', [255, 150 + 80 * f, 60], [44, 16, 4]]; }
+        case CART: return ['■', [132, 98, 62], null];
         case SHARD: {
           const s = 0.6 + 0.4 * Math.sin(t / 220);
           return ['◊', [120 + 120 * s, 210 + 40 * s, 240], null];
         }
       }
       return ['?', [255, 0, 255], null];
+    }
+    // In the Wild, things become each other: each tile drifts through shapes and colors.
+    const WILD_CH = [',', '"', '·', '\'', '*', 'τ', '`', ';'], WILD_GROW_CH = [TREE_CH, PINE_CH, 'Ψ', '¥', '§', 'ʘ'];
+    const WILD_COL = [[150, 92, 196], [80, 184, 172], [204, 172, 84], [118, 204, 120], [206, 104, 146], [120, 140, 220]];
+    function wildLook(i, x, y, t, grow) {
+      const v = vr[i];
+      const ka = Math.floor((t + v * 53) / 2600), kb = Math.floor((t + v * 91) / 3700);
+      const set = grow ? WILD_GROW_CH : WILD_CH;
+      const c = WILD_COL[Math.floor(hash(i, kb) * WILD_COL.length)];
+      if (!grow && hash(i, Math.floor(t / 300)) < 0.004) return ['·', [190, 250, 255], null]; // dust, catching the light
+      const k = grow ? 0.62 : 0.85;
+      return [set[Math.floor(hash(i, ka) * set.length)], [c[0] * k, c[1] * k, c[2] * k], grow ? [14, 10, 18] : null];
     }
     function mosaicLook(i, x, y) {
       if (vr[i] < 34) return [',', [110, 104, 94], [12, 11, 10]]; // lost tesserae
@@ -690,7 +856,9 @@
               const cloud = 0.84 + 0.16 * clamp((nc(x * 0.06 + tx, y * 0.06 + tx * 0.6) - 0.3) * 2.6, 0, 1);
               const dl = day * cloud;
               const ll = lan * 0.7 * duskBlend * flicker;
-              k0 = dl * dayTint[0] + ll; k1 = dl * dayTint[1] + ll * 0.82; k2 = dl * dayTint[2] + ll * 0.6;
+              const fd = Math.hypot(x - CAMP.x, y - CAMP.y);
+              const fl = fd < 7 ? (1 - fd / 7) * (0.25 + 0.75 * duskBlend) * flicker * 0.9 : 0;
+              k0 = dl * dayTint[0] + ll + fl; k1 = dl * dayTint[1] + ll * 0.82 + fl * 0.6; k2 = dl * dayTint[2] + ll * 0.6 + fl * 0.3;
             }
             if (L[2]) { ctx.fillStyle = rgb(L[2], k0, k1, k2); ctx.fillRect(px, py, cellW + 0.5, cellH + 0.5); }
             ctx.fillStyle = rgb(L[1], k0, k1, k2);
@@ -721,6 +889,20 @@
         ctx.fillStyle = `rgba(214,236,120,${b})`;
         ctx.fillText('·', qx, qy);
       }
+      // People
+      for (const n of npcs) {
+        if (!inb(n.x, n.y) || !vis[idx(n.x, n.y)]) continue;
+        const [qx, qy] = at(n.x, n.y);
+        let c = n.col;
+        if (n.id === 'mimic') { const w = wildLook(idx(n.x, n.y), n.x, n.y, t, false)[1]; c = [w[0] * 0.6 + 100, w[1] * 0.6 + 100, w[2] * 0.6 + 100]; }
+        ctx.fillStyle = rgb(c, 1 - duskBlend * 0.3, 1 - duskBlend * 0.3, 1 - duskBlend * 0.2);
+        ctx.fillText(n.ch, qx, qy);
+      }
+      if (spy && vis[idx(spy.x, spy.y)]) {
+        const [qx, qy] = at(spy.x, spy.y);
+        ctx.fillStyle = 'rgba(150,166,186,0.85)';
+        ctx.fillText('@', qx, qy);
+      }
       // The stranger
       if (stranger && vis[idx(stranger.x, stranger.y)]) {
         const [qx, qy] = at(stranger.x, stranger.y);
@@ -744,6 +926,27 @@
       const [qx, qy] = at(player.x, player.y);
       ctx.fillStyle = 'rgb(255,234,176)';
       ctx.fillText('@', qx, qy);
+    }
+
+    // ─── What you have seen, from above ────────────────────────────────────
+    let mapOpen = false, steps = 0;
+    const mapBtn = document.getElementById('mapbtn');
+    function toggleMap(on) { mapOpen = on === undefined ? !mapOpen : on; autoPath = null; dirty = true; }
+    mapBtn.addEventListener('click', ev => { ev.stopPropagation(); if (!pages && mode === 'world') toggleMap(); });
+    function drawMap(t) {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, vw, vh);
+      const sc = Math.max(2, Math.floor(Math.min(vw * 0.94 / W, vh * 0.86 / H)));
+      const ox = Math.floor((vw - W * sc) / 2), oy = Math.floor((vh - H * sc) / 2);
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const i = idx(x, y);
+        if (!seen[i]) continue;
+        const L = look(i, x, y, 0);
+        const c = L[1];
+        ctx.fillStyle = 'rgb(' + ((c[0] * 0.55) | 0) + ',' + ((c[1] * 0.55) | 0) + ',' + ((c[2] * 0.55) | 0) + ')';
+        ctx.fillRect(ox + x * sc, oy + y * sc, sc, sc);
+      }
+      if (Math.sin(t / 260) > -0.3) { ctx.fillStyle = '#ffeab0'; ctx.fillRect(ox + player.x * sc - 1, oy + player.y * sc - 1, sc + 2, sc + 2); }
     }
 
     // ─── The vision ────────────────────────────────────────────────────────
@@ -951,7 +1154,27 @@
       const html = (f.art ? artHTML(f.art, f.colors) : '') + withGaps(f.text);
       return { title: f.src, html };
     }
+    function talkTo(n) {
+      let body, title = '', cls = 'speech';
+      if (n.id === 'child') {
+        const heard = state.read.filter(id => ORAL[id]);
+        if (!heard.length) body = n.talks ? 'Gran says not to touch the words. Only read them.' : 'Are you going to the old walls? Gran says they\u2019re full of words.';
+        else body = n.talks < heard.length ? ORAL[heard[n.talks]] : 'That\u2019s all Gran says.';
+        if (heard.length && n.talks >= heard.length) n.talks = -1; // start again next time
+      } else if (n.id === 'mimic') {
+        title = 'in your voice';
+        body = lastLine || '…hm.';
+      } else {
+        body = n.lines[Math.min(n.talks, n.lines.length - 1)];
+        if (n.talks >= n.lines.length) body = n.note ? n.lines[n.lines.length - 1] : '…';
+        if (n.note) cls = 'note';
+      }
+      n.talks++;
+      showPages([{ cls, title, body }]);
+    }
     function markRead(id) {
+      const lines = FRAGMENTS[id].text.split('\n').filter(l => l.trim());
+      if (lines.length) lastLine = lines[lines.length - 1];
       if (!state.read.includes(id)) { state.read.push(id); save(); }
       updateCount();
     }
@@ -975,6 +1198,18 @@
       const i = idx(x, y);
       const t = tile[i];
       if (stranger && stranger.x === x && stranger.y === y) { talkToStranger(); return true; }
+      const n = npcAt(x, y);
+      if (n) { talkTo(n); return true; }
+      if (spy && spy.x === x && spy.y === y) { spy = null; spyCooldown = 120; dirty = true; return true; }
+      if (t === HULL || t === CAVE || t === WARN) {
+        const first = !touched.has(i);
+        touched.add(i);
+        const body = t === HULL ? 'Ribs of a ship. No name left on it.'
+          : t === WARN ? 'Stones stacked on purpose. The top one points east.'
+          : first ? 'Warm air comes out of the dark, slow, like breathing.' : '…';
+        showPages([{ cls: 'note', body }]);
+        return true;
+      }
       if (t === INSCR || t === LECTERN || t === TAPESTRY) {
         const id = frag.get(i);
         markRead(id);
@@ -1038,7 +1273,7 @@
     }
     function strangerGone() { if (stranger) { stranger.x = -99; stranger.y = -99; } }
     function setHUD(on) {
-      for (const el of [countEl, document.getElementById('home')]) el.style.visibility = on ? 'visible' : 'hidden';
+      for (const el of [countEl, document.getElementById('home'), mapBtn]) el.style.visibility = on ? 'visible' : 'hidden';
     }
 
     function pickUp() {
@@ -1063,6 +1298,8 @@
       if (interact(nx, ny)) return false;
       if (!canStep(player.x, player.y, dx, dy)) return false;
       player.x = nx; player.y = ny;
+      mirror(dx, dy);
+      if (++steps === 140) mapBtn.classList.add('on');
       if (!moved) { moved = true; hideHint(); }
       computeFOV();
       pickUp();
@@ -1105,11 +1342,15 @@
     }
 
     // ─── Things you can use ────────────────────────────────────────────────
-    const USABLE = new Set([INSCR, LECTERN, TAPESTRY, NICHE, SHELF, MENHIR]);
+    const USABLE = new Set([INSCR, LECTERN, TAPESTRY, NICHE, SHELF, MENHIR, HULL, CAVE, WARN]);
     const isStranger = (x, y) => !!stranger && stranger.x === x && stranger.y === y;
-    const usable = (x, y) => inb(x, y) && (isStranger(x, y) || USABLE.has(tile[idx(x, y)]));
+    const usable = (x, y) => inb(x, y) && (isStranger(x, y) || !!npcAt(x, y) || USABLE.has(tile[idx(x, y)]));
+    const touched = new Set(); // objects already looked at this visit
     function unused(x, y) {
       if (isStranger(x, y)) return true;
+      const n = npcAt(x, y);
+      if (n) return n.talks === 0;
+      if ([HULL, CAVE, WARN].includes(tile[idx(x, y)])) return !touched.has(idx(x, y));
       const t = tile[idx(x, y)];
       if (t === INSCR || t === LECTERN || t === TAPESTRY) return !state.read.includes(frag.get(idx(x, y)));
       if (t === NICHE) return !state.read.includes('S');
@@ -1198,6 +1439,8 @@
         if (k === 'Enter' || k === ' ' || k === 'Escape' || k in KEYS) { ev.preventDefault(); if (!ev.repeat) advance(); }
         return;
       }
+      if (mapOpen) { ev.preventDefault(); toggleMap(false); return; }
+      if (k === 'm') { toggleMap(true); return; }
       if (k === 'j') { openJournal(); return; }
       if (k === '+' || k === '=') { setZoom(zoom * 1.15); return; }
       if (k === '-' || k === '_') { setZoom(zoom / 1.15); return; }
@@ -1246,6 +1489,7 @@
       ev.preventDefault();
       if (mode === 'vision') { skipVision(); return; }
       if (pages) { advance(); return; }
+      if (mapOpen) { toggleMap(false); return; }
       pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
       autoPath = null; run = null;
       if (pointers.size === 2) {
@@ -1301,9 +1545,49 @@
     }
     panel.addEventListener('pointerdown', ev => { ev.stopPropagation(); if (ev.target.closest('.entry')) return; advance(); });
 
+    // The one in the Wild steps when you step, the other way.
+    function mirror(dx, dy) {
+      const m = npcs.find(n => n.id === 'mimic');
+      if (!m || !vis[idx(m.x, m.y)] || Math.hypot(m.x - player.x, m.y - player.y) > 16) return;
+      const nx = m.x - dx, ny = m.y + dy;
+      if (inb(nx, ny) && tile[idx(nx, ny)] === WILD && !(nx === player.x && ny === player.y) && Math.hypot(nx - MIMIC_HOME.x, ny - MIMIC_HOME.y) < 9) { m.x = nx; m.y = ny; }
+    }
+    // Someone grey, at the edge of what you can see, who never lets you close.
+    function spyTick() {
+      if (state.read.length < 3 || playerIndoors()) { if (spy && !vis[idx(spy.x, spy.y)]) spy = null; return; }
+      if (!spy) {
+        if (--spyCooldown > 0 || Math.random() > 0.05) return;
+        for (let k = 0; k < 40; k++) {
+          const a = Math.random() * 6.28, d = 11 + Math.random() * 5;
+          const x = Math.round(player.x + Math.cos(a) * d), y = Math.round(player.y + Math.sin(a) * d * 0.8);
+          if (!inb(x, y) || !vis[idx(x, y)] || roof[idx(x, y)] || !walkable(x, y) || x > wildX(y) - 2) continue;
+          if (![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ey]) => [TREE, PINE].includes(tile[idx(x + ex, y + ey)]))) continue;
+          spy = { x, y, life: 0, unseen: 0 };
+          return;
+        }
+        return;
+      }
+      spy.life++;
+      const seenNow = vis[idx(spy.x, spy.y)];
+      spy.unseen = seenNow ? 0 : spy.unseen + 1;
+      if (spy.unseen > 3 || spy.life > 60) { spy = null; spyCooldown = 90 + Math.floor(Math.random() * 120); return; }
+      if (Math.hypot(spy.x - player.x, spy.y - player.y) < 8) {
+        // Back away, through the trees if it must; it knows the woods.
+        let best = null, bd = -1;
+        for (const [ex, ey] of DIRS) {
+          const x = spy.x + ex, y = spy.y + ey;
+          if (!inb(x, y) || roof[idx(x, y)] || !(walkable(x, y) || [TREE, PINE].includes(tile[idx(x, y)]))) continue;
+          const d = Math.hypot(x - player.x, y - player.y);
+          if (d > bd) { bd = d; best = [x, y]; }
+        }
+        if (best) { spy.x = best[0]; spy.y = best[1]; }
+      }
+    }
+
     // ─── Ambient life ──────────────────────────────────────────────────────
     let lastAmbient = 0, duskTarget = state.visionDone ? 1 : 0;
     function ambient(t) {
+      spyTick();
       for (const b of birds) {
         const d = Math.hypot(b.x - player.x, b.y - player.y);
         if (b.away > 0) { b.away--; }
@@ -1347,6 +1631,7 @@
       }
       if (t - lastAmbient > 380) { lastAmbient = t; ambient(t); dirty = true; }
       if (duskBlend !== duskTarget) { duskBlend += Math.sign(duskTarget - duskBlend) * 0.006; if (Math.abs(duskBlend - duskTarget) < 0.01) duskBlend = duskTarget; dirty = true; }
+      if (mapOpen) { if (dirty || t - lastDraw > 120) { drawMap(t); lastDraw = t; dirty = false; } requestAnimationFrame(frame); return; }
       if (dirty || t - lastDraw > 90) {
         drawWorld(t);
         lastDraw = t; dirty = false;
@@ -1360,7 +1645,7 @@
     computeFOV();
     updateCount();
     showHint(HINTS.move);
-    if (location.hash === '#debug') window.__chronicler = { player, state, get zoom() { return zoom; }, get cellH() { return cellH; }, teleport(x, y) { player.x = x; player.y = y; computeFOV(); dirty = true; } };
+    if (location.hash === '#debug') window.__chronicler = { player, state, get zoom() { return zoom; }, get cellH() { return cellH; }, teleport(x, y) { player.x = x; player.y = y; computeFOV(); dirty = true; }, revealAll() { seen.fill(1); dirty = true; }, toggleMap, npcs, get spy() { return spy; } };
     requestAnimationFrame(t => { lastDraw = t; frame(t); });
     setTimeout(() => document.getElementById('veil').classList.add('off'), 120);
   })();
