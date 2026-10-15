@@ -50,6 +50,13 @@
       opacity: 0; pointer-events: none; transition: opacity 1.2s, color .3s;
     }
     #mapbtn.on { opacity: 1; pointer-events: auto; }
+    #sound {
+      position: fixed; z-index: 5;
+      top: env(safe-area-inset-top, 0); right: env(safe-area-inset-right, 0);
+      font: 15px/1 var(--mono); color: #4f4738; padding: 12px 14px; cursor: pointer; transition: opacity .4s, color .3s;
+    }
+    #sound.off { opacity: 0.3; text-decoration: line-through; }
+    #sound:hover { color: #a8977a; }
     #home:hover, #count:hover, #mapbtn:hover { color: #a8977a; }
     #hint {
       position: fixed;
@@ -129,9 +136,11 @@
   <a id="home" href="/" aria-label="back">‹</a>
   <div id="count" role="button" aria-label="journal"></div>
   <div id="mapbtn" role="button" aria-label="map">▦</div>
+  <div id="sound" role="button" aria-label="sound">♪</div>
   <div id="hint"></div>
   <div id="panel" role="dialog" aria-live="polite"><div id="ptitle"></div><div id="pbody"></div><div id="pmore">▾</div></div>
   <div id="veil"></div>
+  <script src="music.js"></script>
   <noscript><p style="color:#776;font:14px monospace;padding:24px">…</p></noscript>
   <script>
   (() => {
@@ -221,55 +230,54 @@
       }).join('')).join('\n') + '</span>';
     }
 
+    // One theme only: what came down, the small moon, the white sky, the one
+    // below, the stones that see, the seeing-glass, and the forgetting.
+    // Written like labels on things, not like history. Some walls were cut
+    // smooth on purpose; those are not counted.
     const FRAGMENTS = {
-      '1': { src: 'cut above the door', text:
-        'WHAT IS KEPT HERE CAME DOWN WITH US.\nREAD IT. ▒▒▒ NOT ▒▒▒▒▒ IT OUT.' },
-      '7': { src: 'carved in the wall', text:
-        'We came down from the Vessel in the ▒▒▒▒▒▒ generation.\nThe Vessel had watched this world a hundred years before it let anyone ▒▒▒▒.' },
-      '8': { src: 'carved in the wall', text:
-        'They made the air thicker so that we could breathe it.\nNothing that already lived here ▒▒▒▒▒▒▒▒. Nothing here had ever ▒▒▒▒▒▒ back.' },
-      '4': { src: 'carved in the wall', text:
-        'There are two moons: the great pale one,\nand a small dark one that runs the wrong way across the sky.\nSomething slept on the small one, older than ▒▒▒▒▒▒▒▒▒▒▒▒.' },
-      'y': { src: 'a tapestry, mostly rotted', art: MOONS_ART, colors: MOONS_COLORS, text: '' },
-      'a': { src: 'a book on a lectern', text:
-        '…and the Makers went up to look at it, and it woke.\nWe do not write who went first. ▒▒▒▒▒ ▒▒ ▒▒▒▒.\nIt is enough to know that we woke it.' },
-      '5': { src: 'carved in the wall, cracked', text:
-        'They fought it above the sky for ▒▒▒ days.\nAt the end they used the ▒▒▒▒▒ fire, and the sky went white.\nAfter that the Makers’ Shore was not fit ▒▒▒ ▒▒▒▒▒▒▒▒.\nThe Vessel ▒▒▒▒▒. It did not come back for us.' },
-      'g': { src: 'carved in a wall open to the sky', text:
-        'After the white sky it rained glass for ▒▒▒ nights.\nWhere it fell thickest, in the Wild, things began to become each other.\nThose who go in come back ▒▒▒▒▒▒▒, or do not come back.' },
-      '2': { src: 'carved in the wall', text:
-        'It fell to us, ▒▒▒▒▒ ▒▒ ▒▒▒ ▒▒▒▒▒ ▒▒▒▒▒. It did not die.\nIt has no young. It cuts away pieces of itself, and the pieces grow,\nand in each piece is a stone no larger than a grain of ▒▒▒▒▒▒.' },
-      '3': { src: 'carved in the wall', text:
-        'The stones see a little way ahead. Not far. A breath. A step.\nSet one in the unborn, and the child grows around it.' },
-      '6': { src: 'carved in a broken wall, open to the sky', text:
-        'Out of the east, over the narrow land, came the ones who had kept the Makers’ rules.\nThey had the Makers’ craft and none of the Makers’ memory.\nTheir oldest name for themselves was ▒▒MINISTR▒▒▒▒▒. We did not know the word.\nThey named the world again, Adividiardi, and set us to work.' },
-      'r': { src: 'carved low in a broken wall', text:
-        'Some of us they tried to make less.\nThose ran into the Wild, and the Wild changed them again.\nThe west has a word for them now. It is not their word.' },
-      'b': { src: 'a burned book', text:
-        '▒▒▒ one of theirs, a girl, who loved one of the two brothers. She opened the ▒▒▒▒ ▒▒ night and ▒▒▒▒ the seeing-glass from ▒▒▒▒ ▒▒▒▒▒, and we went west, ▒▒▒ of us, ▒▒▒▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒▒▒…' },
-      'd': { src: 'carved in the wall', text:
-        'At the high pass, the sleepers in the mountain named a price.\nIt was paid. It is paid still, each time they wake.\nThe ones from the east would not pay it. That is why they did not follow.' },
-      'k': { src: 'a roll cut into the wall, in many hands', text:
-        'THE SLEEPERS WOKE. THE PRICE WAS PAID AT THE PASS.\nturns from the Founding:\n193 · 307 · 471 · 635 · 767 · 934 · 1087 · 1242 · 1396 · ▒▒▒▒' },
-      'w': { src: 'a second tapestry, water-stained', art: FALLS_ART, colors: FALLS_COLORS, text:
-        'AT THE FALLS THE SEEING-GLASS BROKE.\nONE BROTHER GATHERED THE PIECES TO WEAR. ONE SWORE THEM OFF,\nAND ▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒.' },
-      '9': { src: 'carved in the wall', text:
-        'The narrow land in the east still runs to the Makers’ Shore.\nThose who cross it come back ▒▒▒▒▒▒. Do not ▒▒▒▒ what you find ▒▒▒▒▒.\nOne of the Makers’ lights still crosses the night. It does not answer.' },
-      'x': { src: 'scratched into the outer wall, later, by another hand', late: true, text:
-        'Turn 14▒▒. The eastern families came by here, going west and south toward Karpeth.\nThe raids out of the Wastelands are worse every year, and nobody knows why.\nThe Empire’s men write it down as savage incursions.\nThe families did not leave before.' },
+      '1': { src: 'lintel', text:
+        'WHAT CAME DOWN WITH US IS KEPT HERE.\nREAD. DO NOT CARRY IT OUT.' },
+      '7': { src: 'carving of the descent', text:
+        'We came down out of the Vessel, which had watched a long while before it let us go.\nOf the Vessel, only this is remembered: it did not come back.' },
+      '4': { src: 'carving of the second moon', text:
+        'Small, and dark, and wrong in its going.\nSomething lay upon it that was older than the asking.' },
+      'y': { src: 'tapestry of the two moons', art: MOONS_ART, colors: MOONS_COLORS, text:
+        'Rotted through where the dark one was woven.' },
+      'a': { src: 'book of the waking', text:
+        'The Makers went up to see.\nIt is written that it did not wake.\nIt is written, in a later hand, that it did.' },
+      '5': { src: 'carving of the white sky', text:
+        'Fire was made above the world, and the sky went white for ▒▒▒ days.\nAfter, glass fell like rain. Where it fell thickest, nothing kept its shape.' },
+      '2': { src: 'carving of the one below', text:
+        'It fell, and did not die.\nWhat it sheds, grows. In each piece, a stone.\nThe keepers here would not write where it lies.' },
+      '3': { src: 'carving of the stones', text:
+        'A stone sees a little way ahead. A breath. A step.\nSet one in the unborn, and the child sees with it.\nWhat the child saw is not written here.' },
+      'b': { src: 'burned book', text:
+        '▒▒▒ the girl who loved a brother ▒▒▒▒ took the seeing-glass ▒▒▒ and we went west ▒▒▒▒▒▒ ▒▒▒ ▒▒▒▒▒' },
+      'w': { src: 'tapestry of the falls', art: FALLS_ART, colors: FALLS_COLORS, text:
+        'The seeing-glass, broken at the falls.\nOne brother wore the pieces. The other swore them off.\nThe weaver did not finish the second brother’s hands.' },
+      '9': { src: 'carving of the wandering light', text:
+        'One of the Makers’ lights still crosses the night.\nIt has been called to. It does not answer.' },
+      'k': { src: 'tally', text:
+        '193 · 307 · 471 · 635 · 767 · 934 · 1087 · 1242 · 1396 ·\nEach is scored through, but the last.\nAfter it, the stone is smooth.' },
+      'x': { src: 'scratched low on the outer wall', late: true, text:
+        'A child’s hand: a horse, and five small marks.\nThree are circled.' },
       'S': { src: 'inside the niche', text:
-        'We wrote it all down because we knew we would forget.\nWe forgot anyway. Only the stone remembers, and only some of it.\n\nThe west will tell you one story and the east another.\nWrite them all down. You are the chronicler.' },
+        'We wrote it down because we knew we would forget.\nWe forgot anyway.\n\nYou are the chronicler now.' },
+      // Cut away, or worn away. Not counted.
+      '6': { effaced: true, text: 'Chiselled smooth. The cuts are newer than the wall.' },
+      'r': { effaced: true, text: 'Chiselled smooth, all but one word:\n▒▒MINISTR▒▒▒▒' },
+      'g': { effaced: true, text: 'Weathered past reading.' },
     };
-    const FRAG_TOTAL = Object.keys(FRAGMENTS).length;
+    const FRAG_TOTAL = Object.keys(FRAGMENTS).filter(k => !FRAGMENTS[k].effaced).length;
     const NEED_FOR_STRANGER = 6;
     const SHELF_LINES = ['Dust.', 'Ash.', 'The spines crumble.', 'A spine, blank where the title was.', 'Nothing legible.', 'Pages fused to stone.'];
 
     // ─── State (lightly persisted) ─────────────────────────────────────────
-    const SAVE_KEY = 'chronicler.v2'; // v2: the writings were revised
+    const SAVE_KEY = 'chronicler.v3'; // v3: the writings were narrowed and revised
     const state = { read: [], hasShard: false, nicheOpen: false, visionDone: false, shardTaken: false };
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
-      if (s && Array.isArray(s.read)) Object.assign(state, s, { read: s.read.filter(k => FRAGMENTS[k]) });
+      if (s && Array.isArray(s.read)) Object.assign(state, s, { read: s.read.filter(k => FRAGMENTS[k] && !FRAGMENTS[k].effaced) });
     } catch (e) {}
     function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {} }
 
@@ -293,9 +301,9 @@
       '     5....#...........#__%%__',
       '     #HH.H#.O.......o.#_%_%%#',
       '     ######...........#r#_###',
-      '          7...........8      ',
+      '          7...........#      ',
       '          #.O.......O.#      ',
-      '          d...........#      ',
+      '          #...........#      ',
       '          ##x#1...#k###      ',
     ];
     const MOSAIC_C = { x: LX + 16, y: LY + 8 };
@@ -605,21 +613,20 @@
 
     // ─── People (few words each; nothing explained) ────────────────────────
     const ORAL = { // what a child has heard of the writings, the way it's told around a fire
-      '4': 'Gran says the little moon goes backwards because it\u2019s running from something.',
+      '4': 'Gran says the little moon walks backwards. She says don\u2019t point at it.',
       '5': 'Gran says the sky went white once, because the moon got angry.',
       '2': 'Gran says something sleeps under the hills, and dreams a little bit ahead of us.',
-      'g': 'Gran says it rained glass in the east. That\u2019s why we don\u2019t drink from streams that come out of there.',
-      'b': 'Gran says a girl stole a magic ball for a boy, and everybody got a piece.',
-      'w': 'Gran says one brother threw the pieces away, and then went looking for them.',
+      '3': 'Gran says some babies are born already looking at tomorrow.',
+      'w': 'Gran says nobody ever saw the other brother\u2019s hands.',
       '9': 'Gran says there\u2019s a star that walks on its own. If you wave, it doesn\u2019t wave back.',
-      'd': 'Gran says you mustn\u2019t go up the pass when the mountain is breathing.',
+      'x': 'That\u2019s my horse on the wall. Don\u2019t tell.',
     };
     const npcs = [
-      { id: 'woman', x: CAMP.x - 2, y: CAMP.y - 1, ch: '@', col: [204, 166, 122], lines: ['We go on at first light.', 'Three families from the eastern ranges. There were five.', 'No. We never saw who.'] },
-      { id: 'man', x: CAMP.x + 2, y: CAMP.y + 1, ch: '@', col: [180, 146, 108], lines: ['Karpeth didn\u2019t want us. We\u2019re going on south.', 'Their buyers took our best horses and wrote us down as unreliable.', 'The raids get worse every year. Nobody can say why.'] },
+      { id: 'woman', x: CAMP.x - 2, y: CAMP.y - 1, ch: '@', col: [204, 166, 122], lines: ['We go on at first light.', 'There were five families. Don\u2019t count us again.', '…'] },
+      { id: 'man', x: CAMP.x + 2, y: CAMP.y + 1, ch: '@', col: [180, 146, 108], lines: ['South. Further south.', 'They bought the horses. Not us.', 'It gets worse every year. Ask the rangers why, and watch where they look.'] },
       { id: 'child', x: CAMP.x - 1, y: CAMP.y + 2, ch: '@', col: [232, 200, 160], lines: null },
       { id: 'horse', x: CAMP.x + 7, y: CAMP.y, ch: 'h', col: [172, 132, 92], lines: ['The horse leans its long head against you.', 'Its ears turn east, and stay there.'], note: true },
-      { id: 'keeper', x: LEDGE_AT.x + 1, y: LEDGE_AT.y - 1, ch: '@', col: [170, 72, 62], lines: ['They should have woken by now.', 'Every hundred turns, or two hundred. I keep the count.', 'When they wake, someone goes up to the pass. I\u2019ll know first.'] },
+      { id: 'keeper', x: LEDGE_AT.x + 1, y: LEDGE_AT.y - 1, ch: '@', col: [170, 72, 62], lines: ['They should have woken by now.', 'I keep the count. Someone must.', 'When they wake, you\u2019ll want to be elsewhere.'] },
       { id: 'mimic', x: MIMIC_HOME.x, y: MIMIC_HOME.y, ch: '@', col: null, lines: null },
     ];
     for (const n of npcs) n.talks = 0;
@@ -758,6 +765,7 @@
         case MOSAIC: return mosaicLook(i, x, y);
         case INSCR: {
           const id = frag.get(i), read = state.read.includes(id);
+          if (FRAGMENTS[id].effaced) return ['Ξ', [92, 86, 78], [32, 30, 28]]; // cut away
           if (FRAGMENTS[id].late) return ['‡', read ? [104, 112, 122] : [168, 182, 198], [34, 32, 30]]; // a later, rougher hand
           if (read) return ['Ξ', [138, 122, 90], [34, 32, 28]];
           const pulse = state.hasShard ? 0.65 + 0.35 * Math.sin(t / 380 + v) : 1;
@@ -1212,6 +1220,7 @@
       }
       if (t === INSCR || t === LECTERN || t === TAPESTRY) {
         const id = frag.get(i);
+        if (FRAGMENTS[id].effaced) { touched.add(i); showPages([{ cls: 'note', body: FRAGMENTS[id].text }]); return true; }
         markRead(id);
         showPages([fragPage(id)]);
         return true;
@@ -1273,7 +1282,7 @@
     }
     function strangerGone() { if (stranger) { stranger.x = -99; stranger.y = -99; } }
     function setHUD(on) {
-      for (const el of [countEl, document.getElementById('home'), mapBtn]) el.style.visibility = on ? 'visible' : 'hidden';
+      for (const el of [countEl, document.getElementById('home'), mapBtn, document.getElementById('sound')]) el.style.visibility = on ? 'visible' : 'hidden';
     }
 
     function pickUp() {
@@ -1352,7 +1361,7 @@
       if (n) return n.talks === 0;
       if ([HULL, CAVE, WARN].includes(tile[idx(x, y)])) return !touched.has(idx(x, y));
       const t = tile[idx(x, y)];
-      if (t === INSCR || t === LECTERN || t === TAPESTRY) return !state.read.includes(frag.get(idx(x, y)));
+      if (t === INSCR || t === LECTERN || t === TAPESTRY) { const id = frag.get(idx(x, y)); return FRAGMENTS[id].effaced ? !touched.has(idx(x, y)) : !state.read.includes(id); }
       if (t === NICHE) return !state.read.includes('S');
       return false;
     }
@@ -1612,9 +1621,36 @@
       }
     }
 
+    // ─── Music: which part of the country you are in ───────────────────────
+    const music = window.ChroniclerMusic || null;
+    const soundEl = document.getElementById('sound');
+    if (!music) soundEl.style.display = 'none';
+    else soundEl.classList.toggle('off', music.muted);
+    soundEl.addEventListener('click', ev => { ev.stopPropagation(); if (!music) return; music.start(); music.setMuted(!music.muted); soundEl.classList.toggle('off', music.muted); });
+    const wakeMusic = () => { if (music && !music.muted) music.start(); };
+    window.addEventListener('keydown', wakeMusic);
+    window.addEventListener('pointerdown', wakeMusic);
+    function zoneAt(x, y) {
+      if (mode === 'vision') return 'vision';
+      if (x >= LX + 4 && x <= LX + 29 && y >= LY && y <= LY + 16) return 'temple';
+      if (Math.hypot((x - GROVE.x) / 1.35, y - GROVE.y) < 7) return 'grove';
+      if (Math.hypot(x - CAMP.x, y - CAMP.y) < 11) return 'camp';
+      if (x < shoreX(y) + 10) return 'beach';
+      if (x > wildX(y) - 3) return 'wild';
+      if (y < ridgeY(x) + 3) return 'heights';
+      return 'forest';
+    }
+    let lastZoneCheck = 0;
+    function updateZone(t) {
+      if (!music || t - lastZoneCheck < 400) return;
+      lastZoneCheck = t;
+      music.setZone(zoneAt(player.x, player.y));
+    }
+
     // ─── Loop ──────────────────────────────────────────────────────────────
     let lastDraw = 0;
     function frame(t) {
+      updateZone(t);
       if (mode === 'vision') {
         drawVision(t);
         if (t - visionStart > VISION_LEN) endVision();
