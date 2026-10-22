@@ -968,15 +968,16 @@
       // rare and everything decays fast. So the crystal grows from the VE and
       // frays away from it instead of spreading forever. When the VE leaves,
       // births stop and held particles keep their cells until released.
-      const CA_CELL = 3;                  // px; an ordinary orb spans about 8×8 cells
-      const CA_STEP_MS = 95;              // one generation
-      const CA_WARMUP_MS = 2500;          // VE presence before dust can crystallise
+      const CA_CELL = 4 / 3;              // px (2 device px at 1.5x); an ordinary orb spans about 16 cells
+      const CA_STEP_MS = 48;              // one generation
+      const CA_WARMUP_MS = 1500;          // VE presence before dust can crystallise
+      const CA_TOUCH = 3;                 // cells: how near a live cell a free particle must come to be pulled in
       const CA_FIELD_RISE_MS = 8000;      // time factor: full after this long with the VE
       const CA_FIELD_FADE_MS = 3000;      // time factor: half-life once the VE is gone
       const CA_CELL_LIFE = [250, 16000];  // empty-cell half-life (ms): no field … full field
       const CA_DUST_LIFE = [500, 30000];  // held-particle half-life (ms): no field … full field
       const CA_RECAPTURE_MS = 1500;       // a released particle is left alone this long
-      const CA_MAX_LIVE = 9000;
+      const CA_MAX_LIVE = 40000;
       const ca = { gw: 0, gh: 0, cur: null, nxt: null, owner: null, live: 0,
                    x0: 0, y0: 0, x1: -1, y1: -1, acc: 0, veMs: 0, veGoneMs: 0,
                    T: 0, fx: 0, fy: 0, Rf: 60, scorch: null, scars: [], embers: [] };
@@ -1018,7 +1019,7 @@
         p.vy = uy * kick + rand(-0.3, 0.3);
         if (i >= 0) {
           ca.scars.push({ gx: i % ca.gw, gy: (i / ca.gw) | 0, ux, uy, born: now,
-                          r: rand(2.2, 4.4), speed: rand(0.008, 0.014), done: 0 });
+                          r: rand(5, 10), speed: rand(0.018, 0.032), done: 0 });
         }
       }
 
@@ -1095,6 +1096,8 @@
       }
 
       function caLight(i) {
+        const gx = i % ca.gw, gy = (i / ca.gw) | 0;
+        if (gx < 1 || gy < 1 || gx > ca.gw - 2 || gy > ca.gh - 2) return;
         if (!ca.cur[i]) { ca.cur[i] = 1; ca.live++; caGrow(i % ca.gw, (i / ca.gw) | 0); }
       }
 
@@ -1122,8 +1125,8 @@
           if (dx * dx + dy * dy > R2) continue;
           const i = caCellOf(p.x + p.vs * 0.5, p.y + p.vs * 0.5);
           if (!caCapture(p, i)) continue;
-          for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
-            if ((ox || oy) && Math.random() < 0.42) caLight(i + oy * ca.gw + ox);
+          for (let oy = -3; oy <= 3; oy++) for (let ox = -3; ox <= 3; ox++) {
+            if ((ox || oy) && ox * ox + oy * oy <= 10 && Math.random() < 0.36) caLight(i + oy * ca.gw + ox);
           }
         }
       }
@@ -1140,7 +1143,7 @@
             const n = cur[i - gw - 1] + cur[i - gw] + cur[i - gw + 1] + cur[i - 1] + cur[i + 1]
                     + cur[i + gw - 1] + cur[i + gw] + cur[i + gw + 1];
             nxt[i] = cur[i] ? (n === 2 || n === 3 ? 1 : 0)
-                   : (births && n === 3 && scorch[i] < now && Math.random() < 2.5 * caField(i) ? 1 : 0);
+                   : (births && n === 3 && scorch[i] < now && Math.random() < 4 * caField(i) ? 1 : 0);
           }
         }
         // Captured particles ride the pattern.
@@ -1192,18 +1195,20 @@
       function caCaptureTouching(now) {
         if (!ca.live) return;
         const { gw, cur } = ca;
-        const xMin = (ca.x0 - 1) * CA_CELL, xMax = (ca.x1 + 2) * CA_CELL;
-        const yMin = (ca.y0 - 1) * CA_CELL, yMax = (ca.y1 + 2) * CA_CELL;
+        const xMin = (ca.x0 - CA_TOUCH) * CA_CELL, xMax = (ca.x1 + CA_TOUCH + 1) * CA_CELL;
+        const yMin = (ca.y0 - CA_TOUCH) * CA_CELL, yMax = (ca.y1 + CA_TOUCH + 1) * CA_CELL;
         for (const p of particles) {
           if (p.bound || p.r < 0.05 || (p.caCool || 0) > now) continue;
           const px = p.x + p.vs * 0.5, py = p.y + p.vs * 0.5;
           if (px < xMin || px > xMax || py < yMin || py > yMax) continue;
           const i = caCellOf(px, py);
-          if (i < 0) continue;
-          if (cur[i] || cur[i - gw - 1] || cur[i - gw] || cur[i - gw + 1] || cur[i - 1] || cur[i + 1]
-              || cur[i + gw - 1] || cur[i + gw] || cur[i + gw + 1]) {
-            if (Math.random() < caField(i)) caCapture(p, i);
+          if (i < 0 || i % gw < CA_TOUCH || i % gw >= gw - CA_TOUCH || i < gw * CA_TOUCH || i >= cur.length - gw * CA_TOUCH) continue;
+          let touched = false;
+          for (let oy = -CA_TOUCH; oy <= CA_TOUCH && !touched; oy++) {
+            const r = i + oy * gw;
+            for (let ox = -CA_TOUCH; ox <= CA_TOUCH; ox++) if (cur[r + ox]) { touched = true; break; }
           }
+          if (touched && Math.random() < Math.min(1, caField(i) * 1.5)) caCapture(p, i);
         }
       }
 
@@ -1217,7 +1222,7 @@
         // fading, once it is gone.
         if (veOn) {
           ca.fx = ve.x; ca.fy = ve.y;
-          ca.Rf = Math.max(40, ve.scaleCurrent * 1.8);
+          ca.Rf = Math.max(70, ve.scaleCurrent * 3.0);
           ca.T = Math.max(ca.T, clamp(ca.veMs / CA_FIELD_RISE_MS, 0, 1));
         } else {
           ca.T *= Math.pow(0.5, dt / CA_FIELD_FADE_MS);
@@ -1226,16 +1231,16 @@
         // Crystallisation: more likely the longer the VE has stayed and the
         // more dust has gathered near its centre.
         if (veOn && ca.veMs > CA_WARMUP_MS) {
-          const R = Math.max(24, ve.scaleCurrent * 0.9), R2 = R * R;
+          const R = Math.max(32, ve.scaleCurrent * 1.25), R2 = R * R;
           let count = 0;
           for (const p of particles) {
             if (p.bound || p.r < 0.05) continue;
             const dx = p.x - ve.x, dy = p.y - ve.y;
             if (dx * dx + dy * dy < R2) count++;
           }
-          const presence = clamp((ca.veMs - CA_WARMUP_MS) / 8000, 0, 1);
-          const density = clamp((count - 3) / 9, 0, 1);
-          const ratePerSec = 0.45 * presence * density;
+          const presence = clamp((ca.veMs - CA_WARMUP_MS) / 5000, 0, 1);
+          const density = clamp((count - 1) / 6, 0, 1);
+          const ratePerSec = 1.4 * presence * density;
           if (ratePerSec > 0 && Math.random() < 1 - Math.exp(-ratePerSec * dt / 1000)) caNucleate(ve.x, ve.y, R, now);
         }
 
@@ -1252,26 +1257,48 @@
         if (steps === 3) ca.acc = 0;
       }
 
+      // Light cells are written into a bitmap one pixel per cell and drawn
+      // scaled up, crisp, in a single call (a rect per cell is too many now);
+      // the few dust cells are drawn as rects with a soft glow.
+      const caLayer = { canvas: document.createElement('canvas'), img: null, buf: null, px0: 0, py0: 0, px1: -1, py1: -1 };
+      const CA_LIGHT_RGBA = ((180 << 24) | (255 << 16) | (226 << 8) | 159) >>> 0; // #9fe2ff at ~70%, little-endian
+
       function drawCA() {
         if (ca.embers.length) drawEmbers(performance.now());
         if (!ca.live) return;
-        const { gw, cur, owner } = ca;
-        const dust = new Path2D(), glow = new Path2D(), light = new Path2D();
-        const s = CA_CELL - 0.6, g = CA_CELL + 1.6;
+        const { gw, gh, cur, owner } = ca;
+        const L = caLayer;
+        if (!L.img || L.canvas.width !== gw || L.canvas.height !== gh) {
+          L.canvas.width = gw; L.canvas.height = gh;
+          L.img = L.canvas.getContext('2d').createImageData(gw, gh);
+          L.buf = new Uint32Array(L.img.data.buffer);
+          L.px1 = -1;
+        }
+        const buf = L.buf;
+        // clear what was drawn last frame, then write the live area
+        for (let y = L.py0; y <= L.py1; y++) buf.fill(0, y * gw + L.px0, y * gw + L.px1 + 1);
+        const dust = new Path2D(), glow = new Path2D();
+        const ds = CA_CELL * 0.9, gs = CA_CELL * 2.4;
         for (let y = ca.y0; y <= ca.y1; y++) {
           let i = y * gw + ca.x0;
           for (let x = ca.x0; x <= ca.x1; x++, i++) {
             if (!cur[i]) continue;
-            const px = x * CA_CELL, py = y * CA_CELL;
-            if (viewCull && (px < viewCull.x0 || px > viewCull.x1 || py < viewCull.y0 || py > viewCull.y1)) continue;
-            if (owner[i]) { dust.rect(px + 0.3, py + 0.3, s, s); glow.rect(px - 0.8, py - 0.8, g, g); }
-            else light.rect(px + 0.3, py + 0.3, s, s);
+            if (owner[i]) {
+              const px = x * CA_CELL, py = y * CA_CELL;
+              dust.rect(px + CA_CELL * 0.05, py + CA_CELL * 0.05, ds, ds);
+              glow.rect(px - CA_CELL * 0.7, py - CA_CELL * 0.7, gs, gs);
+            } else buf[i] = CA_LIGHT_RGBA;
           }
         }
+        const x0 = Math.min(L.px1 >= 0 ? L.px0 : ca.x0, ca.x0), y0 = Math.min(L.px1 >= 0 ? L.py0 : ca.y0, ca.y0);
+        const x1 = Math.max(L.px1, ca.x1), y1 = Math.max(L.px1 >= 0 ? L.py1 : ca.y1, ca.y1);
+        L.canvas.getContext('2d').putImageData(L.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
+        L.px0 = ca.x0; L.py0 = ca.y0; L.px1 = ca.x1; L.py1 = ca.y1;
         pctx.save();
-        pctx.globalAlpha = 0.5;
-        pctx.fillStyle = '#9fe2ff';
-        pctx.fill(light);
+        pctx.imageSmoothingEnabled = false;
+        const w = ca.x1 - ca.x0 + 1, h = ca.y1 - ca.y0 + 1;
+        pctx.drawImage(L.canvas, ca.x0, ca.y0, w, h, ca.x0 * CA_CELL, ca.y0 * CA_CELL, w * CA_CELL, h * CA_CELL);
+        pctx.imageSmoothingEnabled = true;
         pctx.globalAlpha = 0.16;
         pctx.fillStyle = '#ffe9c8';
         pctx.fill(glow);
@@ -1285,7 +1312,7 @@
       function drawEmbers(now) {
         const e = ca.embers;
         let w = 0;
-        const s = CA_CELL - 0.6;
+        const s = CA_CELL;
         pctx.save();
         pctx.fillStyle = '#ffcf9a';
         for (let k = 0; k < e.length; k += 2) {
@@ -1294,7 +1321,7 @@
           e[w++] = e[k]; e[w++] = e[k + 1];
           const i = e[k];
           pctx.globalAlpha = 0.34 * (1 - age) * (1 - age);
-          pctx.fillRect((i % ca.gw) * CA_CELL + 0.3, ((i / ca.gw) | 0) * CA_CELL + 0.3, s, s);
+          pctx.fillRect((i % ca.gw) * CA_CELL, ((i / ca.gw) | 0) * CA_CELL, s, s);
         }
         e.length = w;
         pctx.restore();
