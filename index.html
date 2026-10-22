@@ -32,7 +32,7 @@
       cursor: default;
       isolation: isolate;
     }
-    #particles, #wordmark-wrap, #veil {
+    #field, #particles, #particles-gl, #wordmark-wrap, #veil {
       position: absolute;
       inset: 0;
       pointer-events: none;
@@ -109,7 +109,7 @@
     box-shadow: 0 0 16px rgba(232,224,209,0.14); outline: none;
   }
   #orb-panel .op-note { margin: 14px 0 0; font-size: 12px; letter-spacing: 0.06em; color: rgba(232,224,209,0.38); font-style: italic; }
-  #particles { transition: opacity 0ms; }
+  #field { transition: opacity 0ms; }
   #ver-stamp {
     position: fixed;
     bottom: max(12px, env(safe-area-inset-bottom, 12px));
@@ -126,7 +126,7 @@
 <body>
   <div id="ver-stamp"></div>
   <main id="stage" aria-label="Interactive Adividiardi landing page">
-    <canvas id="particles"></canvas>
+    <div id="field"><canvas id="particles-gl"></canvas><canvas id="particles"></canvas></div>
     <div id="veil"></div>
     <aside id="orb-panel" role="dialog" aria-live="polite"><div class="op-kicker"></div><h2 class="op-title"></h2><p class="op-desc"></p><div class="op-actions"></div><p class="op-note"></p></aside>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
@@ -141,6 +141,8 @@
       const versionStamp    = document.getElementById('ver-stamp');
       const particlesCanvas = document.getElementById('particles');
       const pctx           = particlesCanvas.getContext('2d');
+      const fieldEl        = document.getElementById('field');
+      const glCanvas       = document.getElementById('particles-gl');
       const word           = document.getElementById('wordmark');
       const audioSources = {
         nautilus: 'audio/Nautilus.mp3',
@@ -491,7 +493,10 @@
       // ─── Canvas sizing ──────────────────────────────────────────────────────
 
       function setCanvasSize(canvas, ctx) {
-        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        // At most ~2.2M canvas pixels: big hi-dpi screens draw a little softer
+        // rather than spend their frames filling pixels.
+        const area = Math.max(1, stage.clientWidth * stage.clientHeight);
+        const dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.2e6 / area)));
         canvas.width  = Math.round(stage.clientWidth  * dpr);
         canvas.height = Math.round(stage.clientHeight * dpr);
         canvas.style.width  = stage.clientWidth  + 'px';
@@ -501,7 +506,9 @@
 
       // ─── Title ─────────────────────────────────────────────────────────────
 
+      let titleRects = null;
       function buildTitle() {
+        titleRects = null;
         titleLetters.length = 0;
         word.innerHTML = '';
         const fontSize = clamp(stage.clientWidth * 0.105, 38, 108);
@@ -600,10 +607,10 @@
           { path: 'library/#godel-escher-bach', color: '#5a4634', cardImg: gebCoverImg, r0: 10.0, speed: 0.95 }, // Godel, Escher, Bach library orb
           { path: 'library/#pale-blue-dot', color: '#4e5c6b', cardImg: paleBlueDotCoverImg, r0: 10.0, speed: 0.95 }, // Pale Blue Dot library orb
           { url: 'https://brickset.com/sets/ownedby-AlphaDraconis', title: 'Brickset', color: '#c91a09', cardImg: brickImg, r0: 8.6, speed: 0.97 }, // red 2x4 brick: my LEGO collection on Brickset
-          // Reset: the triangle sigil. r0 is the radius of its white circle (the
-          // old orb's size); sigil gives the image's size and that circle's centre
+          // Reset: the triangle sigil. r0 is the radius of its white circle (30%
+          // larger than the old orb); sigil gives the image's size and that circle's centre
           // and radius in image pixels, and how far the art reaches from it.
-          { resetOrb: true,        color: '#dfe6ec', cardImg: resetSigilImg, r0: 9.6, speed: 1.18,
+          { resetOrb: true,        color: '#dfe6ec', cardImg: resetSigilImg, r0: 12.5, speed: 1.18,
             sigil: { w: 1200, h: 1042, cx: 596.7, cy: 690.0, r: 262.8, reach: 692.7 } },
         ];
         const audioPages = [
@@ -655,7 +662,8 @@
             vx: 0, vy: 0,
             r0,
             wAngle:      Math.random() * Math.PI * 2,
-            wAngle0:     Math.random() * Math.PI * 2, // starting turn for spinning icons
+            spinAngle:   Math.random() * Math.PI * 2, // spinning icons: current turn…
+            spinOmega:   SIGIL_SPIN,                  // …and angular velocity (rad/ms)
             breathPhase: Math.random() * Math.PI * 2,
             breathRate:  0.0006 + Math.random() * 0.0004,
             speed: page.speed || (page.audioKey ? 2.2 : 1),
@@ -676,7 +684,7 @@
       function seedParticles() {
         particles.length = 0;
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 1;
-        const count = isMobile ? 288 : 518;
+        const count = Math.min(isMobile ? 288 : 518, quality.cap || Infinity);
         for (let i = 0; i < count; i++) {
           const r0 = Math.random() > 0.86 ? 1.0 : 0.5; // 3D radius; visual diameter = r0*2
           particles.push({
@@ -686,7 +694,7 @@
             vy: rand(-0.008, 0.008),
             tw:    Math.random() * Math.PI * 2,
             alpha: rand(0.16, 0.34),
-            trail: [],
+            trail: new Float32Array(10), tn: 0, th: 0, // ring: last 5 positions
             r:    r0,  // current 3D radius (drives mass + visual size)
             r0:   r0,  // max radius (recovery ceiling)
             heat: 0,   // 0=cold, 1=fully ablating
@@ -851,8 +859,9 @@
                                     - 0.0014 / Math.max(p.r, 0.1));
           p.vs   = Math.max(1, p.r * 2);
           p.vx  *= p.drag; p.vy *= p.drag;
-          p.trail.unshift({ x: p.x, y: p.y });
-          if (p.trail.length > 5) p.trail.pop();
+          p.th = (p.th + 1) % 5;
+          p.trail[p.th * 2] = p.x; p.trail[p.th * 2 + 1] = p.y;
+          if (p.tn < 5) p.tn++;
           if (veGravity > 0) {
             const gx = ve.x - p.x, gy = ve.y - p.y;
             const gd2 = gx * gx + gy * gy;
@@ -891,6 +900,168 @@
       // Mass threshold: particles below this are dark-matter — invisible unless lit or hot
       const MASS_THRESH = 0.15; // r ≈ 0.53; captures all small-variant particles
 
+      // Particles are drawn in batches: each one is sorted into a bucket by
+      // heat colour and (quantised) alpha, and every bucket becomes a single
+      // path fill. Halos are two faint round layers, batched the same way.
+      // One draw call per particle (plus one per halo and per trail dot) was
+      // what made frames stutter.
+      const HEAT_STEPS = 16, ALPHA_STEPS = 24;
+      const HEAT_COLORS = Array.from({ length: HEAT_STEPS + 1 }, (_, i) => heatColor(i / HEAT_STEPS));
+      const coreBuckets  = Array.from({ length: (HEAT_STEPS + 1) * ALPHA_STEPS }, () => []);
+      const bloomBuckets = Array.from({ length: (HEAT_STEPS + 1) * ALPHA_STEPS }, () => []);
+      const usedCore = [], usedBloom = [];
+
+      function pushBucket(buckets, used, heatIdx, a, x, y, s) {
+        if (a < 0.004) return;
+        const ai = Math.min(ALPHA_STEPS - 1, Math.floor(a * ALPHA_STEPS));
+        const k = heatIdx * ALPHA_STEPS + ai;
+        const b = buckets[k];
+        if (b.length === 0) used.push(k);
+        b.push(x, y, s);
+      }
+
+      function fillBuckets(ctx, buckets, used, round, snap) {
+        for (const k of used) {
+          const b = buckets[k];
+          ctx.fillStyle = HEAT_COLORS[(k / ALPHA_STEPS) | 0];
+          ctx.globalAlpha = ((k % ALPHA_STEPS) + 0.6) / ALPHA_STEPS;
+          ctx.beginPath();
+          for (let i = 0; i < b.length; i += 3) {
+            const s = b[i + 2];
+            if (round) {
+              const r = s * 0.5;
+              ctx.moveTo(b[i] + s, b[i + 1] + r);
+              ctx.arc(b[i] + r, b[i + 1] + r, r, 0, Math.PI * 2);
+            } else if (snap) {
+              ctx.rect(Math.round(b[i]), Math.round(b[i + 1]), s, s);
+            } else {
+              ctx.rect(b[i], b[i + 1], s, s);
+            }
+          }
+          ctx.fill();
+          b.length = 0;
+        }
+        used.length = 0;
+      }
+
+      // ─── GPU particle layer ──────────────────────────────────────────────────
+      // All particle cores, trail dots and halos go to the GPU as points in two
+      // draw calls (halos, then cores). Falls back to the batched 2D path above
+      // if WebGL is unavailable or its context is lost.
+      const PGL = (() => {
+        let gl = null;
+        try { gl = glCanvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, stencil: false, preserveDrawingBuffer: false }); } catch (_) {}
+        if (!gl) return null;
+        try {
+          const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+          const renderer = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : '';
+          if (/swiftshader|llvmpipe|software|softpipe|basic render/i.test(renderer)) return null;
+        } catch (_) {}
+        const VS = `
+          attribute vec2 a_pos; attribute float a_size; attribute vec4 a_color;
+          uniform vec4 u_view;   // world -> clip: scale xy, offset xy
+          uniform float u_px;    // world px -> device px
+          uniform float u_maxPt;
+          varying vec4 v_color; varying float v_pt;
+          void main() {
+            gl_Position = vec4(a_pos * u_view.xy + u_view.zw, 0.0, 1.0);
+            float s = min(a_size * u_px, u_maxPt);
+            gl_PointSize = max(s, 1.0);
+            v_pt = gl_PointSize;
+            // a dot smaller than a pixel keeps its brightness as coverage
+            v_color = vec4(a_color.rgb, a_color.a * min(1.0, s * s));
+          }`;
+        const FS_CORE = `
+          precision mediump float;
+          varying vec4 v_color; varying float v_pt;
+          uniform float u_round;
+          void main() {
+            float a = v_color.a;
+            if (u_round > 0.5) {
+              float d = length(gl_PointCoord - 0.5) * v_pt;      // device px from centre
+              a *= clamp(v_pt * 0.5 - d + 0.5, 0.0, 1.0);       // 1px anti-aliased edge
+            }
+            gl_FragColor = vec4(v_color.rgb * a, a);
+          }`;
+        const FS_HALO = `
+          precision mediump float;
+          varying vec4 v_color; varying float v_pt;
+          void main() {
+            float d = length(gl_PointCoord - 0.5) * 2.0;          // 0 centre .. 1 edge
+            float a = v_color.a * exp(-d * d * 4.5) * (1.0 - d * d);
+            if (d > 1.0) a = 0.0;
+            gl_FragColor = vec4(v_color.rgb * a, a);
+          }`;
+        function prog(fsSrc) {
+          const mk = (type, src) => { const s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s);
+            if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s)); return s; };
+          const pr = gl.createProgram();
+          gl.attachShader(pr, mk(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, mk(gl.FRAGMENT_SHADER, fsSrc));
+          gl.bindAttribLocation(pr, 0, 'a_pos'); gl.bindAttribLocation(pr, 1, 'a_size'); gl.bindAttribLocation(pr, 2, 'a_color');
+          gl.linkProgram(pr);
+          if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(pr));
+          return { pr, view: gl.getUniformLocation(pr, 'u_view'), px: gl.getUniformLocation(pr, 'u_px'),
+                   maxPt: gl.getUniformLocation(pr, 'u_maxPt'), round: gl.getUniformLocation(pr, 'u_round') };
+        }
+        let core, halo;
+        try { core = prog(FS_CORE); halo = prog(FS_HALO); } catch (e) { console.warn('particle GL off:', e); return null; }
+        const STRIDE = 7; // x, y, size, r, g, b, a
+        let cap = 4096;
+        let coreData = new Float32Array(cap * STRIDE), haloData = new Float32Array(cap * STRIDE);
+        let nCore = 0, nHalo = 0;
+        const buf = gl.createBuffer();
+        const ptRange = gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE);
+        const maxPt = ptRange ? ptRange[1] : 64;
+        let lost = false;
+        glCanvas.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; });
+        const grow = () => {
+          cap *= 2;
+          const c = new Float32Array(cap * STRIDE); c.set(coreData); coreData = c;
+          const h = new Float32Array(cap * STRIDE); h.set(haloData); haloData = h;
+        };
+        function put(arr, i, x, y, s, rgb, a) {
+          const o = i * STRIDE;
+          arr[o] = x; arr[o + 1] = y; arr[o + 2] = s; arr[o + 3] = rgb[0]; arr[o + 4] = rgb[1]; arr[o + 5] = rgb[2]; arr[o + 6] = a;
+        }
+        function pass(p, data, n, view, px, round) {
+          if (n === 0) return;
+          gl.useProgram(p.pr);
+          gl.uniform4fv(p.view, view);
+          gl.uniform1f(p.px, px);
+          gl.uniform1f(p.maxPt, maxPt);
+          if (p.round) gl.uniform1f(p.round, round ? 1 : 0);
+          gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+          gl.bufferData(gl.ARRAY_BUFFER, data.subarray(0, n * STRIDE), gl.STREAM_DRAW);
+          const B = 4 * STRIDE;
+          gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 2, gl.FLOAT, false, B, 0);
+          gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, B, 8);
+          gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 4, gl.FLOAT, false, B, 12);
+          gl.drawArrays(gl.POINTS, 0, n);
+        }
+        return {
+          get ok() { return !lost && !gl.isContextLost(); },
+          resize(w, h) { glCanvas.width = w; glCanvas.height = h; glCanvas.style.width = stage.clientWidth + 'px'; glCanvas.style.height = stage.clientHeight + 'px'; },
+          begin() { nCore = 0; nHalo = 0; },
+          core(x, y, s, rgb, a) { if (nCore >= cap) grow(); put(coreData, nCore++, x, y, s, rgb, a); },
+          halo(x, y, s, rgb, a) { if (nHalo >= cap) grow(); put(haloData, nHalo++, x, y, s, rgb, a); },
+          clear() { gl.viewport(0, 0, glCanvas.width, glCanvas.height); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT); },
+          flush(cam, round) {
+            const W = stage.clientWidth, H = stage.clientHeight;
+            const dpr = glCanvas.width / Math.max(1, W);
+            const z = cam ? cam.z : 1;
+            // screen = (world - f) * z + c ; clip = screen / (W/2) - 1 (y flipped)
+            const ox = cam ? cam.cx - cam.fx * z : 0, oy = cam ? cam.cy - cam.fy * z : 0;
+            const view = [2 * z / W, -2 * z / H, 2 * ox / W - 1, 1 - 2 * oy / H];
+            gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+            gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+            gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+            pass(halo, haloData, nHalo, view, z * dpr, false);
+            pass(core, coreData, nCore, view, z * dpr, round);
+          },
+        };
+      })();
+      const HEAT_RGB = HEAT_COLORS.map(c => c.match(/\d+/g).map(v => v / 255));
+
       function drawParticles(now) {
         pctx.save();
         pctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -902,7 +1073,11 @@
         // Close up, square pixels read as squares: draw round dots instead, and
         // keep halos from ballooning with the zoom.
         const round = drawCamZ * Math.min(window.devicePixelRatio || 1, 1.5) > 2.2;
+        const snap = drawCamZ < 1.01;
         const haloShrink = Math.sqrt(Math.max(1, drawCamZ));
+        const gpu = PGL && PGL.ok;
+        const trailBudget = quality.trails, haloBudget = quality.halos;
+        if (gpu) PGL.begin();
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
           if (viewCull && (p.x < viewCull.x0 || p.x > viewCull.x1 || p.y < viewCull.y0 || p.y > viewCull.y1)) continue;
@@ -913,47 +1088,49 @@
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
           const twinkle = soundOrbTwinkleAt(p.x, p.y, p.tw, now, activeAudioOrbs, soundOrbReach, soundOrbReach2);
           const alpha  = ((p.alpha * 0.59) + local * (0.32 + pulse * 0.18)) * clamp(1 + twinkle * 0.72, 0.45, 2.1);
-          const color  = heatColor(Math.round(p.heat * 16) / 16);
+          const hi = Math.round(p.heat * HEAT_STEPS);
           const emission = Math.max(local, p.heat);
           const speed  = Math.hypot(p.vx, p.vy);
-          const half = p.vs * 0.5;
 
           // Comet tail — only when moving + lit
-          if (emission > 0.04 && speed > 0.002 && p.trail.length > 1) {
-            const tailLen = p.trail.length;
+          if (emission > 0.04 && speed > 0.002 && p.tn > 1 && trailBudget) {
+            const tailLen = p.tn;
             for (let t = 0; t < tailLen; t++) {
+              const ti = ((p.th - t + 5) % 5) * 2, tx = p.trail[ti], ty = p.trail[ti + 1];
               const frac   = (t + 1) / tailLen;
               const evap   = Math.pow(1 - frac, 1.6);
               const tAlpha = alpha * evap * emission * 0.55;
               if (tAlpha < 0.005) break;
-              pctx.globalAlpha = tAlpha;
-              if (round) {
-                pctx.drawImage(discSprite(color), p.trail[t].x, p.trail[t].y, p.vs, p.vs);
-              } else {
-                pctx.fillStyle = color;
-                pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.vs, p.vs);
-              }
+              if (gpu) PGL.core(tx + p.vs * 0.5, ty + p.vs * 0.5, p.vs, HEAT_RGB[hi], tAlpha);
+              else pushBucket(coreBuckets, usedCore, hi, tAlpha, tx, ty, p.vs);
             }
           }
 
-          // Particle head with a soft halo when it is well lit or twinkling
+          // Particle head, with a halo in the bloom layer when it is well lit or twinkling
           const headAlpha = Math.min(1, alpha + p.heat * 0.22);
           const baseBlur = emission > 0.32 ? (1 + emission * emission * 10) : 0;
           const twinkleBlur = twinkle > 0 ? baseBlur * (1 + twinkle * 1.25) + twinkle * 10 : baseBlur * clamp(1 + twinkle * 0.55, 0.35, 1);
           const blur = Math.min(28, Math.max(0, twinkleBlur)) / haloShrink;
-          if (blur > 0.6) {
-            const size = p.vs + blur * 2.2;
-            pctx.globalAlpha = headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85);
-            pctx.drawImage(glowSprite(color), p.x + half - size * 0.5, p.y + half - size * 0.5, size, size);
+          if (blur > 0.6 && gpu && haloBudget) {
+            PGL.halo(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs + blur * 2.6, HEAT_RGB[hi], headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85) * 0.9);
+          } else if (blur > 0.6 && haloBudget) {
+            const k = headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85);
+            const cx = p.x + p.vs * 0.5, cy = p.y + p.vs * 0.5;
+            const d = p.vs + blur * 0.8;
+            pushBucket(bloomBuckets, usedBloom, hi, k * 0.3, cx - d * 0.5, cy - d * 0.5, d);
           }
-          pctx.globalAlpha = headAlpha;
-          if (round) {
-            pctx.drawImage(discSprite(color), p.x, p.y, p.vs, p.vs);
-          } else {
-            pctx.fillStyle = color;
-            pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
-          }
+          if (gpu) PGL.core(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs, HEAT_RGB[hi], headAlpha);
+          else pushBucket(coreBuckets, usedCore, hi, headAlpha, p.x, p.y, p.vs);
         }
+        if (gpu) {
+          PGL.flush(drawCamZ > 1.0001 ? focusCamera() : null, round);
+          pctx.globalAlpha = 1;
+          return;
+        }
+        if (PGL && PGL.ok) PGL.clear();
+
+        fillBuckets(pctx, bloomBuckets, usedBloom, true, false);
+        fillBuckets(pctx, coreBuckets, usedCore, round, snap);
         pctx.globalAlpha = 1;
       }
 
@@ -1232,8 +1409,10 @@
 
       function updateTitle(dt) {
         const now = performance.now();
-        const stageRect = stage.getBoundingClientRect();
-        const wordRect  = word.getBoundingClientRect();
+        // The title never moves between resizes; measure it once per layout.
+        if (!titleRects) titleRects = { stage: stage.getBoundingClientRect(), word: word.getBoundingClientRect() };
+        const stageRect = titleRects.stage;
+        const wordRect  = titleRects.word;
         const letterY   = wordRect.top - stageRect.top + wordRect.height * 0.5;
 
         // Title illumination now follows the VE as a physical light source.
@@ -1294,17 +1473,21 @@
           titleGlow = Math.max(titleGlow, glow);
 
           // Darker unlit baseline; VE light lifts opacity, halo, and warmth.
-          l.el.style.color      = `rgba(232,224,209,${clamp(0.105 + glow01 * 0.64 + overGlow * 0.08, 0.105, 0.92).toFixed(3)})`;
-          l.el.style.textShadow = `0 1px 0 rgba(255,255,255,0.006), 0 0 ${(glow01 * 18 + overGlow * 10).toFixed(1)}px rgba(232,224,209,${clamp(glow01 * 0.15 + overGlow * 0.08, 0, 0.28).toFixed(3)})`;
-          l.el.style.transform  = 'translate(-50%, -50%)';
+          // Only touch the DOM when the (rounded) look actually changes.
+          const col = `rgba(232,224,209,${clamp(0.105 + glow01 * 0.64 + overGlow * 0.08, 0.105, 0.92).toFixed(2)})`;
+          const shadow = `0 1px 0 rgba(255,255,255,0.006), 0 0 ${(glow01 * 18 + overGlow * 10).toFixed(0)}px rgba(232,224,209,${clamp(glow01 * 0.15 + overGlow * 0.08, 0, 0.28).toFixed(2)})`;
+          if (l._col !== col) { l.el.style.color = col; l._col = col; }
+          if (l._shadow !== shadow) { l.el.style.textShadow = shadow; l._shadow = shadow; }
         }
 
         const titleGlow01 = clamp(titleGlow, 0, 1);
         const titleOverGlow = Math.max(0, titleGlow - 1);
-        word.style.filter     = 'none';
-        word.style.opacity    = clamp(0.46 + titleGlow01 * 0.30 + titleOverGlow * 0.05, 0.46, 0.86).toFixed(3);
-        word.style.textShadow = `0 0 ${(titleGlow01 * 13 + titleOverGlow * 9).toFixed(1)}px rgba(232,224,209,${clamp(titleGlow01 * 0.08 + titleOverGlow * 0.05, 0, 0.16).toFixed(3)})`;
-        word.style.setProperty('--after-opacity', clamp(0.006 + titleGlow01 * 0.058 + titleOverGlow * 0.020, 0.006, 0.095).toFixed(3));
+        const wOpacity = clamp(0.46 + titleGlow01 * 0.30 + titleOverGlow * 0.05, 0.46, 0.86).toFixed(2);
+        const wShadow = `0 0 ${(titleGlow01 * 13 + titleOverGlow * 9).toFixed(0)}px rgba(232,224,209,${clamp(titleGlow01 * 0.08 + titleOverGlow * 0.05, 0, 0.16).toFixed(2)})`;
+        const wAfter = clamp(0.006 + titleGlow01 * 0.058 + titleOverGlow * 0.020, 0.006, 0.095).toFixed(3);
+        if (word._o !== wOpacity) { word.style.opacity = wOpacity; word._o = wOpacity; }
+        if (word._s !== wShadow) { word.style.textShadow = wShadow; word._s = wShadow; }
+        if (word._a !== wAfter) { word.style.setProperty('--after-opacity', wAfter); word._a = wAfter; }
       }
 
       // ─── App particle update & draw ─────────────────────────────────────────
@@ -1456,7 +1639,34 @@
           if (ap.y > h - eh) ap.vy -= Math.pow((ap.y - (h - eh)) / eh, 1.6) * 0.022;
           ap.x += ap.vx * dt * 0.026;
           ap.y += ap.vy * dt * 0.026;
+          if (ap.sigil) updateSigilSpin(ap, dt);
         }
+      }
+
+      // The sigil is polarised: its Λ point (the apex, "up" in the art) is the
+      // positive end, drawn toward the vector equilibrium like a dipole in a
+      // field. It swings, overshoots a little and settles pointing at the VE;
+      // the pull fades with distance. With no VE it eases back into its own
+      // slow turn, one revolution a minute.
+      const SIGIL_SPIN   = Math.PI * 2 / 60000; // free turn, rad/ms
+      const SIGIL_TORQUE = 8e-6;    // rad/ms² per unit field
+      const SIGIL_DAMP   = 0.0016;  // 1/ms, while in the field
+      const SIGIL_RELAX  = 0.0006;  // 1/ms, back toward the free turn
+
+      function updateSigilSpin(ap, dt) {
+        let field = 0, target = 0;
+        if (!ve.liberated && ve.alpha > 0.01 && ve.scaleCurrent > 3) {
+          const dx = ve.x - ap.x, dy = ve.y - ap.y;
+          const reach = 260 + ve.scaleCurrent * 3;
+          const d = Math.hypot(dx, dy);
+          field = clamp(ve.alpha, 0, 1) * clamp(ve.scaleP, 0, 1) / (1 + (d / reach) * (d / reach));
+          target = Math.atan2(dx, -dy); // the turn at which the apex (0,-1) faces the VE
+        }
+        const acc = SIGIL_TORQUE * field * Math.sin(target - ap.spinAngle)
+                  - SIGIL_DAMP * field * ap.spinOmega
+                  + (1 - field) * SIGIL_RELAX * (SIGIL_SPIN - ap.spinOmega);
+        ap.spinOmega = clamp(ap.spinOmega + acc * dt, -0.006, 0.006);
+        ap.spinAngle = (ap.spinAngle + ap.spinOmega * dt) % (Math.PI * 2);
       }
 
       // ─── Cat behavioral AI ───────────────────────────────────────────────────
@@ -1797,7 +2007,6 @@
 
       // ────────────────────────────────────────────────────────────────────────
 
-      const SIGIL_SPIN = Math.PI * 2 / 60000; // radians per ms
 
       // Half width/height of a card or icon at rest, in world pixels.
       function cardHalfExtents(ap) {
@@ -1848,6 +2057,11 @@
         if ('imageSmoothingQuality' in tctx) tctx.imageSmoothingQuality = 'high';
         tctx.drawImage(src, 0, 0, texW, texH);
         ap._cardTex[level] = tex;
+        // Swap in an ImageBitmap once ready: it goes to the GPU once and stays
+        // there, where a canvas source may be re-uploaded as it is drawn.
+        if (window.createImageBitmap) {
+          createImageBitmap(tex).then(bm => { if (ap._cardTex && ap._cardTex[level] === tex) ap._cardTex[level] = bm; }).catch(() => {});
+        }
         return tex;
       }
 
@@ -1901,11 +2115,11 @@
             pctx.scale(orbScale, orbScale);
             pctx.globalAlpha = focused ? 1 : clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
             pctx.imageSmoothingEnabled = true;
-            if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'high';
+            if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'low'; // texture is already within 2x of screen size
             if (ap.sigil) {
-              // Turns slowly about the centre of its white circle (one turn a minute).
+              // Turns about the centre of its white circle (see updateSigilSpin).
               const s = ap.r0 / ap.sigil.r;
-              pctx.rotate(now * SIGIL_SPIN + ap.wAngle0);
+              pctx.rotate(ap.spinAngle);
               pctx.drawImage(tex, -ap.sigil.cx * s, -ap.sigil.cy * s, hw * 2, hh * 2);
             } else {
               pctx.drawImage(tex, -hw, -hh, hw * 2, hh * 2);
@@ -2858,6 +3072,7 @@
 
       function resize() {
         setCanvasSize(particlesCanvas, pctx);
+        if (PGL) PGL.resize(particlesCanvas.width, particlesCanvas.height);
         buildTitle();
         seedParticles();
       }
@@ -3037,15 +3252,15 @@
         focus.state = 'out';
         orbPanel.classList.remove('open');
         focus.resetting = true;
-        particlesCanvas.style.transition = `opacity ${RESET_FADE_OUT_MS}ms ease-in`;
-        particlesCanvas.style.opacity = '0';
+        fieldEl.style.transition = `opacity ${RESET_FADE_OUT_MS}ms ease-in`;
+        fieldEl.style.opacity = '0';
         setTimeout(() => {
           focus.resetting = false;
           focus.state = 'none'; focus.ap = null; focus.p = 0; focus.dive = 0;
           wordmarkWrap.style.opacity = '';
           softResetScene(null);
-          particlesCanvas.style.transition = `opacity ${RESET_FADE_IN_MS}ms ease-out`;
-          particlesCanvas.style.opacity = '1';
+          fieldEl.style.transition = `opacity ${RESET_FADE_IN_MS}ms ease-out`;
+          fieldEl.style.opacity = '1';
         }, RESET_FADE_OUT_MS + 20);
       }
 
@@ -3067,7 +3282,7 @@
           }
         } else if (focus.state === 'dive') {
           focus.dive = Math.min(1, focus.dive + dt / FOCUS_DIVE_MS);
-          particlesCanvas.style.opacity = String(1 - Math.pow(focus.dive, 1.6));
+          fieldEl.style.opacity = String(1 - Math.pow(focus.dive, 1.6));
           if (focus.dive >= 1 && focus.diveUrl) {
             const url = focus.diveUrl;
             focus.diveUrl = null;
@@ -3106,9 +3321,28 @@
             && Math.abs(clientY - rect.top - sy) <= focus.hh * cam.z * 1.1;
       }
 
+      // Adaptive quality. If frames run long for a couple of seconds, shed load
+      // in steps: halos, then trails, then a fifth of the dust at a time (down
+      // to a floor). It only ever steps down, so it never oscillates.
+      const quality = { halos: true, trails: true, slowMs: 0, settleUntil: 0, level: 0, cap: 0 };
+      function governQuality(rawDt, now) {
+        if (document.hidden || rawDt > 250 || now < quality.settleUntil) { quality.slowMs = 0; return; }
+        quality.slowMs = rawDt > 24 ? quality.slowMs + rawDt : Math.max(0, quality.slowMs - rawDt * 0.5);
+        if (quality.slowMs < 1800) return;
+        quality.slowMs = 0;
+        quality.settleUntil = now + 2500;
+        quality.level++;
+        if (quality.halos && quality.level >= 3) { quality.halos = false; return; }
+        if (quality.trails && quality.level >= 4) { quality.trails = false; return; }
+        const floor = ('ontouchstart' in window || navigator.maxTouchPoints > 1) ? 140 : 220;
+        if (particles.length > floor) particles.length = quality.cap = Math.max(floor, Math.round(particles.length * 0.8));
+      }
+
       function frame(now) {
-        const dt = Math.min(32, now - (lastFrame || now));
+        const rawDt = now - (lastFrame || now);
+        const dt = Math.min(32, rawDt);
         lastFrame = now;
+        if (now > 3000) governQuality(rawDt, now);
         updateLights(dt);
         updateVE(dt);
         updateVolta(dt, now);
@@ -3297,7 +3531,7 @@
       window.addEventListener('pageshow', e => {
         if (!e.persisted) return;
         focus.state = 'none'; focus.ap = null; focus.p = 0; focus.dive = 0; focus.diveUrl = null;
-        particlesCanvas.style.opacity = '1';
+        fieldEl.style.opacity = '1';
         wordmarkWrap.style.opacity = '';
         orbPanel.classList.remove('open');
       });
