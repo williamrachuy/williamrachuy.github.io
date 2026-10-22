@@ -68,7 +68,9 @@
     var v = w.gem * me - w.deny * (sumOther / 3 + maxOther) / 2;
 
     // Closing the pyramid ends the game: good when ahead, bad when behind.
-    var lead = me - maxOther;
+    // The capstone pays whoever closes, so a player a few gems behind can
+    // still want the pyramid closed (on its own move).
+    var lead = me - maxOther + (s.rules.capstone || 0);
     var close = 8 - distance(s);
     var bias = lead > 0 ? 1 + Math.min(lead, 6) / 3 : (lead === 0 ? 0.3 : -0.35);
     v += w.build * bias * close * (1 + close / 4);

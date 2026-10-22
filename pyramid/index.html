@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=3">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -30,7 +30,7 @@
 <section class="screen" id="screen-title">
   <div class="title-viz glass-well"><canvas id="title-canvas" aria-hidden="true"></canvas></div>
   <h1 class="wordmark">PYRAMID</h1>
-  <p class="tagline">Four courts. Ten lanes. Pair them all and the pyramid closes.</p>
+  <p class="tagline">Four courts. Ten lanes. Pair them all and the pyramid closes; the one who closes it takes the capstone.</p>
   <div class="setup glass">
     <div class="setup-row">
       <span class="setup-label">Opponents</span>
@@ -58,13 +58,16 @@
     <div class="stage-wrap" id="stage-wrap">
       <div class="stage" id="stage">
         <div class="table glass" id="table">
-          <svg class="net" id="net" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg>
           <div class="sweep" id="sweep" aria-hidden="true"></div>
         </div>
         <div class="tray glass" id="tray"></div>
         <div class="layer" id="layer"></div>
         <div class="tip glass" id="tip" role="tooltip" hidden></div>
       </div>
+    </div>
+    <div class="panel glass houses">
+      <div class="panel-head"><span class="panel-title">The Houses</span></div>
+      <div class="houses-list" id="houses-list"></div>
     </div>
     <aside class="rail">
       <div class="panel glass pyr-panel">
@@ -152,7 +155,7 @@
       </section>
       <section>
         <h3>The end</h3>
-        <p>When all ten lanes are paired the pyramid is complete and the game ends. Most gems wins. If the round clock runs out first, the game ends there.</p>
+        <p>When all ten lanes are paired the pyramid is complete and the game ends. Whoever makes that final pair takes <b>the capstone: +5 gems</b>. Then most gems wins. If the round clock runs out first, the game ends there, with no capstone.</p>
       </section>
     </div>
   </div>
@@ -174,12 +177,13 @@
   </div>
 </div>
 
+<div class="fx" id="fx" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="engine.js?v=2"></script>
-<script src="ai.js?v=2"></script>
-<script src="viz.js?v=2"></script>
-<script src="audio.js?v=2"></script>
-<script src="ui.js?v=2"></script>
+<script src="engine.js?v=3"></script>
+<script src="ai.js?v=3"></script>
+<script src="viz.js?v=3"></script>
+<script src="audio.js?v=3"></script>
+<script src="ui.js?v=3"></script>
 </body>
 </html>

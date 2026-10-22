@@ -40,10 +40,11 @@
   var RANK_BEATS = { K: 'Q', Q: 'J', J: 'K' };
   var SUIT_BEATS = { spades: 'hearts', hearts: 'clubs', clubs: 'diamonds', diamonds: 'spades' };
 
-  // House options. FREE_GEM_BANKS: when true the turn's free gem goes into
+  // House options. freeGemBanks: when true the turn's free gem goes into
   // the purse (and so counts as score); when false it is a free action that
-  // is lost if unused. See RULES.md, "Interpretations".
-  var DEFAULTS = { maxRounds: 30, freeGemBanks: false, handLimit: 3 };
+  // is lost if unused. capstone: gems for the player whose action closes the
+  // pyramid. See RULES.md.
+  var DEFAULTS = { maxRounds: 30, freeGemBanks: false, handLimit: 3, capstone: 5 };
 
   // The ten lanes. `a` and `b` are the subjects at each end; the royal in
   // the same position under each subject decides control.
@@ -358,6 +359,11 @@
     collect(s, events);
 
     if (pairedCount(s) === LANES.length) {
+      // The capstone: whoever makes the final pair is paid for closing.
+      if (s.rules.capstone) {
+        s.players[s.current].gems += s.rules.capstone;
+        events.push({ type: 'capstone', seat: s.current, gems: s.rules.capstone });
+      }
       endGame(s, 'pyramid', events);
     }
   }

@@ -4,11 +4,13 @@
  * Drives the DOM from engine states. Every card is one persistent element
  * keyed by its id; a render computes where each card belongs and sets a CSS
  * transform, so swaps, draws and plays animate on the compositor. Gems are
- * small elements that pop on a lane and fly to a purse. The AI plays through
- * the same engine calls, one visible action at a time.
+ * faceted diamonds: they form on a lane (or at a court's centre), hold so
+ * you can see them, then fly to a purse. The AI plays through the same
+ * engine calls, one visible action at a time.
  *
  * Stage coordinates: the table is 100 x 100 units, the tray below it runs to
- * y = 121. One unit is --u px (the stage width / 100).
+ * y = 121. One unit is --u px (the stage width / 100). The three AI houses
+ * sit beside the table, outside the stage.
  */
 (function () {
   'use strict';
@@ -22,41 +24,88 @@
   // Geometry of the table
   // ---------------------------------------------------------------------
 
+  const CW = 9, CH = 12.6;          // card size in units
   const ROT = { S: 0, E: -90, N: 180, W: 90 };
-  // Subject positions; royals sit one row further out.
-  const SUBJ = {
-    S: { L: [37.5, 75], C: [50, 75], R: [62.5, 75] },
-    E: { L: [75, 62.5], C: [75, 50], R: [75, 37.5] },
-    N: { L: [62.5, 25], C: [50, 25], R: [37.5, 25] },
-    W: { L: [25, 37.5], C: [25, 50], R: [25, 62.5] }
-  };
-  const OUT = { S: [0, 15], E: [15, 0], N: [0, -15], W: [-15, 0] };
-  // Lanes sit on the table's diagonals (the pyramid's rays); the two peaks
-  // sit by the apex at the centre.
-  const NODE_AT = {
-    cSE: [72.5, 72.5], cEN: [72.5, 27.5], cNW: [27.5, 27.5], cWS: [27.5, 72.5],
-    rSE: [61, 61], rEN: [61, 39], rNW: [39, 39], rWS: [39, 61],
-    pSN: [50, 43.5], pEW: [56.5, 50]
-  };
-  const BADGE_AT = { S: [2.5, 105.5], E: [77.5, 19], N: [1.5, 19], W: [1.5, 75] };
-  const BADGE_W = { S: 24, E: 21, N: 21, W: 21 };
-  const HAND_AT = { E: [89.5, 9], N: [10.5, 9], W: [10.5, 91] };
+  const CENTRE = 15;                // centre subjects: a cross around the apex
+  const CORNER = 17;                // base-corner nodes sit at (50 +- 17, 50 +- 17)
+  const CORNER_GAP = 3.9;           // from a corner card's top edge to its node
+  const ROYALS = 40;                // royal rows, as before
+  const COURT_NODE = 28.5;          // each court's gem node, between its subjects and royals
+  const RIDGE = CENTRE * 0.66;
+
+  function rv(x, y, deg) {
+    const t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    return [x * c - y * s, x * s + y * c];
+  }
+  // A point given in South's frame (x right, y toward South), turned to `seat`.
+  function seatPt(seat, x, y) { const p = rv(x, y, ROT[seat]); return [50 + p[0], 50 + p[1]]; }
+
+  const SLOT = {};
+  const NODE_AT = {};
+  const COURT_AT = {};
+  SEATS.forEach((seat) => {
+    SLOT[seat] = { subjects: {}, royals: {} };
+    [['L', -12.5], ['C', 0], ['R', 12.5]].forEach(([pos, dx]) => {
+      const [x, y] = seatPt(seat, dx, ROYALS);
+      SLOT[seat].royals[pos] = { x, y, rot: ROT[seat] };
+    });
+    // The centre subject: on the cross, square to its court.
+    const [cx, cy] = seatPt(seat, 0, CENTRE);
+    SLOT[seat].subjects.C = { x: cx, y: cy, rot: ROT[seat] };
+    // The left and right subjects lean 45 degrees, top toward the corner node
+    // they share with the neighbouring court.
+    [['R', 1, 45], ['L', -1, -45]].forEach(([pos, sx, lean]) => {
+      const node = seatPt(seat, sx * CORNER, CORNER);
+      const k = CH / 2 + CORNER_GAP;
+      const off = rv(-sx * k / Math.SQRT2, k / Math.SQRT2, ROT[seat]);
+      SLOT[seat].subjects[pos] = { x: node[0] + off[0], y: node[1] + off[1], rot: ROT[seat] + lean };
+    });
+    COURT_AT[seat] = seatPt(seat, 0, COURT_NODE);
+  });
+  // Each corner is one court's R end and the next court's L end.
+  NODE_AT.cSE = seatPt('S', CORNER, CORNER);
+  NODE_AT.cEN = seatPt('E', CORNER, CORNER);
+  NODE_AT.cNW = seatPt('N', CORNER, CORNER);
+  NODE_AT.cWS = seatPt('W', CORNER, CORNER);
+  NODE_AT.rSE = seatPt('S', RIDGE, RIDGE);
+  NODE_AT.rEN = seatPt('E', RIDGE, RIDGE);
+  NODE_AT.rNW = seatPt('N', RIDGE, RIDGE);
+  NODE_AT.rWS = seatPt('W', RIDGE, RIDGE);
+  NODE_AT.pSN = [50, 45.5];
+  NODE_AT.pEW = [54.5, 50];
+  const APEX = [50, 50];
+
+  const BADGE_AT = [2.5, 105.5], BADGE_W = 24;
   const DECK_AT = [90, 90];
   const TRAY_Y = 111.25;
   const SUIT_GLYPH = { spades: '♠', hearts: '♥', clubs: '♣', diamonds: '♦' };
   const SEAT_COLOR = { S: 'var(--S)', E: 'var(--E)', N: 'var(--N)', W: 'var(--W)' };
-  const SEAT_HEX = { S: '#dfe6f2', E: '#ff7a8a', N: '#63d6a4', W: '#78b4ff' };
   const CROWN = { K: '♔︎', Q: '♕︎', J: '♘︎' };
   const LANE_NAME = {
     cSE: 'south-east corner', cEN: 'north-east corner', cNW: 'north-west corner', cWS: 'south-west corner',
     rSE: 'South–East ridge', rEN: 'East–North ridge', rNW: 'North–West ridge', rWS: 'West–South ridge',
     pSN: 'South–North peak', pEW: 'East–West peak'
   };
+  const SEAT_WORD = { S: 'South', E: 'East', N: 'North', W: 'West' };
   const POS_WORD = { L: 'left', C: 'centre', R: 'right' };
   const LEVELS = ['easy', 'normal', 'hard', 'master'];
   const CLOCKS = [{ v: 20, label: '20 rounds' }, { v: 30, label: '30 rounds' }, { v: 0, label: 'None' }];
   const PACES = [{ v: 'calm', label: 'Calm' }, { v: 'normal', label: 'Normal' }, { v: 'fast', label: 'Fast' }];
-  const PACE_T = { calm: 1.35, normal: 1, fast: 0.5 };
+  const PACE_T = { calm: 1.35, normal: 1, fast: 0.55 };
+
+  // A cut gem in profile: a table, five crown facets, four pavilion facets.
+  const GEM_SVG = '<svg viewBox="0 0 40 34" aria-hidden="true">' +
+    '<g stroke="rgba(255,250,230,.75)" stroke-width=".7" stroke-linejoin="round">' +
+    '<polygon points="2,12 12,2 11,12" fill="#f4cd6e"/>' +
+    '<polygon points="12,2 20,12 11,12" fill="#fff3c9"/>' +
+    '<polygon points="12,2 28,2 20,12" fill="#ffe59a"/>' +
+    '<polygon points="28,2 29,12 20,12" fill="#e2aa40"/>' +
+    '<polygon points="28,2 38,12 29,12" fill="#b9801f"/>' +
+    '<polygon points="2,12 11,12 20,32" fill="#e8b24c"/>' +
+    '<polygon points="11,12 20,12 20,32" fill="#fff0bd"/>' +
+    '<polygon points="20,12 29,12 20,32" fill="#c98c2a"/>' +
+    '<polygon points="29,12 38,12 20,32" fill="#875812"/>' +
+    '</g></svg>';
 
   // ---------------------------------------------------------------------
   // App state
@@ -74,8 +123,9 @@
     cards: new Map(),
     place: new Map(),
     nodes: {},
+    courtNodes: {},
     gems: {},
-    badges: {},
+    houses: {},
     shown: {},
     viz: null,
     titleViz: null,
@@ -109,6 +159,9 @@
     const a = s.courts[lane.a.seat].subjects[lane.a.pos], b = s.courts[lane.b.seat].subjects[lane.b.pos];
     if (a.r === 'A' && b.r === 'A') return 1;
     return a.r === 'A' ? E.value(b) : E.value(a);
+  }
+  function ownSuitCount(s, seat) {
+    return POS.filter((p) => s.courts[seat].subjects[p].s === E.SUIT_OF[seat]).length;
   }
 
   // ---------------------------------------------------------------------
@@ -194,45 +247,6 @@
     built = true;
     const layer = $('layer');
 
-    // The net: four faces of the unfolded pyramid, its rays, and the lanes.
-    const svg = $('net');
-    const ns = 'http://www.w3.org/2000/svg';
-    const tri = { S: '0,100 100,100 50,50', E: '100,100 100,0 50,50', N: '100,0 0,0 50,50', W: '0,0 0,100 50,50' };
-    SEATS.forEach((seat) => {
-      const p = document.createElementNS(ns, 'polygon');
-      p.setAttribute('points', tri[seat]);
-      p.setAttribute('class', 'face');
-      p.setAttribute('fill', SEAT_HEX[seat]);
-      p.setAttribute('fill-opacity', '0.03');
-      p.id = 'face-' + seat;
-      svg.appendChild(p);
-    });
-    [[0, 0], [100, 0], [100, 100], [0, 100]].forEach((c) => {
-      const l = document.createElementNS(ns, 'line');
-      l.setAttribute('x1', 50); l.setAttribute('y1', 50); l.setAttribute('x2', c[0]); l.setAttribute('y2', c[1]);
-      l.setAttribute('stroke', 'rgba(255,255,255,.10)'); l.setAttribute('stroke-width', '0.25');
-      svg.appendChild(l);
-      for (let i = 1; i <= 10; i++) {
-        const t = 0.5 + i * 0.045, d = document.createElementNS(ns, 'circle');
-        d.setAttribute('cx', 50 + (c[0] - 50) * (t - 0.5) * 2 * 0.9); d.setAttribute('cy', 50 + (c[1] - 50) * (t - 0.5) * 2 * 0.9);
-        d.setAttribute('r', i % 5 ? 0.22 : 0.4); d.setAttribute('fill', 'rgba(255,255,255,.18)');
-        svg.appendChild(d);
-      }
-    });
-    const apex = document.createElementNS(ns, 'circle');
-    apex.setAttribute('cx', 50); apex.setAttribute('cy', 50); apex.setAttribute('r', 0.9); apex.setAttribute('fill', 'rgba(242,201,110,.5)');
-    svg.appendChild(apex);
-    E.LANES.forEach((l) => {
-      const pl = document.createElementNS(ns, 'polyline');
-      const a = SUBJ[l.a.seat][l.a.pos], b = SUBJ[l.b.seat][l.b.pos], n = NODE_AT[l.id];
-      pl.setAttribute('points', a.join(',') + ' ' + n.join(',') + ' ' + b.join(','));
-      pl.setAttribute('fill', 'none');
-      pl.setAttribute('class', 'lane');
-      pl.setAttribute('stroke-linejoin', 'round');
-      pl.id = 'lane-' + l.id;
-      svg.insertBefore(pl, apex);
-    });
-
     // Lane nodes.
     E.LANES.forEach((l) => {
       const b = document.createElement('button');
@@ -241,7 +255,7 @@
       b.dataset.lane = l.id;
       b.innerHTML = '<span class="ring"></span><span class="kind"></span>';
       b.setAttribute('aria-label', LANE_NAME[l.id]);
-      b.addEventListener('click', () => onLane(l.id));
+      b.addEventListener('click', (e) => { e.stopPropagation(); onLane(l.id); });
       b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showLaneTip(l.id); });
       b.addEventListener('pointerleave', () => hideTip());
       b.addEventListener('focus', () => showLaneTip(l.id));
@@ -250,23 +264,38 @@
       app.nodes[l.id] = b;
     });
 
-    // House badges.
+    // Court gem nodes: a flush (three of the court's own suit) forms a gem here.
     SEATS.forEach((seat) => {
-      const d = document.createElement('div');
-      d.className = 'badge' + (seat === 'S' ? ' me' : '');
-      d.style.setProperty('--c', SEAT_COLOR[seat]);
-      d.innerHTML = '<div class="badge-top"><span class="badge-name"></span><span class="badge-gems">0</span></div><div class="badge-sub"></div>';
-      layer.appendChild(d);
-      app.badges[seat] = d;
+      const b = document.createElement('button');
+      b.className = 'node court-node';
+      b.type = 'button';
+      b.style.setProperty('--c', SEAT_COLOR[seat]);
+      b.innerHTML = '<span class="ring"></span><span class="kind">' + SUIT_GLYPH[E.SUIT_OF[seat]] + '</span>';
+      b.setAttribute('aria-label', SEAT_WORD[seat] + '’s court');
+      b.addEventListener('click', (e) => { e.stopPropagation(); showCourtTip(seat); });
+      b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showCourtTip(seat); });
+      b.addEventListener('pointerleave', () => hideTip());
+      b.addEventListener('blur', () => hideTip());
+      layer.appendChild(b);
+      app.courtNodes[seat] = b;
     });
+
+    // Your purse.
+    const d = document.createElement('div');
+    d.className = 'badge me';
+    d.style.setProperty('--c', SEAT_COLOR.S);
+    d.innerHTML = '<div class="badge-top"><span class="badge-name">' + SUIT_GLYPH.spades + ' You</span>' +
+      '<span class="purse"><span class="purse-gem">' + GEM_SVG + '</span><b class="purse-n">0</b></span></div><div class="badge-sub"></div>';
+    layer.appendChild(d);
+    app.badge = d;
 
     // The deck: a little stack of backs, and its count.
     for (let i = 0; i < 3; i++) {
-      const d = document.createElement('div');
-      d.className = 'card down deck-back no-anim';
-      d.innerHTML = '<div class="card-body"><div class="back"></div></div>';
-      d.dataset.off = i;
-      layer.appendChild(d);
+      const b = document.createElement('div');
+      b.className = 'card down deck-back no-anim';
+      b.innerHTML = '<div class="card-body"><div class="back"></div></div>';
+      b.dataset.off = i;
+      layer.appendChild(b);
     }
     const dc = document.createElement('div');
     dc.className = 'deck-count';
@@ -287,6 +316,19 @@
     $('btn-draw').addEventListener('click', () => act({ type: 'draw' }));
     $('btn-end').addEventListener('click', () => act({ type: 'pass' }));
 
+    // The three houses, beside the table.
+    const list = $('houses-list');
+    ['E', 'N', 'W'].forEach((seat) => {
+      const h = document.createElement('div');
+      h.className = 'house';
+      h.style.setProperty('--c', SEAT_COLOR[seat]);
+      h.innerHTML = '<div class="house-id"><span class="house-name"></span><span class="house-title"></span></div>' +
+        '<div class="house-hand"></div>' +
+        '<span class="purse"><span class="purse-gem">' + GEM_SVG + '</span><b class="purse-n">0</b></span>';
+      list.appendChild(h);
+      app.houses[seat] = h;
+    });
+
     if (window.ResizeObserver) new ResizeObserver(() => layout()).observe($('stage'));
     window.addEventListener('resize', layout);
 
@@ -299,39 +341,35 @@
     $('stage').addEventListener('click', (e) => {
       if (e.target.closest('.card, .node, .btn')) return;
       clearSel();
+      hideTip();
     });
   }
 
   function px(x, y) { return [x * app.u, y * app.u]; }
+  function placeAt(el, at) { const [x, y] = px(at[0], at[1]); el.style.transform = 'translate(' + x + 'px,' + y + 'px)'; }
 
   function layout() {
     const stage = $('stage');
     if (!stage || !stage.clientWidth) return;
     const u = stage.clientWidth / 100;
-    const changed = Math.abs(u - app.u) > 0.01;
     app.u = u;
     stage.style.setProperty('--u', u + 'px');
-    E.LANES.forEach((l) => {
-      const [x, y] = px(NODE_AT[l.id][0], NODE_AT[l.id][1]);
-      app.nodes[l.id].style.transform = 'translate(' + x + 'px,' + y + 'px)';
-    });
-    SEATS.forEach((seat) => {
-      const [x, y] = px(BADGE_AT[seat][0], BADGE_AT[seat][1]);
-      app.badges[seat].style.transform = 'translate(' + x + 'px,' + y + 'px)';
-      app.badges[seat].style.width = (BADGE_W[seat] * u) + 'px';
-    });
+    E.LANES.forEach((l) => placeAt(app.nodes[l.id], NODE_AT[l.id]));
+    SEATS.forEach((seat) => placeAt(app.courtNodes[seat], COURT_AT[seat]));
+    placeAt(app.badge, BADGE_AT);
+    app.badge.style.width = (BADGE_W * u) + 'px';
     document.querySelectorAll('.deck-back').forEach((d) => {
       const o = +d.dataset.off;
-      d.style.transform = 'translate(' + ((DECK_AT[0] - 5 - o * 0.35) * u) + 'px,' + ((DECK_AT[1] - 7 - o * 0.35) * u) + 'px)';
+      d.style.transform = 'translate(' + ((DECK_AT[0] - CW / 2 - o * 0.35) * u) + 'px,' + ((DECK_AT[1] - CH / 2 - o * 0.35) * u) + 'px)';
     });
-    let [x, y] = px(DECK_AT[0], DECK_AT[1] - 10.4);
+    let [x, y] = px(DECK_AT[0], DECK_AT[1] - 9.8);
     $('deck-count').style.transform = 'translate(' + x + 'px,' + y + 'px) translateX(-50%)';
     [x, y] = px(50, TRAY_Y - 1.2);
     $('hand-label').style.transform = 'translate(' + x + 'px,' + y + 'px) translateX(-50%)';
     [x, y] = px(76, 103.4);
     app.trayBtns.style.transform = 'translate(' + x + 'px,' + y + 'px)';
-    Object.keys(app.gems).forEach((id) => setGemAt(app.gems[id], NODE_AT[id]));
-    if (changed && app.state) {
+    Object.keys(app.gems).forEach((id) => placeAt(app.gems[id], NODE_AT[id]));
+    if (app.state) {
       app.cards.forEach((el) => el.classList.add('no-anim'));
       renderCards(app.state, true);
       requestAnimationFrame(() => app.cards.forEach((el) => el.classList.remove('no-anim')));
@@ -342,21 +380,30 @@
   // Cards
   // ---------------------------------------------------------------------
 
+  // Where an AI's hand is, in stage units: beside the table, in its house row.
+  function offstage(seat) {
+    const hand = app.houses[seat] && app.houses[seat].querySelector('.house-hand');
+    const st = $('stage').getBoundingClientRect();
+    if (!hand) return [110, 50];
+    const r = hand.getBoundingClientRect();
+    return [(r.left + r.width / 2 - st.left) / app.u, (r.top + r.height / 2 - st.top) / app.u];
+  }
+
   function placements(s) {
     const m = new Map();
     SEATS.forEach((seat) => {
       POS.forEach((pos) => {
-        const [x, y] = SUBJ[seat][pos];
-        m.set(s.courts[seat].subjects[pos].id, { zone: 'subject', seat, pos, x, y, rot: ROT[seat], card: s.courts[seat].subjects[pos] });
-        m.set(s.courts[seat].royals[pos].id, { zone: 'royal', seat, pos, x: x + OUT[seat][0], y: y + OUT[seat][1], rot: ROT[seat], card: s.courts[seat].royals[pos], royal: true });
+        const a = SLOT[seat].subjects[pos], r = SLOT[seat].royals[pos];
+        m.set(s.courts[seat].subjects[pos].id, { zone: 'subject', seat, pos, x: a.x, y: a.y, rot: a.rot, card: s.courts[seat].subjects[pos] });
+        m.set(s.courts[seat].royals[pos].id, { zone: 'royal', seat, pos, x: r.x, y: r.y, rot: r.rot, card: s.courts[seat].royals[pos], royal: true });
       });
       const hand = s.players[seat].hand;
+      const off = s.players[seat].human ? null : offstage(seat);
       hand.forEach((c, i) => {
         if (s.players[seat].human) {
           m.set(c.id, { zone: 'hand', seat, index: i, x: 39 + 11 * i, y: TRAY_Y, rot: 0, card: c });
         } else {
-          const k = i - (hand.length - 1) / 2;
-          m.set(c.id, { zone: 'hand', seat, index: i, x: HAND_AT[seat][0] + k * 3.6, y: HAND_AT[seat][1] + Math.abs(k) * 0.5, rot: k * 9, scale: 0.62, down: s.phase === 'play', card: c });
+          m.set(c.id, { zone: 'hand', seat, index: i, x: off[0], y: off[1], rot: 0, scale: 0.35, down: true, off: true, card: c });
         }
       });
     });
@@ -367,9 +414,10 @@
     const el = document.createElement('div');
     el.className = 'card' + (royal ? ' royal' : '');
     el.dataset.suit = c.s;
+    const under = c.r === '6' || c.r === '9' ? ' under' : '';
     el.innerHTML = '<div class="card-body"><div class="face"><div class="face-in">' +
       (royal ? '<span class="crown">' + CROWN[c.r] + '</span>' : '') +
-      '<span class="rank">' + rankLabel(c.r) + '</span><span class="pip">' + SUIT_GLYPH[c.s] + '</span></div></div><div class="back"></div></div>';
+      '<span class="rank' + under + '">' + rankLabel(c.r) + '</span><span class="pip">' + SUIT_GLYPH[c.s] + '</span></div></div><div class="back"></div></div>';
     el.addEventListener('click', (e) => { e.stopPropagation(); onCard(c.id); });
     el.setAttribute('aria-label', E.rankName(c.r) + ' of ' + c.s);
     $('layer').appendChild(el);
@@ -377,7 +425,7 @@
   }
 
   function transformFor(el, p) {
-    const u = app.u, w = 10 * u, h = 14 * u;
+    const u = app.u, w = CW * u, h = CH * u;
     let rot = p.rot;
     if (el._rot != null) rot = p.rot + 360 * Math.round((el._rot - p.rot) / 360);
     el._rot = rot;
@@ -401,8 +449,8 @@
         el.classList.remove('no-anim');
       }
       const tf = transformFor(el, p);
-      el.querySelector('.face-in').style.transform = 'rotate(' + (-el._rot) + 'deg)';
       el.classList.toggle('down', !!p.down);
+      el.classList.toggle('off', !!p.off);
       if (el._tf !== tf) {
         if (el._tf && !instant) moved.push(el);
         el._tf = tf;
@@ -413,15 +461,15 @@
     app.cards.forEach((el, id) => {
       if (m.has(id)) return;
       app.cards.delete(id);
-      el.classList.add('is-moving');
-      el.classList.add('down');
+      el.classList.add('is-moving', 'down');
+      el.classList.remove('off');
       el.style.transform = transformFor(el, { x: DECK_AT[0], y: DECK_AT[1], rot: 0 });
-      setTimeout(() => el.remove(), 800);
+      setTimeout(() => el.remove(), 900);
     });
     moved.forEach((el) => {
       el.classList.add('is-moving', 'glint');
       clearTimeout(el._mt);
-      el._mt = setTimeout(() => el.classList.remove('is-moving', 'glint'), 900);
+      el._mt = setTimeout(() => el.classList.remove('is-moving', 'glint'), 950);
     });
     updateCardStates();
     return moved.length;
@@ -453,20 +501,14 @@
   }
 
   // ---------------------------------------------------------------------
-  // Lanes, gems, badges
+  // Lanes, gems, purses
   // ---------------------------------------------------------------------
 
-  function setGemAt(g, at, scale) {
-    const t = 'translate(' + (at[0] * app.u) + 'px,' + (at[1] * app.u) + 'px)' + (scale != null ? ' scale(' + scale + ')' : '');
-    g.style.setProperty('--at', 'translate(' + (at[0] * app.u) + 'px,' + (at[1] * app.u) + 'px)');
-    g.style.transform = t;
-  }
-
-  function makeGem(at, pop) {
+  function makeRestingGem(at) {
     const g = document.createElement('div');
-    g.className = 'gem' + (pop ? ' pop' : '');
-    g.innerHTML = '<i></i>';
-    setGemAt(g, at);
+    g.className = 'gem rest';
+    g.innerHTML = GEM_SVG;
+    placeAt(g, at);
     $('layer').appendChild(g);
     return g;
   }
@@ -475,7 +517,7 @@
   function renderGems(s) {
     E.LANES.forEach((l) => {
       const has = s.lanes[l.id].gem;
-      if (has && !app.gems[l.id]) app.gems[l.id] = makeGem(NODE_AT[l.id], true);
+      if (has && !app.gems[l.id]) app.gems[l.id] = makeRestingGem(NODE_AT[l.id]);
       if (!has && app.gems[l.id]) { app.gems[l.id].remove(); delete app.gems[l.id]; }
     });
   }
@@ -485,45 +527,56 @@
     E.LANES.forEach((l) => {
       const n = app.nodes[l.id];
       const st = s.lanes[l.id];
-      const ctrl = E.controller(s, l);
       n.classList.toggle('paired', st.paired);
-      n.classList.toggle('stalemate', !ctrl);
-      n.style.setProperty('--ctrl', ctrl ? SEAT_HEX[ctrl] : 'rgba(255,255,255,.3)');
-      n.querySelector('.kind').textContent = st.paired ? String(laneValue(s, l)) : (l.kind === 'peak' ? '▲' : '');
-      const acc = E.laneAccess(s, l.id, s.current);
-      n.classList.toggle('is-disabled', !(mine && acc.ok));
+      n.querySelector('.kind').textContent = st.paired ? String(laneValue(s, l)) : '';
+      const open = mine && E.laneAccess(s, l.id, 'S').ok;
+      n.classList.toggle('is-open', open);
+      n.classList.toggle('is-dim', mine && !open);
       n.classList.toggle('is-armed', app.tollArm === l.id);
-      const line = $('lane-' + l.id);
-      line.setAttribute('stroke', st.paired ? '#f2c96e' : (ctrl ? SEAT_HEX[ctrl] : '#ffffff'));
-      line.setAttribute('stroke-opacity', st.paired ? '0.75' : '0.16');
-      line.setAttribute('stroke-width', st.paired ? '0.55' : '0.3');
-      line.setAttribute('stroke-dasharray', ctrl || st.paired ? '' : '1 1');
+    });
+    SEATS.forEach((seat) => {
+      const n = app.courtNodes[seat];
+      n.classList.toggle('flush', E.isFlush(s, seat));
+      n.dataset.count = ownSuitCount(s, seat);
     });
   }
 
-  function renderBadges(s, bumps) {
+  function purseOf(seat) {
+    return seat === 'S' ? app.badge.querySelector('.purse') : app.houses[seat].querySelector('.purse');
+  }
+  function setShown(seat, v, bump) {
+    app.shown[seat] = v;
+    const p = purseOf(seat);
+    p.querySelector('.purse-n').textContent = v;
+    if (bump) { p.classList.remove('bump'); void p.offsetWidth; p.classList.add('bump'); }
+  }
+
+  function renderPurses(s, bump) {
     SEATS.forEach((seat) => {
-      const b = app.badges[seat], P = s.players[seat];
-      b.querySelector('.badge-name').textContent = SUIT_GLYPH[P.suit] + ' ' + P.name;
-      const g = b.querySelector('.badge-gems');
-      if (g.textContent !== String(P.gems)) {
-        g.textContent = P.gems;
-        if (bumps) { g.classList.remove('bump'); void g.offsetWidth; g.classList.add('bump'); }
-      }
-      b.classList.toggle('is-turn', s.phase === 'play' && s.current === seat);
-      let sub;
-      if (P.human) {
-        const free = s.current === seat && s.phase === 'play' ? (s.free > 0 ? '<span class="free">✦ free action</span>' : '<span class="free spent">free action</span>') : 'waiting';
-        sub = free;
-      } else {
-        sub = app.personas[seat] ? app.personas[seat].title : '';
-      }
-      b.querySelector('.badge-sub').innerHTML = sub;
+      const v = s.players[seat].gems;
+      if (app.shown[seat] !== v) setShown(seat, v, bump);
     });
-    SEATS.forEach((seat) => {
-      const f = $('face-' + seat);
-      if (f) f.setAttribute('fill-opacity', s.phase === 'play' && s.current === seat ? '0.085' : '0.03');
+  }
+
+  function renderHouses(s) {
+    ['E', 'N', 'W'].forEach((seat) => {
+      const h = app.houses[seat], P = s.players[seat];
+      h.querySelector('.house-name').textContent = SUIT_GLYPH[P.suit] + ' ' + P.name;
+      h.querySelector('.house-title').textContent = app.personas[seat] ? app.personas[seat].title : '';
+      h.classList.toggle('is-turn', s.phase === 'play' && s.current === seat);
+      const hand = h.querySelector('.house-hand');
+      if (hand.childElementCount !== P.hand.length) {
+        hand.innerHTML = P.hand.map(() => '<i></i>').join('');
+      }
     });
+    app.badge.classList.toggle('is-turn', s.phase === 'play' && s.current === 'S');
+    renderBadgeFree(s);
+  }
+
+  // Your free-action marker.
+  function renderBadgeFree(s) {
+    const free = s.current === 'S' && s.phase === 'play' ? (s.free > 0 ? '<span class="free">✦ free action</span>' : '<span class="free spent">free action used</span>') : 'waiting';
+    app.badge.querySelector('.badge-sub').innerHTML = free;
   }
 
   function renderTray(s) {
@@ -566,7 +619,7 @@
     } else if (!s.players[s.current].human) {
       h = whoB(s.current) + ' is playing.';
     } else if (app.busy) {
-      h = '';
+      h = 'Your move plays out\u2026';
     } else if (app.tollArm) {
       const acc = E.laneAccess(s, app.tollArm, 'S');
       h = 'Click the ' + LANE_NAME[app.tollArm] + ' again to pay ' + whoB(acc.controller) + ' one gem and make the swap.';
@@ -577,7 +630,7 @@
       else h = 'Play ' + cardHTML(p.card) + ' onto one of your subjects. The card it replaces goes to the bottom of the deck.';
     } else {
       const cost = s.free > 0 ? 'Your <b>free action</b> is ready.' : 'Each action now costs <b>1 gem</b> (you have ' + s.players.S.gems + ').';
-      h = cost + ' Swap two of your subjects or royals, or click a lane to swap across it.';
+      h = cost + ' Swap two of your subjects or royals, or click a lit lane to swap across it. Close the pyramid for <b>+' + (s.rules.capstone || 0) + '</b>.';
     }
     $('hint').innerHTML = h;
   }
@@ -587,7 +640,8 @@
     renderCards(s, opts.instant);
     renderNodes(s);
     renderGems(s);
-    if (!opts.keepBadges) renderBadges(s, opts.bumps);
+    renderHouses(s);
+    if (!opts.keepPurses) renderPurses(s, opts.bumps);
     renderTray(s);
     renderTop(s);
     renderViz(s);
@@ -597,6 +651,17 @@
   // ---------------------------------------------------------------------
   // Tooltips
   // ---------------------------------------------------------------------
+
+  function placeTip(at, html) {
+    const tip = $('tip');
+    tip.innerHTML = html;
+    tip.hidden = false;
+    const W = $('stage').clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
+    let x = at[0] * app.u - tw / 2, y = at[1] * app.u - th - 4.5 * app.u;
+    if (y < 0) y = at[1] * app.u + 4.5 * app.u;
+    x = Math.max(4, Math.min(W - tw - 4, x));
+    tip.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+  }
 
   function showLaneTip(id) {
     const s = app.state;
@@ -621,20 +686,23 @@
       else html += acc.reason;
     }
     if (st.gem) html += '<br>A gem waits here for whoever takes control.';
-    const tip = $('tip');
-    tip.innerHTML = html;
-    tip.hidden = false;
-    const [nx, ny] = NODE_AT[id];
-    const W = $('stage').clientWidth, tw = tip.offsetWidth, th = tip.offsetHeight;
-    let x = nx * app.u - tw / 2, y = ny * app.u - th - 4.5 * app.u;
-    if (y < 0) y = ny * app.u + 4.5 * app.u;
-    x = Math.max(4, Math.min(W - tw - 4, x));
-    tip.style.transform = 'translate(' + x + 'px,' + y + 'px)';
+    placeTip(NODE_AT[id], html);
     [l.a, l.b].forEach((end) => {
       const sc = s.courts[end.seat];
       [sc.subjects[end.pos].id, sc.royals[end.pos].id].forEach((cid) => { const el = app.cards.get(cid); if (el) el.classList.add('is-lit'); });
     });
     app.nodes[id].classList.add('is-hot');
+  }
+
+  function showCourtTip(seat) {
+    const s = app.state;
+    if (!s) return;
+    const n = ownSuitCount(s, seat), suit = E.SUIT_OF[seat];
+    const html = '<div class="tip-head">' + SEAT_WORD[seat] + '’s court</div>' +
+      n + ' of 3 subjects are ' + SUIT_GLYPH[suit] + ' ' + suit + '. ' +
+      (n === 3 ? '<b>A flush.</b> It earned a gem when it formed.' : 'Three of a kind of suit (a flush) forms a gem here for ' + whoB(seat) + '.');
+    placeTip(COURT_AT[seat], html);
+    POS.forEach((p) => { const el = app.cards.get(s.courts[seat].subjects[p].id); if (el) el.classList.add('is-lit'); });
   }
 
   function hideTip() {
@@ -687,7 +755,7 @@
     if (!app.state) return;
     if (!myTurn()) { if (app.state.phase === 'play' && !app.busy) toast(who(app.state.current) + ' is playing.'); return; }
     const acc = E.laneAccess(app.state, id, 'S');
-    if (!acc.ok) { toast(acc.reason); Sound.play('error'); return; }
+    if (!acc.ok) { showLaneTip(id); toast(acc.reason); Sound.play('error'); return; }
     if (acc.toll && app.tollArm !== id) {
       app.tollArm = id;
       app.sel = null;
@@ -731,90 +799,158 @@
     await animate(before, r.state, r.events);
   }
 
-  function badgeCenter(seat) {
-    return [BADGE_AT[seat][0] + BADGE_W[seat] - 4, BADGE_AT[seat][1] + 2.5];
+  // Client coordinates (for the gem flights, which cross from the table to
+  // the purses beside it).
+  function clientOfStage(at) {
+    const r = $('stage').getBoundingClientRect();
+    return [r.left + at[0] * app.u, r.top + at[1] * app.u];
+  }
+  function clientOfPurse(seat) {
+    const r = purseOf(seat).querySelector('.purse-gem').getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
   }
 
-  function courtCenter(seat) { return SUBJ[seat].C; }
+  function gemSize() { return Math.max(18, app.u * 4.6); }
 
-  function fly(from, to, delay, opts) {
-    opts = opts || {};
-    return new Promise((res) => {
-      const g = opts.el || makeGem(from, !opts.el && opts.pop);
+  // One gem's journey: it forms where it is made (a burst of light, then it
+  // holds so you can see it), then arcs to its purse.
+  function gemFlight(opts) {
+    const t = T();
+    const size = gemSize();
+    return new Promise((resolve) => {
       setTimeout(() => {
-        setGemAt(g, to, opts.shrink ? 0.4 : 1);
-        if (opts.fadeTo) g.style.opacity = '0';
-      }, delay);
-      setTimeout(() => { g.style.opacity = '0'; setTimeout(() => { g.remove(); res(); }, 280); }, delay + 780 * Math.max(0.6, T()));
+        const from = opts.fromClient || clientOfStage(opts.from);
+        const fx = $('fx');
+        const g = document.createElement('div');
+        g.className = 'gem fly';
+        g.innerHTML = GEM_SVG;
+        g.style.width = size + 'px';
+        g.style.height = size + 'px';
+        fx.appendChild(g);
+        const at = (p, sc, r) => 'translate(' + (p[0] - size / 2) + 'px,' + (p[1] - size / 2) + 'px) scale(' + sc + ') rotate(' + (r || 0) + 'deg)';
+        let formed = Promise.resolve();
+        if (opts.form) {
+          const burst = document.createElement('div');
+          burst.className = 'gem-burst';
+          burst.style.transform = 'translate(' + (from[0] - size) + 'px,' + (from[1] - size) + 'px)';
+          burst.style.width = burst.style.height = (size * 2) + 'px';
+          fx.appendChild(burst);
+          burst.animate([{ opacity: 0.9, transform: burst.style.transform + ' scale(.2)' }, { opacity: 0, transform: burst.style.transform + ' scale(1.4)' }], { duration: 750 * t, easing: 'ease-out' }).finished.then(() => burst.remove());
+          if (opts.sound !== false) Sound.play('gemArm');
+          formed = g.animate([
+            { transform: at(from, 0, -40), opacity: 0, filter: 'brightness(3)' },
+            { transform: at(from, 1.35, 8), opacity: 1, filter: 'brightness(1.8)', offset: 0.6 },
+            { transform: at(from, 1, 0), opacity: 1, filter: 'brightness(1)' }
+          ], { duration: 680 * t, easing: 'ease-out', fill: 'forwards' }).finished;
+        } else {
+          g.style.transform = at(from, 1, 0);
+        }
+        formed
+          .then(() => wait((opts.hold == null ? 520 : opts.hold) * t))
+          .then(() => {
+            if (opts.onDepart) opts.onDepart();
+            const to = opts.toClient || clientOfPurse(opts.to);
+            const dist = Math.hypot(to[0] - from[0], to[1] - from[1]);
+            const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2 - Math.min(140, dist * 0.28)];
+            return g.animate([
+              { transform: at(from, 1, 0), opacity: 1 },
+              { transform: at(mid, 1.15, 180), opacity: 1, offset: 0.5 },
+              { transform: at(to, opts.fade ? 0.4 : 0.6, 360), opacity: opts.fade ? 0 : 1 }
+            ], { duration: Math.max(650, Math.min(1250, 520 + dist * 0.9)) * t, easing: 'cubic-bezier(.45,.05,.3,1)', fill: 'forwards' }).finished;
+          })
+          .then(() => {
+            g.remove();
+            if (opts.onArrive) opts.onArrive();
+            resolve();
+          });
+      }, opts.delay || 0);
     });
+  }
+
+  // A gem spent to the bank: it lifts off the purse and dissolves.
+  function gemSpend(seat) {
+    const from = clientOfPurse(seat);
+    setShown(seat, app.shown[seat] - 1, false);
+    return gemFlight({ fromClient: from, toClient: [from[0], from[1] - 40], hold: 0, fade: true });
   }
 
   async function animate(before, after, events) {
     const t = T();
-    const flights = [];
-    let longest = 0;
+    const jobs = [];
 
     events.forEach((e) => logEvent(e, before, after));
     const moved = renderCards(after);
     renderNodes(after);
+    renderHouses(after);
     renderTray(after);
     renderTop(after);
     renderViz(after);
     renderHint(after);
-    renderBadgeFree(after);
 
     if (events.some((e) => e.type === 'swap' || e.type === 'play')) Sound.play('pivot');
     if (events.some((e) => e.type === 'draw')) Sound.play('draw');
 
     const spawned = new Set(events.filter((e) => e.type === 'spawn').map((e) => e.lane));
-    const gemDelay = (moved ? 520 : 120) * t;
+    // Gems form once the cards have landed, one after another.
+    let at = moved ? 640 * t : 160 * t;
+    const step = () => { const d = at; at += 380 * t; return d; };
 
     events.forEach((e) => {
-      if (e.type === 'pay' && !e.free && !e.to) {
-        // A gem spent to the bank: it lifts off the purse and fades.
-        const from = badgeCenter(e.seat);
-        flights.push(fly(from, [from[0], from[1] - 6], 0, { fadeTo: true, shrink: true }));
-      }
+      if (e.type === 'pay' && !e.free && !e.to) jobs.push(gemSpend(e.seat));
       if (e.type === 'toll') {
         Sound.play('buy');
-        flights.push(fly(badgeCenter(e.seat), badgeCenter(e.to), 60, {}));
+        setShown(e.seat, app.shown[e.seat] - 1, false);
+        jobs.push(gemFlight({ fromClient: clientOfPurse(e.seat), to: e.to, hold: 120, onArrive: () => setShown(e.to, app.shown[e.to] + 1, true) }));
       }
       if (e.type === 'collect') {
-        let el = null;
-        if (!spawned.has(e.lane) && app.gems[e.lane]) { el = app.gems[e.lane]; delete app.gems[e.lane]; }
-        const at = NODE_AT[e.lane];
-        const startAt = spawned.has(e.lane) ? gemDelay + 420 * t : gemDelay;
-        if (!el) {
-          const g = makeGem(at, false);
-          g.style.opacity = '0';
-          setTimeout(() => { g.style.opacity = '1'; g.classList.add('pop'); Sound.play('gemArm'); }, gemDelay);
-          el = g;
+        const fresh = spawned.has(e.lane);
+        const delay = step();
+        if (!fresh && app.gems[e.lane]) {
+          const restEl = app.gems[e.lane];
+          delete app.gems[e.lane];
+          setTimeout(() => restEl.remove(), delay);
         }
-        setTimeout(() => Sound.play('claim'), startAt + 500 * t);
-        flights.push(fly(at, badgeCenter(e.seat), startAt, { el }));
-        longest = Math.max(longest, startAt + 800 * t);
+        jobs.push(gemFlight({
+          from: NODE_AT[e.lane], to: e.seat, delay, form: fresh, hold: fresh ? 560 : 260,
+          onArrive: () => { setShown(e.seat, app.shown[e.seat] + 1, true); Sound.play('claim'); }
+        }));
       }
       if (e.type === 'flush') {
-        const at = courtCenter(e.seat);
-        setTimeout(() => Sound.play('claim'), gemDelay + 300 * t);
-        flights.push(fly(at, badgeCenter(e.seat), gemDelay + 200 * t, { pop: true }));
-        toast(who(e.seat) + (app.state.players[e.seat].human ? '’ve' : '’s court has') + ' a flush: +1 gem', true);
+        const node = app.courtNodes[e.seat];
+        const delay = step();
+        setTimeout(() => node.classList.add('is-forming'), delay);
+        jobs.push(gemFlight({
+          from: COURT_AT[e.seat], to: e.seat, delay, form: true, hold: 760,
+          onDepart: () => node.classList.remove('is-forming'),
+          onArrive: () => { setShown(e.seat, app.shown[e.seat] + 1, true); Sound.play('claim'); }
+        }));
+        setTimeout(() => toast((e.seat === 'S' ? 'Your court' : who(e.seat) + '’s court') + ' is a flush: +1 gem', true), delay);
+      }
+      if (e.type === 'spawn' && after.lanes[e.lane].gem) {
+        // A gem on a stalemated lane forms and stays.
+        const delay = step();
+        jobs.push(new Promise((res) => setTimeout(() => {
+          const g = makeRestingGem(NODE_AT[e.lane]);
+          g.classList.add('forming');
+          app.gems[e.lane] = g;
+          Sound.play('gemArm');
+          setTimeout(res, 700 * t);
+        }, delay)));
+      }
+      if (e.type === 'capstone') {
+        for (let i = 0; i < e.gems; i++) {
+          jobs.push(gemFlight({
+            from: APEX, to: e.seat, delay: at + 260 * t + i * 220 * t, form: true, hold: 420, sound: i === 0,
+            onArrive: () => { setShown(e.seat, app.shown[e.seat] + 1, true); Sound.play('claim'); }
+          }));
+        }
       }
     });
-    // Gems that stay on a stalemated lane appear after the cards land.
-    const resting = events.filter((e) => e.type === 'spawn' && after.lanes[e.lane].gem);
-    if (resting.length) {
-      setTimeout(() => { renderGems(after); Sound.play('gemArm'); }, gemDelay);
-    } else {
-      renderGems(after);
-    }
 
-    const started = performance.now();
-    const base = moved ? 650 * t : 200 * t;
-    await Promise.race([Promise.all(flights), wait(2600)]);
-    await wait(Math.max(0, Math.max(base, longest) - (performance.now() - started)));
+    const minWait = moved ? 700 * t : 220 * t;
+    await Promise.all([Promise.all(jobs), wait(minWait)]);
     renderGems(after);
-    renderBadges(after, true);
+    renderPurses(after, true);
 
     const turn = events.find((e) => e.type === 'turn');
     if (turn) {
@@ -827,14 +963,6 @@
       await wait(700 * t);
       showResults(after);
     }
-  }
-
-  // The human's free-action marker changes at once (not after the gems land).
-  function renderBadgeFree(s) {
-    const b = app.badges.S;
-    const P = s.players.S;
-    const free = s.current === 'S' && s.phase === 'play' ? (s.free > 0 ? '<span class="free">✦ free action</span>' : '<span class="free spent">free action</span>') : 'waiting';
-    b.querySelector('.badge-sub').innerHTML = free;
   }
 
   function sweep() {
@@ -859,7 +987,7 @@
       ids.push(s.courts[l.a.seat].subjects[l.a.pos].id, s.courts[l.b.seat].subjects[l.b.pos].id);
       app.nodes[action.lane].classList.toggle('is-hot', on);
     } else if (action.type === 'play') {
-      ids.push(s.players[seat].hand[action.hand].id, s.courts[seat].subjects[action.pos].id);
+      ids.push(s.courts[seat].subjects[action.pos].id);
     }
     ids.forEach((id) => { const el = app.cards.get(id); if (el) el.classList.toggle('is-ai-pick', on); });
   }
@@ -870,7 +998,7 @@
     render(app.state);
     while (app.state.phase === 'play' && !app.state.players[app.state.current].human) {
       const seat = app.state.current;
-      app.badges[seat].classList.add('thinking');
+      app.houses[seat].classList.add('thinking');
       await wait(520 * T());
       if (token !== app.token) return;
       let acted = 0;
@@ -878,18 +1006,18 @@
         const a = AI.choose(app.state, { persona: app.personas[seat], level: app.settings.level, rng: app.rng, actionsThisTurn: acted });
         if (a.type !== 'pass') {
           highlight(a, seat, true);
-          await wait(480 * T());
+          await wait(520 * T());
           if (token !== app.token) return;
           highlight(a, seat, false);
         } else {
-          app.badges[seat].classList.remove('thinking');
+          app.houses[seat].classList.remove('thinking');
         }
         await perform(a);
         if (token !== app.token) return;
         acted++;
         if (a.type !== 'pass') await wait(260 * T());
       }
-      app.badges[seat].classList.remove('thinking');
+      app.houses[seat].classList.remove('thinking');
     }
     app.busy = false;
     render(app.state);
@@ -913,8 +1041,7 @@
     const W = (seat) => whoB(seat);
     switch (e.type) {
       case 'swap': {
-        const byId = (id) => findCard(before, id);
-        const c1 = byId(e.cards[0]), c2 = byId(e.cards[1]);
+        const c1 = findCard(before, e.cards[0]), c2 = findCard(before, e.cards[1]);
         if (e.kind === 'court') log(W(e.seat) + ' ' + verb(e.seat, 'swap', 'swaps') + ' ' + cardHTML(c1) + ' and ' + cardHTML(c2) + ' in ' + their(e.seat) + ' court.', e.seat);
         else if (e.kind === 'royal') log(W(e.seat) + ' ' + verb(e.seat, 'move', 'moves') + ' ' + their(e.seat) + ' royals: ' + cardHTML(c1) + ' ↔ ' + cardHTML(c2) + '.', e.seat);
         else log(W(e.seat) + ' ' + verb(e.seat, 'swap', 'swaps') + ' ' + cardHTML(c1) + ' ↔ ' + cardHTML(c2) + ' across the ' + LANE_NAME[e.lane] + '.', e.seat);
@@ -944,6 +1071,9 @@
       }
       case 'flush':
         log(W(e.seat) + (s.players[e.seat].human ? ' hold' : ' holds') + ' a flush: +1 gem.', e.seat);
+        break;
+      case 'capstone':
+        log(W(e.seat) + ' ' + verb(e.seat, 'close', 'closes') + ' the pyramid and ' + verb(e.seat, 'take', 'takes') + ' the capstone: <b>+' + e.gems + ' gems</b>.', e.seat);
         break;
       case 'turn':
         if (s.players[e.seat].human) log('<b>Round ' + e.round + '.</b> Your turn.', 'S');
@@ -991,7 +1121,8 @@
     if (s.winners.length > 1) sub = 'Shared at ' + best + ' gems: ' + s.winners.map(who).join(' and ') + '.';
     else if (human) sub = 'You win with ' + best + ' gems.';
     else sub = who(s.winners[0]) + ' wins with ' + best + ' gems.';
-    if (s.endReason !== 'pyramid') sub += ' ' + E.pairedCount(s) + ' of 10 lanes were paired.';
+    if (s.endReason === 'pyramid') sub += ' The capstone went to ' + who(s.current) + '.';
+    else sub += ' ' + E.pairedCount(s) + ' of 10 lanes were paired.';
     $('results-sub').textContent = sub;
     const box = $('standings');
     box.innerHTML = '';
@@ -1028,24 +1159,25 @@
     app.cards.clear();
     Object.values(app.gems).forEach((g) => g.remove());
     app.gems = {};
+    app.shown = {};
+    $('fx').innerHTML = '';
     $('log').innerHTML = '';
     $('results').hidden = true;
     layout();
     render(app.state, { instant: true });
-    // Deal: the cards were placed at the deck; let them fly out.
+    // Deal: the cards fly out from the deck.
+    const ids = [...app.place.keys()];
     app.cards.forEach((el, id) => {
       const p = app.place.get(id);
-      el.classList.add('no-anim');
-      el.style.transform = transformFor(el, { x: DECK_AT[0], y: DECK_AT[1], rot: 0, scale: 0.9 });
-      el.classList.add('down');
+      el.classList.add('no-anim', 'down');
+      el.style.transform = transformFor(el, { x: DECK_AT[0], y: DECK_AT[1], rot: 0 });
       el.getBoundingClientRect();
       el.classList.remove('no-anim');
-      const i = [...app.place.keys()].indexOf(id);
       setTimeout(() => {
         el._tf = transformFor(el, p);
         el.style.transform = el._tf;
         el.classList.toggle('down', !!p.down);
-      }, 40 + i * 45);
+      }, 40 + ids.indexOf(id) * 45);
     });
     log('<b>The table is dealt.</b> You play South (♠). Your free action is ready.', 'S');
     setTimeout(sweep, 900);
