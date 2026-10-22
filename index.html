@@ -188,6 +188,7 @@
       const berzerkRobotImg = new Image(); berzerkRobotImg.src = 'assets/icons/berzerk-robot.svg';
       const missileCommandImg = new Image(); missileCommandImg.src = 'assets/icons/missile-command.svg';
       const blogQuillImg = new Image(); blogQuillImg.src = 'assets/icons/blog-quill.svg';
+      const comboButtonsImg = new Image(); comboButtonsImg.src = 'assets/icons/combo-buttons.svg';
       const resetSigilImg = new Image(); resetSigilImg.src = 'assets/reset-sigil.png';
       const brickImg = new Image(); brickImg.src = 'assets/brick-2x4.svg';
       const pyramidImg = new Image(); pyramidImg.src = 'pyramid/icon.svg';
@@ -599,6 +600,7 @@
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
           { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 7.4, speed: 0.97 }, // QR code orb
           { path: 'missile-command',  color: '#3a2410', cardImg: missileCommandImg, r0: 9.0, speed: 1.02 }, // a city, an incoming warhead and a counter-burst
+          { path: 'combo/',           color: '#8a84a0', cardImg: comboButtonsImg, r0: 8.4, speed: 0.98 }, // Combo — the Super Famicom face buttons
           { path: 'pyramid',          color: '#b8892e', cardImg: pyramidImg, r0: 7.8, speed: 0.99 }, // Pyramid — a golden 3D pyramid: courts, lanes & gems
           { path: 'chronicler/',      color: '#34482f', cardImg: chroniclerGlyphImg, r0: 7.2, speed: 0.97 }, // The Chronicler — Ξ, the temple's readable carving
           { path: 'cassie/',          color: '#7d8c6a', cardImg: cassieSableImg, r0: 9.6, speed: 0.95 }, // Cassie and the White Sable — the sable herself
@@ -779,6 +781,7 @@
 
         // Rebuild all regenerated scene contents.
         seedParticles();
+        caReset();
         seedAppParticles();
         initCat();
         buildTitle();
@@ -833,6 +836,7 @@
         const dtScale = dt / 16.7;
 
         for (const p of particles) {
+          if (p.bound) continue; // held in the Life grid (see updateCA)
           p.tw += dt * 0.00045;
 
           // No pressure forces act on particles. Only arc energy (p.thermalInput)
@@ -942,6 +946,232 @@
           b.length = 0;
         }
         used.length = 0;
+      }
+
+      // ─── Crystallisation: Conway's Life inside the vector equilibrium ───────
+      // When the VE has been present a while and dust has gathered near its
+      // centre, the dust may crystallise: the particles there snap onto a grid
+      // and start to obey Life (B3/S23: a dead cell with exactly 3 live
+      // neighbours is born, a live cell with 2 or 3 survives; the rule is
+      // Turing complete and full of still lifes, oscillators and gliders).
+      // Particles are never created or destroyed. A captured particle sits in a
+      // live cell and rides the pattern: when its cell dies it moves into a
+      // neighbour being born (so gliders carry their dust), else into a live
+      // neighbour, else it is let go. A free particle touched by a live cell is
+      // pulled in. Cells born without a particle are only light. When the VE
+      // leaves, births stop, empty cells die off, and each captured particle
+      // holds its cell until it is released, with a half-life.
+      const CA_CELL = 3;                  // px; an ordinary orb spans about 8×8 cells
+      const CA_STEP_MS = 95;              // one generation
+      const CA_WARMUP_MS = 2500;          // VE presence before dust can crystallise
+      const CA_CELL_HALFLIFE = 1400;      // ms, empty live cells once the VE is gone
+      const CA_PARTICLE_HALFLIFE = 4500;  // ms, captured particles once the VE is gone
+      const CA_RECAPTURE_MS = 1500;       // a released particle is left alone this long
+      const CA_MAX_LIVE = 9000;
+      const ca = { gw: 0, gh: 0, cur: null, nxt: null, owner: null, live: 0,
+                   x0: 0, y0: 0, x1: -1, y1: -1, acc: 0, veMs: 0, veGoneMs: 0 };
+
+      function caReset() {
+        ca.gw = Math.ceil(stage.clientWidth / CA_CELL) + 2;
+        ca.gh = Math.ceil(stage.clientHeight / CA_CELL) + 2;
+        const n = ca.gw * ca.gh;
+        ca.cur = new Uint8Array(n);
+        ca.nxt = new Uint8Array(n);
+        ca.owner = new Array(n).fill(null);
+        ca.live = 0; ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; ca.acc = 0;
+      }
+
+      function caGrow(gx, gy) {
+        if (ca.x1 < ca.x0) { ca.x0 = ca.x1 = gx; ca.y0 = ca.y1 = gy; return; }
+        if (gx < ca.x0) ca.x0 = gx; if (gx > ca.x1) ca.x1 = gx;
+        if (gy < ca.y0) ca.y0 = gy; if (gy > ca.y1) ca.y1 = gy;
+      }
+
+      function caCellOf(x, y) {
+        const gx = Math.floor(x / CA_CELL), gy = Math.floor(y / CA_CELL);
+        if (gx < 1 || gy < 1 || gx > ca.gw - 2 || gy > ca.gh - 2) return -1;
+        return gy * ca.gw + gx;
+      }
+
+      function caPlace(p, i) {
+        ca.owner[i] = p;
+        p.bound = true;
+        p.x = (i % ca.gw + 0.5) * CA_CELL - p.vs * 0.5;
+        p.y = ((i / ca.gw) | 0) * CA_CELL + CA_CELL * 0.5 - p.vs * 0.5;
+      }
+
+      function caLight(i) {
+        if (!ca.cur[i]) { ca.cur[i] = 1; ca.live++; caGrow(i % ca.gw, (i / ca.gw) | 0); }
+      }
+
+      function caCapture(p, i) {
+        if (i < 0 || ca.owner[i]) return false;
+        caPlace(p, i);
+        caLight(i);
+        return true;
+      }
+
+      function caRelease(p, now) {
+        p.bound = false;
+        p.vx = rand(-0.7, 0.7); p.vy = rand(-0.7, 0.7);
+        p.tn = 0;
+        p.caCool = now + CA_RECAPTURE_MS;
+      }
+
+      // Dust near the VE centre crystallises: each particle takes its cell and
+      // lights some of its neighbours (its energy), giving Life a soup to work on.
+      function caNucleate(cx, cy, R, now) {
+        const R2 = R * R;
+        for (const p of particles) {
+          if (p.bound || p.r < 0.05 || (p.caCool || 0) > now) continue;
+          const dx = p.x - cx, dy = p.y - cy;
+          if (dx * dx + dy * dy > R2) continue;
+          const i = caCellOf(p.x + p.vs * 0.5, p.y + p.vs * 0.5);
+          if (!caCapture(p, i)) continue;
+          for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+            if ((ox || oy) && Math.random() < 0.42) caLight(i + oy * ca.gw + ox);
+          }
+        }
+      }
+
+      function caStep(veOn, now) {
+        const { gw, cur, nxt, owner } = ca;
+        const x0 = Math.max(1, ca.x0 - 1), x1 = Math.min(ca.gw - 2, ca.x1 + 1);
+        const y0 = Math.max(1, ca.y0 - 1), y1 = Math.min(ca.gh - 2, ca.y1 + 1);
+        const births = veOn && ca.live < CA_MAX_LIVE;
+        for (let y = y0; y <= y1; y++) {
+          let i = y * gw + x0;
+          for (let x = x0; x <= x1; x++, i++) {
+            const n = cur[i - gw - 1] + cur[i - gw] + cur[i - gw + 1] + cur[i - 1] + cur[i + 1]
+                    + cur[i + gw - 1] + cur[i + gw] + cur[i + gw + 1];
+            nxt[i] = cur[i] ? (n === 2 || n === 3 ? 1 : 0) : (births && n === 3 ? 1 : 0);
+          }
+        }
+        // Captured particles ride the pattern.
+        const N8 = [-gw - 1, -gw, -gw + 1, -1, 1, gw - 1, gw, gw + 1];
+        for (let y = y0; y <= y1; y++) {
+          let i = y * gw + x0;
+          for (let x = x0; x <= x1; x++, i++) {
+            const p = owner[i];
+            if (!p || nxt[i]) continue;
+            // With the VE gone the crystal melts rather than churns: a held
+            // particle keeps its cell until it is released (half-life below).
+            if (!veOn) { nxt[i] = 1; continue; }
+            owner[i] = null;
+            let to = -1;
+            for (const o of N8) { const j = i + o; if (nxt[j] && !cur[j] && !owner[j]) { to = j; break; } }
+            if (to < 0) for (const o of N8) { const j = i + o; if (nxt[j] && !owner[j]) { to = j; break; } }
+            if (to >= 0) caPlace(p, to);
+            else caRelease(p, now);
+          }
+        }
+        // With the VE gone, empty cells die off and particles drift out.
+        if (!veOn) {
+          const dieCell = 1 - Math.pow(0.5, CA_STEP_MS / CA_CELL_HALFLIFE);
+          const freeP = 1 - Math.pow(0.5, CA_STEP_MS / CA_PARTICLE_HALFLIFE);
+          for (let y = y0; y <= y1; y++) {
+            let i = y * gw + x0;
+            for (let x = x0; x <= x1; x++, i++) {
+              if (!nxt[i]) continue;
+              const p = owner[i];
+              if (p) { if (Math.random() < freeP) { owner[i] = null; nxt[i] = 0; caRelease(p, now); } }
+              else if (Math.random() < dieCell) nxt[i] = 0;
+            }
+          }
+        }
+        // Commit, and re-measure the live area.
+        let live = 0, bx0 = Infinity, by0 = Infinity, bx1 = -1, by1 = -1;
+        for (let y = y0; y <= y1; y++) {
+          let i = y * gw + x0;
+          for (let x = x0; x <= x1; x++, i++) {
+            const v = nxt[i];
+            cur[i] = v; nxt[i] = 0;
+            if (v) { live++; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+          }
+        }
+        ca.live = live;
+        if (live) { ca.x0 = bx0; ca.x1 = bx1; ca.y0 = by0; ca.y1 = by1; } else { ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; }
+      }
+
+      // Free particles touched by a live cell are pulled in.
+      function caCaptureTouching(now) {
+        if (!ca.live) return;
+        const { gw, cur } = ca;
+        const xMin = (ca.x0 - 1) * CA_CELL, xMax = (ca.x1 + 2) * CA_CELL;
+        const yMin = (ca.y0 - 1) * CA_CELL, yMax = (ca.y1 + 2) * CA_CELL;
+        for (const p of particles) {
+          if (p.bound || p.r < 0.05 || (p.caCool || 0) > now) continue;
+          const px = p.x + p.vs * 0.5, py = p.y + p.vs * 0.5;
+          if (px < xMin || px > xMax || py < yMin || py > yMax) continue;
+          const i = caCellOf(px, py);
+          if (i < 0) continue;
+          if (cur[i] || cur[i - gw - 1] || cur[i - gw] || cur[i - gw + 1] || cur[i - 1] || cur[i + 1]
+              || cur[i + gw - 1] || cur[i + gw] || cur[i + gw + 1]) caCapture(p, i);
+        }
+      }
+
+      function updateCA(dt, now) {
+        if (!ca.cur) caReset();
+        const veOn = !ve.liberated && ve.scaleCurrent > 5
+          && (ve.active || ve.voltaHeld || ve.alphaP > 0.16 || ve.scaleP > 0.16);
+        if (veOn) { ca.veMs += dt; ca.veGoneMs = 0; }
+        else { ca.veGoneMs += dt; if (ca.veGoneMs > 1200) ca.veMs = 0; }
+
+        // Crystallisation: more likely the longer the VE has stayed and the
+        // more dust has gathered near its centre.
+        if (veOn && ca.veMs > CA_WARMUP_MS) {
+          const R = Math.max(24, ve.scaleCurrent * 0.9), R2 = R * R;
+          let count = 0;
+          for (const p of particles) {
+            if (p.bound || p.r < 0.05) continue;
+            const dx = p.x - ve.x, dy = p.y - ve.y;
+            if (dx * dx + dy * dy < R2) count++;
+          }
+          const presence = clamp((ca.veMs - CA_WARMUP_MS) / 8000, 0, 1);
+          const density = clamp((count - 3) / 9, 0, 1);
+          const ratePerSec = 0.45 * presence * density;
+          if (ratePerSec > 0 && Math.random() < 1 - Math.exp(-ratePerSec * dt / 1000)) caNucleate(ve.x, ve.y, R, now);
+        }
+
+        if (!ca.live) { ca.acc = 0; return; }
+        ca.acc += dt;
+        let steps = 0;
+        while (ca.acc >= CA_STEP_MS && steps < 3) {
+          ca.acc -= CA_STEP_MS;
+          steps++;
+          if (veOn) caCaptureTouching(now);
+          caStep(veOn, now);
+          if (!ca.live) break;
+        }
+        if (steps === 3) ca.acc = 0;
+      }
+
+      function drawCA() {
+        if (!ca.live) return;
+        const { gw, cur, owner } = ca;
+        const dust = new Path2D(), glow = new Path2D(), light = new Path2D();
+        const s = CA_CELL - 0.6, g = CA_CELL + 1.6;
+        for (let y = ca.y0; y <= ca.y1; y++) {
+          let i = y * gw + ca.x0;
+          for (let x = ca.x0; x <= ca.x1; x++, i++) {
+            if (!cur[i]) continue;
+            const px = x * CA_CELL, py = y * CA_CELL;
+            if (viewCull && (px < viewCull.x0 || px > viewCull.x1 || py < viewCull.y0 || py > viewCull.y1)) continue;
+            if (owner[i]) { dust.rect(px + 0.3, py + 0.3, s, s); glow.rect(px - 0.8, py - 0.8, g, g); }
+            else light.rect(px + 0.3, py + 0.3, s, s);
+          }
+        }
+        pctx.save();
+        pctx.globalAlpha = 0.5;
+        pctx.fillStyle = '#9fe2ff';
+        pctx.fill(light);
+        pctx.globalAlpha = 0.16;
+        pctx.fillStyle = '#ffe9c8';
+        pctx.fill(glow);
+        pctx.globalAlpha = 0.95;
+        pctx.fillStyle = '#fbf3e4';
+        pctx.fill(dust);
+        pctx.restore();
       }
 
       // ─── GPU particle layer ──────────────────────────────────────────────────
@@ -1079,7 +1309,7 @@
         const trailBudget = quality.trails, haloBudget = quality.halos;
         if (gpu) PGL.begin();
         for (const p of particles) {
-          if (p.r < 0.05) continue; // fully evaporated
+          if (p.r < 0.05 || p.bound) continue; // evaporated, or drawn as a Life cell
           if (viewCull && (p.x < viewCull.x0 || p.x > viewCull.x1 || p.y < viewCull.y0 || p.y > viewCull.y1)) continue;
           const local = lightAt(p.x, p.y, now);
           // Small + unlit + cool → invisible (dark matter until illuminated or heated)
@@ -2890,7 +3120,7 @@
         // Harvest nearby particles and orbs — orbs are especially attractive because they fight back.
         const nearby = [];
         for (const p of particles) {
-          if (p.r >= 0.05) {
+          if (p.r >= 0.05 && !p.bound) {
             const dpx = p.x - volta.cx, dpy = p.y - volta.cy;
             const distFromVolta = Math.hypot(dpx, dpy) || 1;
             if (distFromVolta < VOLTA_SEARCH_R) {
@@ -3075,6 +3305,7 @@
         if (PGL) PGL.resize(particlesCanvas.width, particlesCanvas.height);
         buildTitle();
         seedParticles();
+        caReset();
       }
 
       // ─── Orb focus camera & info panel ──────────────────────────────────────
@@ -3121,7 +3352,7 @@
       const PAGE_INFO = {
         'berzerk': 'Berzerk', 'blog': 'Blog', 'about': 'About', 'meowdividiardi': 'Meow',
         'qr': 'QR', 'missile-command': 'Missile Command', 'pyramid': 'Pyramid',
-        'chronicler/': 'The Chronicler', 'cassie/': 'Cassie', 'library/#schilds-ladder': "Schild's Ladder",
+        'chronicler/': 'The Chronicler', 'cassie/': 'Cassie', 'combo/': 'Combo', 'library/#schilds-ladder': "Schild's Ladder",
         'library/#godel-escher-bach': 'Gödel, Escher, Bach', 'library/#pale-blue-dot': 'Pale Blue Dot',
         'battlebox/': 'Battlebox',
       };
@@ -3347,6 +3578,7 @@
         updateVE(dt);
         updateVolta(dt, now);
         updateParticles(dt);
+        updateCA(dt, now);
         updateAppParticles(dt);
         updateCat(dt, now);
         updateLiberatedNodes(dt, now);
@@ -3354,7 +3586,7 @@
         // Rebuild hot-particle list once per frame (avoids O(N²) in lightAt)
         hotParticles.length = 0;
         for (const p of particles) {
-          if (p.heat >= 0.3 && p.r >= 0.05) hotParticles.push(p);
+          if (p.heat >= 0.3 && p.r >= 0.05 && !p.bound) hotParticles.push(p);
         }
         for (const ap of appParticles) ap._lp = ap.cardImg ? 0.5 : (Math.sin(now * ap.breathRate + ap.breathPhase) + 1) * 0.5;
         updateFocus(Math.min(100, now - (focusLastNow || now)));
@@ -3370,6 +3602,7 @@
           pctx.translate(-cam.fx, -cam.fy);
         }
         drawParticles(now);
+        drawCA();
         drawAppParticles(now);
         drawVE();
         drawLiberatedNodes();

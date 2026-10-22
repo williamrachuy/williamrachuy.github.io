@@ -229,7 +229,29 @@ def blog():
                well + f'<g clip-path="url(#above)">{quill}</g>', defs + clip)
 
 
+# ─── Combo: the four face buttons of a Super Famicom pad ────────────────────
+def snes_buttons():
+    # X top (blue), A right (red), B bottom (yellow), Y left (green): domed
+    # buttons on a pale grey base, lit from the upper left like the brick studs.
+    R, d = 1.85, 3.0
+    buttons = [(0, -d, '#3b5fd6'), (d, 0, '#d8262c'), (0, d, '#f2c414'), (-d, 0, '#2f9e48')]
+    defs = ('<radialGradient id="base" cx="0.42" cy="0.38" r="0.7"><stop offset="0" stop-color="#e9e6ee"/>'
+            '<stop offset="0.7" stop-color="#c9c4d2"/><stop offset="1" stop-color="#9d97a8"/></radialGradient>')
+    body = [f'<circle cx="0.25" cy="0.35" r="{f(d + R + 1.0)}" fill="#4a4652"/>',
+            f'<circle cx="0" cy="0" r="{f(d + R + 1.0)}" fill="url(#base)"/>',
+            f'<circle cx="0" cy="0" r="{f(d + R + 1.0)}" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="0.18"/>']
+    for i, (x, y, c) in enumerate(buttons):
+        defs += (f'<radialGradient id="b{i}" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="{shade(c, 0.55)}"/>'
+                 f'<stop offset="0.45" stop-color="{c}"/><stop offset="1" stop-color="{shade(c, -0.45)}"/></radialGradient>')
+        body += [f'<circle cx="{f(x + 0.22)}" cy="{f(y + 0.32)}" r="{f(R)}" fill="#2a2630" opacity="0.55"/>',  # well / shadow
+                 f'<circle cx="{f(x)}" cy="{f(y)}" r="{f(R)}" fill="url(#b{i})"/>',
+                 f'<ellipse cx="{f(x - 0.7)}" cy="{f(y - 0.8)}" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 {f(x - 0.7)} {f(y - 0.8)})"/>']
+    e = d + R + 1.5
+    return svg('Super Famicom buttons', -e, -e, 2 * e, 2 * e, '\n'.join(body), defs)
+
+
 ICONS = {
+    'combo-buttons.svg': snes_buttons,
     'berzerk-robot.svg': berzerk,
     'missile-command.svg': missile_command,
     'chronicler-xi.svg': chronicler,

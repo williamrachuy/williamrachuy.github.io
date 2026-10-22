@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="102" height="102" viewBox="-6.35 -6.35 12.7 12.7">
+<title>Super Famicom buttons</title>
+<defs><radialGradient id="base" cx="0.42" cy="0.38" r="0.7"><stop offset="0" stop-color="#e9e6ee"/><stop offset="0.7" stop-color="#c9c4d2"/><stop offset="1" stop-color="#9d97a8"/></radialGradient><radialGradient id="b0" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="#a7b7ed"/><stop offset="0.45" stop-color="#3b5fd6"/><stop offset="1" stop-color="#203476"/></radialGradient><radialGradient id="b1" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="#ed9da0"/><stop offset="0.45" stop-color="#d8262c"/><stop offset="1" stop-color="#771518"/></radialGradient><radialGradient id="b2" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="#f9e495"/><stop offset="0.45" stop-color="#f2c414"/><stop offset="1" stop-color="#856c0b"/></radialGradient><radialGradient id="b3" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="#a1d3ad"/><stop offset="0.45" stop-color="#2f9e48"/><stop offset="1" stop-color="#1a5728"/></radialGradient></defs>
+<circle cx="0.25" cy="0.35" r="5.85" fill="#4a4652"/>
+<circle cx="0" cy="0" r="5.85" fill="url(#base)"/>
+<circle cx="0" cy="0" r="5.85" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="0.18"/>
+<circle cx="0.22" cy="-2.68" r="1.85" fill="#2a2630" opacity="0.55"/>
+<circle cx="0" cy="-3" r="1.85" fill="url(#b0)"/>
+<ellipse cx="-0.7" cy="-3.8" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 -0.7 -3.8)"/>
+<circle cx="3.22" cy="0.32" r="1.85" fill="#2a2630" opacity="0.55"/>
+<circle cx="3" cy="0" r="1.85" fill="url(#b1)"/>
+<ellipse cx="2.3" cy="-0.8" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 2.3 -0.8)"/>
+<circle cx="0.22" cy="3.32" r="1.85" fill="#2a2630" opacity="0.55"/>
+<circle cx="0" cy="3" r="1.85" fill="url(#b2)"/>
+<ellipse cx="-0.7" cy="2.2" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 -0.7 2.2)"/>
+<circle cx="-2.78" cy="0.32" r="1.85" fill="#2a2630" opacity="0.55"/>
+<circle cx="-3" cy="0" r="1.85" fill="url(#b3)"/>
+<ellipse cx="-3.7" cy="-0.8" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 -3.7 -0.8)"/>
+</svg>
