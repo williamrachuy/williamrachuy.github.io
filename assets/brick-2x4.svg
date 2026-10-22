@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="321" viewBox="-18.18 -14.90 50.21 40.10">
+<title>Red 2x4 brick</title>
+<defs><linearGradient id="stud" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#d42410"/><stop offset="0.55" stop-color="#b3170a"/><stop offset="1" stop-color="#7d1006"/></linearGradient></defs>
+<polygon points="0.00,-9.60 27.71,6.40 13.86,14.40 -13.86,-1.60" fill="#e5341f"/>
+<polygon points="-13.86,-1.60 13.86,14.40 13.86,24.00 -13.86,8.00" fill="#c91a09"/>
+<polygon points="27.71,6.40 13.86,14.40 13.86,24.00 27.71,16.00" fill="#8f1207"/>
+<path d="M-2.94,-7.30 L-2.94,-5.60 A2.94,1.70 0 0 0 2.94,-5.60 L2.94,-7.30 Z" fill="url(#stud)"/>
+<ellipse cx="0.00" cy="-7.30" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="-0.65" cy="-7.61" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M-9.87,-3.30 L-9.87,-1.60 A2.94,1.70 0 0 0 -3.99,-1.60 L-3.99,-3.30 Z" fill="url(#stud)"/>
+<ellipse cx="-6.93" cy="-3.30" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="-7.57" cy="-3.61" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M3.99,-3.30 L3.99,-1.60 A2.94,1.70 0 0 0 9.87,-1.60 L9.87,-3.30 Z" fill="url(#stud)"/>
+<ellipse cx="6.93" cy="-3.30" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="6.28" cy="-3.61" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M-2.94,0.70 L-2.94,2.40 A2.94,1.70 0 0 0 2.94,2.40 L2.94,0.70 Z" fill="url(#stud)"/>
+<ellipse cx="0.00" cy="0.70" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="-0.65" cy="0.39" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M10.92,0.70 L10.92,2.40 A2.94,1.70 0 0 0 16.80,2.40 L16.80,0.70 Z" fill="url(#stud)"/>
+<ellipse cx="13.86" cy="0.70" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="13.21" cy="0.39" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M3.99,4.70 L3.99,6.40 A2.94,1.70 0 0 0 9.87,6.40 L9.87,4.70 Z" fill="url(#stud)"/>
+<ellipse cx="6.93" cy="4.70" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="6.28" cy="4.39" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M17.85,4.70 L17.85,6.40 A2.94,1.70 0 0 0 23.72,6.40 L23.72,4.70 Z" fill="url(#stud)"/>
+<ellipse cx="20.78" cy="4.70" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="20.14" cy="4.39" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<path d="M10.92,8.70 L10.92,10.40 A2.94,1.70 0 0 0 16.80,10.40 L16.80,8.70 Z" fill="url(#stud)"/>
+<ellipse cx="13.86" cy="8.70" rx="2.94" ry="1.70" fill="#f04a33"/>
+<ellipse cx="13.21" cy="8.39" rx="1.23" ry="0.58" fill="#ff8a70" opacity="0.55"/>
+<line x1="-13.86" y1="-1.60" x2="13.86" y2="14.40" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<line x1="27.71" y1="6.40" x2="13.86" y2="14.40" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<line x1="13.86" y1="14.40" x2="13.86" y2="24.00" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<polygon points="0.00,-9.60 27.71,6.40 27.71,16.00 13.86,24.00 -13.86,8.00 -13.86,-1.60" fill="none" stroke="#4a0904" stroke-width="0.45" stroke-linejoin="round"/>
+</svg>
