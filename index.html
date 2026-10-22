@@ -176,13 +176,16 @@
       const hotParticles     = []; // subset of particles with heat≥0.3 — rebuilt each frame
       const liberatedNodes   = []; // VE nodes after full dissolution — persist forever
       const catOrbImg    = new Image(); catOrbImg.src = 'catorb.png';
-      const aboutQuestionImg = new Image(); aboutQuestionImg.src = 'about/question.svg?v=20260630.9';
+      const aboutQuestionImg = new Image(); aboutQuestionImg.src = 'assets/icons/about-question.svg';
       const cubeCobraCardbackImg = new Image(); cubeCobraCardbackImg.src = 'assets/cube-cobra-cardback.png';
       const gregEganCoverImg = new Image(); gregEganCoverImg.src = 'assets/greg-egan-cover.jpg';
       const gebCoverImg = new Image(); gebCoverImg.src = 'assets/geb-cover.jpg';
       const paleBlueDotCoverImg = new Image(); paleBlueDotCoverImg.src = 'assets/pale-blue-dot-cover.jpg';
-      const chroniclerGlyphImg = new Image(); chroniclerGlyphImg.src = 'chronicler/orb.svg';
-      const cassieSableImg = new Image(); cassieSableImg.src = 'cassie/orb.svg';
+      const chroniclerGlyphImg = new Image(); chroniclerGlyphImg.src = 'assets/icons/chronicler-xi.svg';
+      const cassieSableImg = new Image(); cassieSableImg.src = 'assets/icons/white-sable.svg';
+      const berzerkRobotImg = new Image(); berzerkRobotImg.src = 'assets/icons/berzerk-robot.svg';
+      const missileCommandImg = new Image(); missileCommandImg.src = 'assets/icons/missile-command.svg';
+      const blogQuillImg = new Image(); blogQuillImg.src = 'assets/icons/blog-quill.svg';
       const brickImg = new Image(); brickImg.src = 'assets/brick-2x4.svg';
       const pyramidImg = new Image(); pyramidImg.src = 'pyramid/icon.svg';
       const qrCodeImg = new Image(); qrCodeImg.src = 'assets/adividiardi-qr.png';
@@ -222,6 +225,82 @@
         const lift = (c, f) => Math.round(c + (255-c)*f).toString(16).padStart(2,'0');
         return `#${lift(r,0.62)}${lift(g,0.62)}${lift(b,0.62)}`;
       }
+
+      // Soft glow sprites stand in for canvas shadowBlur, which re-blurs every
+      // draw and made the page crawl once many particles were lit.
+      const spriteCache = new Map();
+      function glowSprite(color) {
+        const key = 'g' + color;
+        let c = spriteCache.get(key);
+        if (c) return c;
+        c = document.createElement('canvas');
+        c.width = c.height = 64;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        grad.addColorStop(0, 'rgba(255,255,255,1)');
+        grad.addColorStop(0.18, 'rgba(255,255,255,0.62)');
+        grad.addColorStop(0.45, 'rgba(255,255,255,0.20)');
+        grad.addColorStop(0.75, 'rgba(255,255,255,0.05)');
+        grad.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, 64, 64);
+        g.globalCompositeOperation = 'source-in';
+        g.fillStyle = color;
+        g.fillRect(0, 0, 64, 64);
+        spriteCache.set(key, c);
+        return c;
+      }
+      // A round, anti-aliased dot: particles drawn this way when the camera is close.
+      function discSprite(color) {
+        const key = 'd' + color;
+        let c = spriteCache.get(key);
+        if (c) return c;
+        c = document.createElement('canvas');
+        c.width = c.height = 32;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+        grad.addColorStop(0, color);
+        grad.addColorStop(0.72, color);
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grad;
+        g.beginPath(); g.arc(16, 16, 16, 0, Math.PI * 2); g.fill();
+        spriteCache.set(key, c);
+        return c;
+      }
+      // A disc of radius r with a soft halo out to r + blur, in one gradient fill.
+      function fillGlowDisc(ctx, x, y, r, blur, color, haloAlpha) {
+        if (blur <= 0.05 || haloAlpha <= 0.002) return;
+        const R = r + blur;
+        const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, R);
+        const a = ctx.globalAlpha;
+        ctx.globalAlpha = a * haloAlpha;
+        g.addColorStop(0, color);
+        g.addColorStop(clamp(r / R, 0, 1), color);
+        g.addColorStop(clamp((r + blur * 0.35) / R, 0, 1), color.length === 7 ? color + '55' : color);
+        g.addColorStop(1, color.length === 7 ? color + '00' : 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = a;
+      }
+      // Stroke a line as light: three ever-narrower faint halos (a stepped
+      // falloff, so the glow has no hard edge), then the bright core.
+      function strokeGlowLine(ctx, ax, ay, bx, by, width, blur, coreColor, glowColor, alpha) {
+        const a = ctx.globalAlpha;
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
+        ctx.strokeStyle = glowColor;
+        for (const [k, s] of GLOW_STEPS) {
+          ctx.globalAlpha = a * alpha * k;
+          ctx.lineWidth = width + blur * s;
+          ctx.stroke();
+        }
+        ctx.strokeStyle = coreColor;
+        ctx.globalAlpha = a * alpha;
+        ctx.lineWidth = width;
+        ctx.stroke();
+        ctx.globalAlpha = a;
+      }
+      const GLOW_STEPS = [[0.025, 1.5], [0.045, 0.85], [0.09, 0.35]];
+      let drawCamZ = 1; // camera zoom for the frame being drawn
 
       function desaturateColor(hex, amount) {
         const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
@@ -506,15 +585,15 @@
       function seedAppParticles() {
         appParticles.length = 0;
         const linkPages = [
-          { path: 'berzerk',          color: '#6b3420' }, // dark terracotta
-          { path: 'blog',            color: '#5c3333' }, // dark dusty rose
-          { path: 'about',            color: '#4a4258', overlayImg: aboutQuestionImg, speed: 0.96 }, // about orb
+          { path: 'berzerk',          color: '#6b3420', cardImg: berzerkRobotImg, r0: 8.8 }, // the Berzerk robot
+          { path: 'blog',            color: '#5c3333', cardImg: blogQuillImg, r0: 10.2 }, // quill and inkwell
+          { path: 'about',            color: '#4a4258', cardImg: aboutQuestionImg, r0: 8.4, speed: 0.96 }, // a solid question mark
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
-          { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 10.0, speed: 0.97 }, // QR code orb
-          { path: 'missile-command',  color: '#3a2410', speed: 1.02 }, // Missile Command arcade recreation
+          { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 7.4, speed: 0.97 }, // QR code orb
+          { path: 'missile-command',  color: '#3a2410', cardImg: missileCommandImg, r0: 9.0, speed: 1.02 }, // a city, an incoming warhead and a counter-burst
           { path: 'pyramid',          color: '#b8892e', cardImg: pyramidImg, r0: 7.8, speed: 0.99 }, // Pyramid — a golden 3D pyramid: courts, lanes & gems
-          { path: 'chronicler/',      color: '#34482f', overlayImg: chroniclerGlyphImg, speed: 0.97 }, // The Chronicler — ASCII ruined-library demo
-          { path: 'cassie/',          color: '#7d8c6a', overlayImg: cassieSableImg, speed: 0.95 }, // Cassie and the White Sable — interactive picture book
+          { path: 'chronicler/',      color: '#34482f', cardImg: chroniclerGlyphImg, r0: 7.2, speed: 0.97 }, // The Chronicler — Ξ, the temple's readable carving
+          { path: 'cassie/',          color: '#7d8c6a', cardImg: cassieSableImg, r0: 9.6, speed: 0.95 }, // Cassie and the White Sable — the sable herself
           { path: 'library/#schilds-ladder', color: '#39415f', cardImg: gregEganCoverImg, r0: 10.0, speed: 0.96 }, // Schild's Ladder library orb
           { path: 'battlebox/', color: '#665034', cardImg: cubeCobraCardbackImg, r0: 10.2, speed: 0.98 }, // Battlebox (the game server; invite-only) — the Magic cardback orb
           { path: 'library/#godel-escher-bach', color: '#5a4634', cardImg: gebCoverImg, r0: 10.0, speed: 0.95 }, // Godel, Escher, Bach library orb
@@ -814,6 +893,10 @@
         const activeAudioOrbs = appParticles.filter(ap => ap.audioKey && ap.playing);
         const soundOrbReach = activeAudioOrbs.length > 0 ? Math.hypot(stage.clientWidth, stage.clientHeight) * 0.09246 : 0;
         const soundOrbReach2 = soundOrbReach * soundOrbReach;
+        // Close up, square pixels read as squares: draw round dots instead, and
+        // keep halos from ballooning with the zoom.
+        const round = drawCamZ * Math.min(window.devicePixelRatio || 1, 1.5) > 2.2;
+        const haloShrink = Math.sqrt(Math.max(1, drawCamZ));
         for (const p of particles) {
           if (p.r < 0.05) continue; // fully evaporated
           if (viewCull && (p.x < viewCull.x0 || p.x > viewCull.x1 || p.y < viewCull.y0 || p.y > viewCull.y1)) continue;
@@ -823,16 +906,14 @@
           if (!baseVisible) continue;
           const pulse  = 0.5 + Math.sin(now * 0.0007 + p.tw) * 0.5;
           const twinkle = soundOrbTwinkleAt(p.x, p.y, p.tw, now, activeAudioOrbs, soundOrbReach, soundOrbReach2);
-          const twinkleLift = clamp(1 + twinkle * 0.85, 0.35, 2.2);
           const alpha  = ((p.alpha * 0.59) + local * (0.32 + pulse * 0.18)) * clamp(1 + twinkle * 0.72, 0.45, 2.1);
-          const color  = heatColor(p.heat);
+          const color  = heatColor(Math.round(p.heat * 16) / 16);
           const emission = Math.max(local, p.heat);
-          const luminous = clamp(emission * twinkleLift, 0, 2.1);
           const speed  = Math.hypot(p.vx, p.vy);
+          const half = p.vs * 0.5;
 
-          // Comet tail — only when moving + lit; no shadowBlur on trail segments (perf)
+          // Comet tail — only when moving + lit
           if (emission > 0.04 && speed > 0.002 && p.trail.length > 1) {
-            pctx.shadowBlur = 0;
             const tailLen = p.trail.length;
             for (let t = 0; t < tailLen; t++) {
               const frac   = (t + 1) / tailLen;
@@ -840,23 +921,34 @@
               const tAlpha = alpha * evap * emission * 0.55;
               if (tAlpha < 0.005) break;
               pctx.globalAlpha = tAlpha;
-              pctx.fillStyle   = color;
-              pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.vs, p.vs);
+              if (round) {
+                pctx.drawImage(discSprite(color), p.trail[t].x, p.trail[t].y, p.vs, p.vs);
+              } else {
+                pctx.fillStyle = color;
+                pctx.fillRect(Math.round(p.trail[t].x), Math.round(p.trail[t].y), p.vs, p.vs);
+              }
             }
           }
 
-          // Particle head — glow only on particles with significant illumination (perf)
-          const heatSq = luminous * luminous;
-          pctx.globalAlpha = Math.min(1, alpha + p.heat * 0.22);
+          // Particle head with a soft halo when it is well lit or twinkling
+          const headAlpha = Math.min(1, alpha + p.heat * 0.22);
           const baseBlur = emission > 0.32 ? (1 + emission * emission * 10) : 0;
           const twinkleBlur = twinkle > 0 ? baseBlur * (1 + twinkle * 1.25) + twinkle * 10 : baseBlur * clamp(1 + twinkle * 0.55, 0.35, 1);
-          pctx.shadowBlur  = Math.min(28, Math.max(0, twinkleBlur));
-          pctx.shadowColor = color;
-          pctx.fillStyle   = color;
-          pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
+          const blur = Math.min(28, Math.max(0, twinkleBlur)) / haloShrink;
+          if (blur > 0.6) {
+            const size = p.vs + blur * 2.2;
+            pctx.globalAlpha = headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85);
+            pctx.drawImage(glowSprite(color), p.x + half - size * 0.5, p.y + half - size * 0.5, size, size);
+          }
+          pctx.globalAlpha = headAlpha;
+          if (round) {
+            pctx.drawImage(discSprite(color), p.x, p.y, p.vs, p.vs);
+          } else {
+            pctx.fillStyle = color;
+            pctx.fillRect(Math.round(p.x), Math.round(p.y), p.vs, p.vs);
+          }
         }
         pctx.globalAlpha = 1;
-        pctx.shadowBlur  = 0;
       }
 
       // ─── Light system ───────────────────────────────────────────────────────
@@ -1697,6 +1789,54 @@
 
       // ────────────────────────────────────────────────────────────────────────
 
+      // Half width/height of a card or icon at rest, in world pixels.
+      function cardHalfExtents(ap) {
+        const hh = (ap.r0 || 8) * 1.375;
+        const img = ap.cardImg;
+        const aspect = img && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1;
+        return { hw: hh * aspect, hh };
+      }
+
+      // Texture for a card at a pixel scale: power-of-two levels, built once
+      // each. SVG icons are rendered straight at the level's size; photos are
+      // halved step by step so detail averages instead of aliasing.
+      function cardTexture(ap, pxScale) {
+        const level = clamp(Math.ceil(Math.log2(Math.max(pxScale, 0.5)) - 1e-6), -1, 5);
+        if (!ap._cardTex) ap._cardTex = {};
+        if (ap._cardTex[level]) return ap._cardTex[level];
+        const { hw, hh } = cardHalfExtents(ap);
+        const s = Math.pow(2, level);
+        const maxSide = 2048;
+        const k = Math.min(1, maxSide / Math.max(hw * 2 * s, hh * 2 * s));
+        const texW = Math.max(2, Math.round(hw * 2 * s * k));
+        const texH = Math.max(2, Math.round(hh * 2 * s * k));
+        const img = ap.cardImg;
+        const isSvg = /\.svg(\?|$)/i.test(img.src);
+        let src = img;
+        let sw = img.naturalWidth, sh = img.naturalHeight;
+        if (!isSvg) {
+          while (sw * 0.5 >= texW && sh * 0.5 >= texH) {
+            const half = document.createElement('canvas');
+            half.width = Math.round(sw * 0.5);
+            half.height = Math.round(sh * 0.5);
+            const hctx = half.getContext('2d');
+            hctx.imageSmoothingEnabled = true;
+            if ('imageSmoothingQuality' in hctx) hctx.imageSmoothingQuality = 'high';
+            hctx.drawImage(src, 0, 0, half.width, half.height);
+            src = half; sw = half.width; sh = half.height;
+          }
+        }
+        const tex = document.createElement('canvas');
+        tex.width = texW;
+        tex.height = texH;
+        const tctx = tex.getContext('2d');
+        tctx.imageSmoothingEnabled = true;
+        if ('imageSmoothingQuality' in tctx) tctx.imageSmoothingQuality = 'high';
+        tctx.drawImage(src, 0, 0, texW, texH);
+        ap._cardTex[level] = tex;
+        return tex;
+      }
+
       function drawAppParticles(now) {
         for (const ap of appParticles) {
           if (viewCull && ap !== focus.ap && (ap.x < viewCull.x0 - 60 || ap.x > viewCull.x1 + 60 || ap.y < viewCull.y0 - 60 || ap.y > viewCull.y1 + 60)) continue;
@@ -1732,65 +1872,23 @@
             pctx.shadowBlur  = 0;
             pctx.restore();
           } else if (ap.cardImg && ap.cardImg.complete && ap.cardImg.naturalWidth > 0) {
-            // Cube Cobra cardback link: manual mip texture, no outer glow.
-            // The original PNG is too detailed to resample directly to orb size
-            // every frame; breathing would make source pixels pop/crawl. Build a
-            // stable prefiltered texture near the orb's base size, then transform
-            // that cached texture continuously with the orb pulse.
+            // Card / icon: a cached texture prefiltered to (just above) the size
+            // it is shown at, so it is never minified more than 2x per frame.
+            // Sampling a much larger texture is what made covers and the QR
+            // code crawl with noise as they drifted.
             const baseR = Math.max(1, ap.r0 || rDraw || 1);
-            const aspect = ap.cardImg.naturalWidth / Math.max(1, ap.cardImg.naturalHeight);
-            const baseCardH = baseR * 2.75;
-            const baseCardW = baseCardH * aspect;
-            const texDpr = Math.min(window.devicePixelRatio || 1, 2);
-            const texScale = (focus.ap === ap && focus.state !== 'none') ? 8 : 4;
-            const texW = Math.max(2, Math.round(baseCardW * texScale * texDpr));
-            const texH = Math.max(2, Math.round(baseCardH * texScale * texDpr));
-
-            if (!ap._cardTexture || ap._cardTexture.w !== texW || ap._cardTexture.h !== texH) {
-              let srcCanvas = document.createElement('canvas');
-              srcCanvas.width = ap.cardImg.naturalWidth;
-              srcCanvas.height = ap.cardImg.naturalHeight;
-              let srcCtx = srcCanvas.getContext('2d');
-              srcCtx.imageSmoothingEnabled = true;
-              if ('imageSmoothingQuality' in srcCtx) srcCtx.imageSmoothingQuality = 'high';
-              srcCtx.drawImage(ap.cardImg, 0, 0);
-
-              // Progressive downsample reduces aliasing more reliably than one
-              // huge source->tiny destination draw.
-              while (srcCanvas.width * 0.5 > texW * 1.35 && srcCanvas.height * 0.5 > texH * 1.35) {
-                const half = document.createElement('canvas');
-                half.width = Math.max(texW, Math.round(srcCanvas.width * 0.5));
-                half.height = Math.max(texH, Math.round(srcCanvas.height * 0.5));
-                const halfCtx = half.getContext('2d');
-                halfCtx.imageSmoothingEnabled = true;
-                if ('imageSmoothingQuality' in halfCtx) halfCtx.imageSmoothingQuality = 'high';
-                halfCtx.drawImage(srcCanvas, 0, 0, half.width, half.height);
-                srcCanvas = half;
-                srcCtx = halfCtx;
-              }
-
-              const tex = document.createElement('canvas');
-              tex.width = texW;
-              tex.height = texH;
-              const texCtx = tex.getContext('2d');
-              texCtx.imageSmoothingEnabled = true;
-              if ('imageSmoothingQuality' in texCtx) texCtx.imageSmoothingQuality = 'high';
-              texCtx.drawImage(srcCanvas, 0, 0, texW, texH);
-
-              ap._cardTexture = { canvas: tex, w: texW, h: texH };
-            }
-
+            const { hw, hh } = cardHalfExtents(ap);
             const orbScale = rDraw / baseR;
+            const tex = cardTexture(ap, Math.min(window.devicePixelRatio || 1, 1.5) * drawCamZ * orbScale);
+            const focused = focus.ap === ap && focus.state !== 'none';
 
             pctx.save();
             pctx.translate(drawX, drawY);
             pctx.scale(orbScale, orbScale);
-            pctx.globalAlpha = clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
+            pctx.globalAlpha = focused ? 1 : clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
             pctx.imageSmoothingEnabled = true;
             if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'high';
-            pctx.filter = 'none';
-            pctx.shadowBlur = 0;
-            pctx.drawImage(ap._cardTexture.canvas, -baseCardW * 0.5, -baseCardH * 0.5, baseCardW, baseCardH);
+            pctx.drawImage(tex, -hw, -hh, hw * 2, hh * 2);
             pctx.restore();
           } else if (ap.emoji) {
             const strain = ap.voltaStrain || 0;
@@ -1817,17 +1915,16 @@
             const orbBrightnessScale = 1;
             const baseColor = strain > 0 ? desaturateColor(ap.color, Math.min(0.85, strain * 0.82)) : ap.color;
             const brightColor = strain > 0 ? desaturateColor(ap.brightColor, Math.min(0.90, strain * 0.88)) : ap.brightColor;
-            // Dark base — always present
+            // Dark base — always present, with a soft halo in the bright color
             pctx.globalAlpha = clamp(0.70 + t * 0.17 + local * 0.03 + (unstable ? vibration * 0.16 : 0), 0.2, 1) * orbBrightnessScale;
-            pctx.shadowBlur  = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0) + strain * 10);
-            pctx.shadowColor = brightColor;
+            const haloBlur = Math.max(0, 1 + t * 5 + local * 8 + (unstable ? vibration * 12 + 12 : 0) + strain * 10);
+            fillGlowDisc(pctx, strainedX, strainedY, strainedR, haloBlur / Math.sqrt(Math.max(1, drawCamZ)), brightColor, 0.55);
             pctx.fillStyle   = baseColor;
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
             pctx.fill();
             // Bright color overlay: expands with pulse
             pctx.globalAlpha = (t * (0.34 - strain * 0.12) + local * 0.23) * orbBrightnessScale;
-            pctx.shadowBlur  = 0;
             pctx.fillStyle   = brightColor;
             pctx.beginPath();
             pctx.arc(strainedX, strainedY, strainedR, 0, Math.PI * 2);
@@ -1844,11 +1941,7 @@
               pctx.translate(strainedX, strainedY);
               pctx.scale(orbScale, orbScale);
               pctx.globalAlpha = clamp(0.62 + t * 0.18 + local * 0.14, 0.52, 0.86) * orbBrightnessScale;
-              pctx.shadowBlur  = Math.max(1, 1.5 + t * 4 + local * 5);
-              pctx.shadowColor = brightColor;
-              pctx.filter = 'brightness(1.55)';
               pctx.drawImage(ap.overlayImg, -overlaySize * 0.5, -overlaySize * 0.5, overlaySize, overlaySize);
-              pctx.filter = 'none';
               pctx.restore();
             }
 
@@ -2164,10 +2257,11 @@
         // Structural integrity (for node glow boost — edges dim individually, nodes don't)
         const structIntegrity = VE_E.length > 0 ? 1 - ve.destroyedEdges.size / VE_E.length : 1;
 
-        // Edges — each dims individually based on its own energy
-        pctx.shadowBlur  = 8 + ex * 14 + elecAmp * 8 * stability;
-        pctx.shadowColor = '#40ccff';
-        pctx.strokeStyle = '#b8eeff';
+        // Edges — each dims individually based on its own energy. Drawn as
+        // light (halo + core, round ends) rather than a blurred flat stroke.
+        const haloShrink = Math.sqrt(Math.max(1, drawCamZ));
+        pctx.lineCap = 'round';
+        const edgeBlur = (8 + ex * 14 + elecAmp * 8 * stability) / haloShrink;
         for (let ei = 0; ei < VE_E.length; ei++) {
           if (ve.destroyedEdges.has(ei)) continue;
           const edgeE = ve.edgeEnergies ? ve.edgeEnergies[ei] : 1;
@@ -2175,70 +2269,59 @@
           const [i, j] = VE_E[ei];
           const a = proj[i], b = proj[j];
           const zf = 0.35 + 0.65 * (1 - (a.z + b.z) * 0.5) * 0.5;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability) * edgeE);
-          pctx.lineWidth   = (0.5 + zf * 0.6 + elecAmp * 0.8) * edgeE;
-          pctx.beginPath();
-          pctx.moveTo(a.px, a.py);
-          pctx.lineTo(b.px, b.py);
-          pctx.stroke();
+          pctx.globalAlpha = 1;
+          strokeGlowLine(pctx, a.px, a.py, b.px, b.py, (0.5 + zf * 0.6 + elecAmp * 0.8) * edgeE, edgeBlur * edgeE,
+            '#b8eeff', '#40ccff', Math.min(1, ve.alpha * zf * ((0.65 + ex * 0.23) + elecAmp * 0.20 * stability) * edgeE));
         }
 
         // Radial spokes — dim per vertex based on average energy of its edges
         const centerX = ve.centerNode ? ve.centerNode.x : ve.x;
         const centerY = ve.centerNode ? ve.centerNode.y : ve.y;
-        pctx.shadowBlur  = 4 + ex * 8 + elecAmp * 4 * stability;
-        pctx.shadowColor = '#40ccff';
-        pctx.strokeStyle = '#b8eeff';
+        const spokeBlur = (4 + ex * 8 + elecAmp * 4 * stability) / haloShrink;
         for (let i = 0; i < 12; i++) {
           const { px, py, z } = proj[i];
           const zf = 0.35 + 0.65 * (1 - z) * 0.5;
           const spokeE = ve.edgeEnergies
             ? VE_VERTEX_EDGES[i].reduce((s, ei) => s + ve.edgeEnergies[ei], 0) / (VE_VERTEX_EDGES[i].length || 1)
             : 1;
-          pctx.globalAlpha = Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability) * spokeE);
-          pctx.lineWidth   = 0.3 + zf * 0.28 + elecAmp * 0.35;
-          pctx.beginPath();
-          pctx.moveTo(px, py);
-          pctx.lineTo(centerX, centerY);
-          pctx.stroke();
+          pctx.globalAlpha = 1;
+          strokeGlowLine(pctx, px, py, centerX, centerY, 0.3 + zf * 0.28 + elecAmp * 0.35, spokeBlur,
+            '#b8eeff', '#40ccff', Math.min(1, ve.alpha * zf * ((0.28 + ex * 0.17) + elecAmp * 0.12 * stability) * spokeE));
         }
-        pctx.shadowBlur = 0;
 
         // Center node — once liberated it's a liberatedNode; only draw while VE lives
         if (!ve.liberated) {
           const centerBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.55) : 1;
           pctx.globalAlpha = Math.min(1, ve.alpha * 0.92 * centerBoost);
-          pctx.shadowBlur  = (14 + ex * 14) * centerBoost;
-          pctx.shadowColor = '#80e8ff';
+          const centerScale = (ve.centerNode && ve.centerNode.drawScale) || 1.0;
+          const cr = 2.5 * centerBoost * centerScale;
+          fillGlowDisc(pctx, centerX, centerY, cr, (14 + ex * 14) * centerBoost / haloShrink, '#80e8ff', 0.30);
           pctx.fillStyle   = '#e8f8ff';
           pctx.beginPath();
-          const centerScale = (ve.centerNode && ve.centerNode.drawScale) || 1.0;
-          pctx.arc(centerX, centerY, 2.5 * centerBoost * centerScale, 0, Math.PI * 2);
+          pctx.arc(centerX, centerY, cr, 0, Math.PI * 2);
           pctx.fill();
         }
-        pctx.shadowBlur = 0;
 
         // Vertices — drawn here while VE lives; once liberated, liberatedNodes handles them
         if (!ve.liberated) {
           const infBoost = volta.state === 'infecting' ? (1 + (1 - structIntegrity) * 0.6) : 1;
-          pctx.shadowBlur  = (11 + ex * 10) * infBoost;
-          pctx.shadowColor = '#70e0ff';
-          pctx.fillStyle   = '#e0f8ff';
+          const nodeBlur = (11 + ex * 10) * infBoost / haloShrink;
           for (let i = 0; i < 12; i++) {
             const { px, py, z } = proj[i];
             const zf = 0.4 + 0.6 * (1 - z) * 0.5;
             const nodeBoost = volta.state === 'infecting' && ve.vertNodes
               ? (1 + ve.vertNodes[i].freedom * 0.5) : 1;
             pctx.globalAlpha = Math.min(1, ve.alpha * zf * nodeBoost);
-            pctx.beginPath();
             const nScale = (ve.vertNodes && ve.vertNodes[i].drawScale) || 1.0;
+            fillGlowDisc(pctx, px, py, 2.3 * nScale, nodeBlur, '#70e0ff', 0.22);
+            pctx.fillStyle = '#e0f8ff';
+            pctx.beginPath();
             pctx.arc(px, py, 2.3 * nScale, 0, Math.PI * 2);
             pctx.fill();
           }
         }
 
 
-        pctx.shadowBlur  = 0;
         pctx.globalAlpha = 1;
         pctx.restore();
       }
@@ -2377,12 +2460,11 @@
       function drawLiberatedNodes() {
         if (liberatedNodes.length === 0) return;
         pctx.save();
-        pctx.shadowColor = '#70e0ff';
-        pctx.fillStyle   = '#d8f4ff';
         for (const n of liberatedNodes) {
           if (n.alpha < 0.01 || (n.r || 0) < 0.05) continue;
-          pctx.shadowBlur  = 9 * n.alpha;
           pctx.globalAlpha = n.alpha * 0.88;
+          fillGlowDisc(pctx, n.x, n.y, n.r || 2.3, 9 * n.alpha / Math.sqrt(Math.max(1, drawCamZ)), '#70e0ff', 0.25);
+          pctx.fillStyle = '#d8f4ff';
           pctx.beginPath();
           pctx.arc(n.x, n.y, n.r || 2.3, 0, Math.PI * 2);
           pctx.fill();
@@ -2744,15 +2826,9 @@
           const bright  = energy * energy;
           const a       = masterAlpha * life * flicker * (0.78 + bright * 0.22);
           if (a < 0.02) continue;
-          pctx.globalAlpha = Math.min(1, a * 1.8);
-          // Live blur only: it is redrawn with this arc and disappears with it.
-          pctx.shadowBlur  = 8 + bright * 26;
-          pctx.shadowColor = '#d0eeff';
-          pctx.lineWidth   = 0.4 + bright * 1.2;
-          pctx.beginPath();
-          pctx.moveTo(arc.a.x, arc.a.y);
-          pctx.lineTo(arc.b.x, arc.b.y);
-          pctx.stroke();
+          pctx.globalAlpha = 1;
+          strokeGlowLine(pctx, arc.a.x, arc.a.y, arc.b.x, arc.b.y, 0.4 + bright * 1.2,
+            (8 + bright * 26) / Math.sqrt(Math.max(1, drawCamZ)), '#ffffff', '#d0eeff', Math.min(1, a * 1.8));
         }
         pctx.restore();
       }
@@ -2809,7 +2885,7 @@
       const PAGE_INFO = {
         'berzerk': 'Berzerk', 'blog': 'Blog', 'about': 'About', 'meowdividiardi': 'Meow',
         'qr': 'QR', 'missile-command': 'Missile Command', 'pyramid': 'Pyramid',
-        'chronicler/': 'The Chronicler', 'library/#schilds-ladder': "Schild's Ladder",
+        'chronicler/': 'The Chronicler', 'cassie/': 'Cassie', 'library/#schilds-ladder': "Schild's Ladder",
         'library/#godel-escher-bach': 'Gödel, Escher, Bach', 'library/#pale-blue-dot': 'Pale Blue Dot',
         'battlebox/': 'Battlebox',
       };
@@ -2820,30 +2896,52 @@
         return { title: ap.title || PAGE_INFO[ap.path] || ap.path || '', action: 'Open' };
       }
 
+      // Visible half width/height of an orb or icon at rest (world pixels),
+      // including breathing, so the zoomed object can be framed exactly.
+      function apHalfExtents(ap) {
+        if (ap.cardImg) return cardHalfExtents(ap);
+        const r = ap.r0 * (ap.orbImg ? 1.5 * 1.22 * 1.1 : ap.audioKey ? 1.34 : 1.22);
+        return { hw: r, hh: r };
+      }
+
+      // Frame the focused object and its panel side by side (wide screens) or
+      // stacked (narrow ones), sized so the panel never covers the object.
       function focusGeometry(ap) {
         const w = stage.clientWidth, h = stage.clientHeight;
         const narrow = w < 700;
-        focus.R  = narrow ? Math.min(w * 0.30, h * 0.20) : Math.min(w, h) * 0.20;
-        focus.tx = narrow ? w * 0.5 : w * 0.40;
-        focus.ty = narrow ? h * 0.30 : h * 0.5;
-        // Wide cards (the brick) zoom a little less so they clear the panel.
-        const cardAspect = ap.cardImg && ap.cardImg.naturalHeight ? ap.cardImg.naturalWidth / ap.cardImg.naturalHeight : 1;
-        focus.baseR = ap.r0 * (ap.orbImg ? 1.9 : ap.cardImg ? (cardAspect > 1 ? Math.max(1.45, 2.75 * cardAspect) : 1.45) : 1.3);
-        focus.zMax = Math.max(2, focus.R / focus.baseR);
+        const margin = 16, gap = narrow ? 22 : 36;
+        const pw = Math.min(300, w - margin * 2);
+        orbPanel.style.width = pw + 'px';
+        const ph = orbPanel.offsetHeight || 110;
+        const { hw, hh } = apHalfExtents(ap);
+        // Target size: the larger half-extent fills about a fifth of the screen.
+        let z = (narrow ? Math.min(w * 0.30, h * 0.20) : Math.min(w, h) * 0.20) / Math.max(hw, hh);
+        if (narrow) {
+          z = Math.min(z, (w - margin * 2) / (2 * hw), (h - margin * 2 - gap - ph) / (2 * hh));
+          const total = 2 * hh * z + gap + ph;
+          const top = Math.max(margin, (h - total) * 0.42);
+          focus.tx = w * 0.5;
+          focus.ty = top + hh * z;
+          focus.panelX = (w - pw) / 2;
+          focus.panelY = top + 2 * hh * z + gap;
+        } else {
+          z = Math.min(z, (w - margin * 2 - gap - pw) / (2 * hw), (h - margin * 2) / (2 * hh));
+          const total = 2 * hw * z + gap + pw;
+          const left = Math.max(margin, (w - total) * 0.5);
+          focus.tx = left + hw * z;
+          focus.ty = h * 0.5;
+          focus.panelX = left + 2 * hw * z + gap;
+          focus.panelY = Math.max(margin, h * 0.5 - ph * 0.5);
+        }
+        focus.hw = hw; focus.hh = hh;
+        focus.R = Math.max(hw, hh) * z;
+        focus.baseR = Math.max(hw, hh);
+        focus.zMax = Math.max(1.5, z);
       }
 
       function layoutPanel() {
-        const w = stage.clientWidth, h = stage.clientHeight;
-        const pw = Math.min(300, w - 32);
-        orbPanel.style.width = pw + 'px';
-        if (w < 700) {
-          orbPanel.style.left = ((w - pw) / 2) + 'px';
-          orbPanel.style.top  = Math.min(h - 40, focus.ty + focus.R * 0.55) + 'px';
-        } else {
-          const left = Math.min(focus.tx + focus.R * 0.55, w - pw - 16);
-          orbPanel.style.left = left + 'px';
-          orbPanel.style.top  = Math.max(16, h * 0.5 - orbPanel.offsetHeight * 0.5) + 'px';
-        }
+        orbPanel.style.left = focus.panelX + 'px';
+        orbPanel.style.top  = focus.panelY + 'px';
       }
 
       function buildPanel(ap) {
@@ -2880,8 +2978,8 @@
       function beginFocus(ap) {
         if (focus.state !== 'none') return;
         focus.ap = ap;
-        focusGeometry(ap);
         buildPanel(ap);
+        focusGeometry(ap);
         layoutPanel();
         focus.state = 'in';
         focus.p = 0;
@@ -2931,6 +3029,7 @@
           focus.p = Math.min(1, focus.p + dt / FOCUS_IN_MS);
           if (focus.p >= 1) {
             focus.state = 'open';
+            focusGeometry(focus.ap);
             layoutPanel();
             orbPanel.classList.add('open');
           }
@@ -2977,7 +3076,8 @@
         const rect = stage.getBoundingClientRect();
         const sx = cam.cx + (focus.ap.x - cam.fx) * cam.z;
         const sy = cam.cy + (focus.ap.y - cam.fy) * cam.z;
-        return Math.hypot(clientX - rect.left - sx, clientY - rect.top - sy) <= focus.baseR * cam.z * 1.15;
+        return Math.abs(clientX - rect.left - sx) <= focus.hw * cam.z * 1.1
+            && Math.abs(clientY - rect.top - sy) <= focus.hh * cam.z * 1.1;
       }
 
       function frame(now) {
@@ -3000,6 +3100,7 @@
         updateFocus(Math.min(100, now - (focusLastNow || now)));
         focusLastNow = now;
         const cam = focusCamera();
+        drawCamZ = cam ? cam.z : 1;
         if (cam) {
           const hw = stage.clientWidth * 0.5 / cam.z + 40, hh = stage.clientHeight * 0.5 / cam.z + 40;
           viewCull = { x0: cam.fx - hw, x1: cam.fx + hw, y0: cam.fy - hh, y1: cam.fy + hh };
