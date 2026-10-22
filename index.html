@@ -977,6 +977,7 @@
       const CA_CELL = 4 / 3;              // px (2 device px at 1.5x); an ordinary orb spans about 16 cells
       const CA_STEP_MS = 48;              // one generation
       const CA_WARMUP_MS = 1500;          // VE presence before dust can crystallise
+      const CA_SEED_RATE = 0.4;           // per second, a particle at the VE centre in full presence
       const CA_TOUCH = 3;                 // cells: how near a live cell a free particle must come to be pulled in
       const CA_FIELD_RISE_MS = 8000;      // time factor: full after this long with the VE
       const CA_FIELD_FADE_MS = 3000;      // time factor: half-life once the VE is gone
@@ -1121,19 +1122,13 @@
         p.caCool = now + CA_RECAPTURE_MS;
       }
 
-      // Dust near the VE centre crystallises: each particle takes its cell and
-      // lights some of its neighbours (its energy), giving Life a soup to work on.
-      function caNucleate(cx, cy, R, now) {
-        const R2 = R * R;
-        for (const p of particles) {
-          if (p.bound || p.r < 0.05 || (p.caCool || 0) > now) continue;
-          const dx = p.x - cx, dy = p.y - cy;
-          if (dx * dx + dy * dy > R2) continue;
-          const i = caCellOf(p.x + p.vs * 0.5, p.y + p.vs * 0.5);
-          if (!caCapture(p, i)) continue;
-          for (let oy = -3; oy <= 3; oy++) for (let ox = -3; ox <= 3; ox++) {
-            if ((ox || oy) && ox * ox + oy * oy <= 10 && Math.random() < 0.36) caLight(i + oy * ca.gw + ox);
-          }
+      // A free particle crystallises: it takes its cell and lights some of its
+      // neighbours (its energy), giving Life a little soup to work on.
+      function caSeed(p) {
+        const i = caCellOf(p.x + p.vs * 0.5, p.y + p.vs * 0.5);
+        if (!caCapture(p, i)) return;
+        for (let oy = -3; oy <= 3; oy++) for (let ox = -3; ox <= 3; ox++) {
+          if ((ox || oy) && ox * ox + oy * oy <= 10 && Math.random() < 0.36) caLight(i + oy * ca.gw + ox);
         }
       }
 
@@ -1234,8 +1229,10 @@
           ca.T *= Math.pow(0.5, dt / CA_FIELD_FADE_MS);
         }
 
-        // Crystallisation: more likely the longer the VE has stayed and the
-        // more dust has gathered near its centre.
+        // Crystallisation. Every free particle has its own chance, moment to
+        // moment, of crystallising: likelier the nearer it is to the VE centre,
+        // the longer the VE has stayed, and the more dust has gathered there.
+        // Particles convert one at a time, never all at once.
         if (veOn && ca.veMs > CA_WARMUP_MS) {
           const R = Math.max(32, ve.scaleCurrent * 1.25), R2 = R * R;
           let count = 0;
@@ -1245,9 +1242,17 @@
             if (dx * dx + dy * dy < R2) count++;
           }
           const presence = clamp((ca.veMs - CA_WARMUP_MS) / 5000, 0, 1);
-          const density = clamp((count - 1) / 6, 0, 1);
-          const ratePerSec = 1.4 * presence * density;
-          if (ratePerSec > 0 && Math.random() < 1 - Math.exp(-ratePerSec * dt / 1000)) caNucleate(ve.x, ve.y, R, now);
+          const density = clamp(count / 6, 0.2, 1.5);
+          const base = CA_SEED_RATE * presence * density * dt / 1000;
+          if (base > 0) {
+            const reach2 = R2 * 9; // beyond 3R the chance is negligible
+            for (const p of particles) {
+              if (p.bound || p.r < 0.05 || (p.caCool || 0) > now) continue;
+              const dx = p.x - ve.x, dy = p.y - ve.y, d2 = dx * dx + dy * dy;
+              if (d2 > reach2) continue;
+              if (Math.random() < 1 - Math.exp(-base * Math.exp(-0.5 * d2 / R2))) caSeed(p);
+            }
+          }
         }
 
         if (!ca.live) { ca.acc = 0; ca.scars.length = 0; return; }
