@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="402" height="321" viewBox="-18.176 -14.9 50.209 40.1">
+<title>Red 2x4 brick</title>
+<defs><linearGradient id="stud_red" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#d42410"/><stop offset="0.55" stop-color="#b3170a"/><stop offset="1" stop-color="#7d1006"/></linearGradient><linearGradient id="stud_yellow" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#f0c830"/><stop offset="0.55" stop-color="#d6ad1c"/><stop offset="1" stop-color="#9a7a0c"/></linearGradient><linearGradient id="stud_blue" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#2a66b4"/><stop offset="0.55" stop-color="#1c4f94"/><stop offset="1" stop-color="#10305c"/></linearGradient></defs>
+<polygon points="0,-9.6 27.713,6.4 13.856,14.4 -13.856,-1.6" fill="#e5341f"/>
+<polygon points="-13.856,-1.6 13.856,14.4 13.856,24 -13.856,8" fill="#c91a09"/>
+<polygon points="27.713,6.4 13.856,14.4 13.856,24 27.713,16" fill="#8f1207"/>
+<path d="M-2.939,-7.3 L-2.939,-5.6 A2.939,1.697 0 0 0 2.939,-5.6 L2.939,-7.3 Z" fill="url(#stud_red)"/>
+<ellipse cx="0" cy="-7.3" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="-0.647" cy="-7.605" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M-9.868,-3.3 L-9.868,-1.6 A2.939,1.697 0 0 0 -3.989,-1.6 L-3.989,-3.3 Z" fill="url(#stud_red)"/>
+<ellipse cx="-6.928" cy="-3.3" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="-7.575" cy="-3.605" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M3.989,-3.3 L3.989,-1.6 A2.939,1.697 0 0 0 9.868,-1.6 L9.868,-3.3 Z" fill="url(#stud_red)"/>
+<ellipse cx="6.928" cy="-3.3" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="6.282" cy="-3.605" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M-2.939,0.7 L-2.939,2.4 A2.939,1.697 0 0 0 2.939,2.4 L2.939,0.7 Z" fill="url(#stud_red)"/>
+<ellipse cx="0" cy="0.7" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="-0.647" cy="0.395" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M10.917,0.7 L10.917,2.4 A2.939,1.697 0 0 0 16.796,2.4 L16.796,0.7 Z" fill="url(#stud_red)"/>
+<ellipse cx="13.856" cy="0.7" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="13.21" cy="0.395" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M3.989,4.7 L3.989,6.4 A2.939,1.697 0 0 0 9.868,6.4 L9.868,4.7 Z" fill="url(#stud_red)"/>
+<ellipse cx="6.928" cy="4.7" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="6.282" cy="4.395" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M17.845,4.7 L17.845,6.4 A2.939,1.697 0 0 0 23.724,6.4 L23.724,4.7 Z" fill="url(#stud_red)"/>
+<ellipse cx="20.785" cy="4.7" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="20.138" cy="4.395" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<path d="M10.917,8.7 L10.917,10.4 A2.939,1.697 0 0 0 16.796,10.4 L16.796,8.7 Z" fill="url(#stud_red)"/>
+<ellipse cx="13.856" cy="8.7" rx="2.939" ry="1.697" fill="#f04a33"/>
+<ellipse cx="13.21" cy="8.395" rx="1.235" ry="0.577" fill="#ff8a70" opacity="0.55"/>
+<line x1="-13.856" y1="-1.6" x2="13.856" y2="14.4" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<line x1="27.713" y1="6.4" x2="13.856" y2="14.4" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<line x1="13.856" y1="14.4" x2="13.856" y2="24" stroke="#ff7a5c" stroke-opacity="0.45" stroke-width="0.35"/>
+<polygon points="0,-9.6 27.713,6.4 27.713,16 13.856,24 -13.856,8 -13.856,-1.6" fill="none" stroke="#4a0904" stroke-width="0.45" stroke-linejoin="round"/>
+</svg>

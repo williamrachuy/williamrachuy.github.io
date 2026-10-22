@@ -131,6 +131,7 @@
     <aside id="orb-panel" role="dialog" aria-live="polite"><div class="op-kicker"></div><h2 class="op-title"></h2><p class="op-desc"></p><div class="op-actions"></div><p class="op-note"></p></aside>
     <div id="wordmark-wrap"><div id="wordmark" aria-label="ADIVIDIARDI"></div></div>
   </main>
+  <script src="assets/icons/anim/manifest.js"></script>
   <script>
     (() => {
       const TITLE   = 'ADIVIDIARDI';
@@ -190,8 +191,8 @@
       const blogQuillImg = new Image(); blogQuillImg.src = 'assets/icons/blog-quill.svg';
       const comboButtonsImg = new Image(); comboButtonsImg.src = 'assets/icons/combo-buttons.svg';
       const resetSigilImg = new Image(); resetSigilImg.src = 'assets/reset-sigil.png';
-      const brickImg = new Image(); brickImg.src = 'assets/brick-2x4.svg';
-      const pyramidImg = new Image(); pyramidImg.src = 'pyramid/icon.svg';
+      const brickImg = new Image(); brickImg.src = 'assets/icons/brick-2x4.svg';
+      const pyramidImg = new Image(); pyramidImg.src = 'assets/icons/pyramid.svg';
       const qrCodeImg = new Image(); qrCodeImg.src = 'assets/adividiardi-qr.png';
       const eveningHorseImg = new Image(); eveningHorseImg.src = 'assets/evening-horse-head.png';
       const catMeowAudio = new Audio('meow.mp3');
@@ -599,21 +600,21 @@
       function seedAppParticles() {
         appParticles.length = 0;
         const linkPages = [
-          { path: 'berzerk',          color: '#6b3420', cardImg: berzerkRobotImg, r0: 8.8 }, // the Berzerk robot
-          { path: 'blog',            color: '#5c3333', cardImg: blogQuillImg, r0: 10.2 }, // quill and inkwell
+          { path: 'berzerk',          color: '#6b3420', cardImg: berzerkRobotImg, r0: 8.8, anim: 'berzerk-robot' }, // the Berzerk robot
+          { path: 'blog',            color: '#5c3333', cardImg: blogQuillImg, r0: 10.2, anim: 'blog-quill' }, // quill and inkwell
           { path: 'about',            color: '#4a4258', cardImg: aboutQuestionImg, r0: 8.4, speed: 0.96 }, // a solid question mark
           { path: 'meowdividiardi',   color: '#772277', orbImg: catOrbImg }, // cat orb
           { path: 'qr',               color: '#d9d9d9', cardImg: qrCodeImg, r0: 7.4, speed: 0.97 }, // QR code orb
-          { path: 'missile-command',  color: '#3a2410', cardImg: missileCommandImg, r0: 9.0, speed: 1.02 }, // a city, an incoming warhead and a counter-burst
-          { path: 'combo/',           color: '#8a84a0', cardImg: comboButtonsImg, r0: 8.4, speed: 0.98 }, // Combo — the Super Famicom face buttons
-          { path: 'pyramid',          color: '#b8892e', cardImg: pyramidImg, r0: 7.8, speed: 0.99 }, // Pyramid — a golden 3D pyramid: courts, lanes & gems
-          { path: 'chronicler/',      color: '#34482f', cardImg: chroniclerGlyphImg, r0: 7.2, speed: 0.97 }, // The Chronicler — Ξ, the temple's readable carving
-          { path: 'cassie/',          color: '#7d8c6a', cardImg: cassieSableImg, r0: 9.6, speed: 0.95 }, // Cassie and the White Sable — the sable herself
+          { path: 'missile-command',  color: '#3a2410', cardImg: missileCommandImg, r0: 9.0, anim: 'missile-command', speed: 1.02 }, // a city, an incoming warhead and a counter-burst
+          { path: 'combo/',           color: '#8a84a0', cardImg: comboButtonsImg, r0: 8.4, anim: 'combo-buttons', speed: 0.98 }, // Combo — the Super Famicom face buttons
+          { path: 'pyramid',          color: '#b8892e', cardImg: pyramidImg, r0: 7.8, anim: 'pyramid', speed: 0.99 }, // Pyramid — a golden 3D pyramid: courts, lanes & gems
+          { path: 'chronicler/',      color: '#34482f', cardImg: chroniclerGlyphImg, r0: 7.2, anim: 'chronicler-xi', speed: 0.97 }, // The Chronicler — Ξ, the temple's readable carving
+          { path: 'cassie/',          color: '#7d8c6a', cardImg: cassieSableImg, r0: 9.6, anim: 'white-sable', speed: 0.95 }, // Cassie and the White Sable — the sable herself
           { path: 'library/#schilds-ladder', color: '#39415f', cardImg: gregEganCoverImg, r0: 10.0, speed: 0.96 }, // Schild's Ladder library orb
           { path: 'battlebox/', color: '#665034', cardImg: cubeCobraCardbackImg, r0: 10.2, speed: 0.98 }, // Battlebox (the game server; invite-only) — the Magic cardback orb
           { path: 'library/#godel-escher-bach', color: '#5a4634', cardImg: gebCoverImg, r0: 10.0, speed: 0.95 }, // Godel, Escher, Bach library orb
           { path: 'library/#pale-blue-dot', color: '#4e5c6b', cardImg: paleBlueDotCoverImg, r0: 10.0, speed: 0.95 }, // Pale Blue Dot library orb
-          { url: 'https://brickset.com/sets/ownedby-AlphaDraconis', title: 'Brickset', color: '#c91a09', cardImg: brickImg, r0: 8.6, speed: 0.97 }, // red 2x4 brick: my LEGO collection on Brickset
+          { url: 'https://brickset.com/sets/ownedby-AlphaDraconis', title: 'Brickset', color: '#c91a09', cardImg: brickImg, r0: 8.6, anim: 'brick-2x4', speed: 0.97 }, // red 2x4 brick: my LEGO collection on Brickset
           // Reset: the triangle sigil. r0 is the radius of its white circle (30%
           // larger than the old orb); sigil gives the image's size and that circle's centre
           // and radius in image pixels, and how far the art reaches from it.
@@ -2508,6 +2509,51 @@
         return tex;
       }
 
+      // ─── Icon animations ───────────────────────────────────────────────────
+      // An icon with an animation (window.ICON_ANIMS, from make_icons.py) plays
+      // it while it is zoomed into. Its sheet (one loop of frames in a grid) is
+      // loaded the first time, rasterised once at the zoomed size after the
+      // zoom-in has finished, played at the icon's own frame rate, and freed
+      // when the camera climbs back out.
+      function iconAnim(ap) {
+        return ap.anim && window.ICON_ANIMS ? window.ICON_ANIMS[ap.anim] || null : null;
+      }
+
+      function animSheet(ap, now) {
+        const A = iconAnim(ap);
+        if (!A) return null;
+        let s = ap._anim;
+        if (!s) {
+          s = ap._anim = { A, img: new Image(), canvas: null, fw: 0, fh: 0, t0: 0 };
+          s.img.src = A.src;
+        }
+        if (!s.canvas && focus.state === 'open' && s.img.complete && s.img.naturalWidth > 0) {
+          const { hw, hh } = cardHalfExtents(ap);
+          const [l, tp, r, b] = A.ext;
+          const H = 2 * hh * (1 + tp + b);
+          const scale = Math.min(window.devicePixelRatio || 1, 1.5) * focus.zMax;
+          let fh = Math.min(420, Math.ceil(H * scale));
+          // keep the whole sheet under ~12M pixels
+          fh = Math.min(fh, Math.floor(Math.sqrt(12e6 / (A.cols * A.rows * A.aspect))));
+          const fw = Math.max(2, Math.round(fh * A.aspect));
+          const c = document.createElement('canvas');
+          c.width = A.cols * fw; c.height = A.rows * fh;
+          const cx = c.getContext('2d');
+          cx.imageSmoothingEnabled = true;
+          cx.drawImage(s.img, 0, 0, c.width, c.height);
+          s.canvas = c; s.fw = fw; s.fh = fh; s.t0 = now;
+          if (window.createImageBitmap) createImageBitmap(c).then(bm => { if (ap._anim === s) s.canvas = bm; }).catch(() => {});
+        }
+        return s.canvas ? s : null;
+      }
+
+      function releaseAnim(ap) {
+        if (ap && ap._anim) {
+          if (ap._anim.canvas && ap._anim.canvas.close) ap._anim.canvas.close();
+          ap._anim = null;
+        }
+      }
+
       function drawAppParticles(now) {
         for (const ap of appParticles) {
           if (viewCull && ap !== focus.ap && (ap.x < viewCull.x0 - 60 || ap.x > viewCull.x1 + 60 || ap.y < viewCull.y0 - 60 || ap.y > viewCull.y1 + 60)) continue;
@@ -2559,7 +2605,13 @@
             pctx.globalAlpha = focused ? 1 : clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
             pctx.imageSmoothingEnabled = true;
             if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'low'; // texture is already within 2x of screen size
-            if (ap.sigil) {
+            const anim = focused && focus.p > 0.5 ? animSheet(ap, now) : null;
+            if (anim) {
+              const A = anim.A, [l, tp, r, b] = A.ext;
+              const k = Math.floor((now - anim.t0) * A.fps / 1000) % A.n;
+              pctx.drawImage(anim.canvas, (k % A.cols) * anim.fw, Math.floor(k / A.cols) * anim.fh, anim.fw, anim.fh,
+                -hw - l * 2 * hw, -hh - tp * 2 * hh, 2 * hw * (1 + l + r), 2 * hh * (1 + tp + b));
+            } else if (ap.sigil) {
               // Turns about the centre of its white circle (see updateSigilSpin).
               const s = ap.r0 / ap.sigil.r;
               pctx.rotate(ap.spinAngle);
@@ -3622,7 +3674,12 @@
           const reach = ap.sigil.reach * ap.r0 / ap.sigil.r;
           return { hw: reach, hh: reach };
         }
-        if (ap.cardImg) return cardHalfExtents(ap);
+        if (ap.cardImg) {
+          const e = cardHalfExtents(ap), A = iconAnim(ap);
+          if (!A) return e;
+          // room for the animation (e.g. bricks dropping in from above)
+          return { hw: e.hw * (1 + 2 * Math.max(A.ext[0], A.ext[2])), hh: e.hh * (1 + 2 * Math.max(A.ext[1], A.ext[3])) };
+        }
         const r = ap.r0 * (ap.orbImg ? 1.5 * 1.22 * 1.1 : ap.audioKey ? 1.34 : 1.22);
         return { hw: r, hh: r };
       }
@@ -3759,6 +3816,7 @@
         } else if (focus.state === 'out') {
           focus.p = Math.max(0, focus.p - dt / FOCUS_OUT_MS);
           if (focus.p <= 0 && !focus.resetting) {
+            releaseAnim(focus.ap);
             focus.state = 'none'; focus.ap = null;
             wordmarkWrap.style.opacity = '';
           }

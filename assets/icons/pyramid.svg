@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="128" viewBox="-1.474 -1.248 2.948 1.883">
+<title>Golden pyramid</title>
+<defs><linearGradient id="g1" gradientUnits="userSpaceOnUse" x1="0" y1="-1.188" x2="0.927" y2="0.152"><stop offset="0" stop-color="#e2aa44"/><stop offset="0.32" stop-color="#bb7d20"/><stop offset="0.72" stop-color="#7f4d0a"/><stop offset="1" stop-color="#4f2d04"/></linearGradient><linearGradient id="g2" gradientUnits="userSpaceOnUse" x1="0" y1="-1.188" x2="-0.375" y2="0.377"><stop offset="0" stop-color="#fff5d0"/><stop offset="0.32" stop-color="#f7d466"/><stop offset="0.72" stop-color="#dca12b"/><stop offset="1" stop-color="#a76912"/></linearGradient></defs>
+<polygon points="0,-1.188 1.302,-0.225 0.553,0.529" fill="url(#g1)"/>
+<line x1="1.041" y1="-0.417" x2="0.442" y2="0.186" stroke="rgba(36,18,0,0.258)" stroke-width="0.011"/>
+<line x1="0.781" y1="-0.61" x2="0.332" y2="-0.157" stroke="rgba(36,18,0,0.258)" stroke-width="0.011"/>
+<line x1="0.521" y1="-0.802" x2="0.221" y2="-0.501" stroke="rgba(36,18,0,0.258)" stroke-width="0.011"/>
+<line x1="0.26" y1="-0.995" x2="0.111" y2="-0.844" stroke="rgba(36,18,0,0.258)" stroke-width="0.011"/>
+<polygon points="0,-1.188 0.169,-1.062 0.072,-0.964" fill="#f3cc74"/>
+<polygon points="0,-1.188 0.553,0.529 -1.302,0.225" fill="url(#g2)"/>
+<line x1="0.442" y1="0.186" x2="-1.041" y2="-0.058" stroke="rgba(138,83,8,0.221)" stroke-width="0.011"/>
+<line x1="0.332" y1="-0.157" x2="-0.781" y2="-0.34" stroke="rgba(138,83,8,0.221)" stroke-width="0.011"/>
+<line x1="0.221" y1="-0.501" x2="-0.521" y2="-0.623" stroke="rgba(138,83,8,0.221)" stroke-width="0.011"/>
+<line x1="0.111" y1="-0.844" x2="-0.26" y2="-0.905" stroke="rgba(138,83,8,0.221)" stroke-width="0.011"/>
+<polygon points="0,-1.188 0.072,-0.964 -0.169,-1.004" fill="#fffae4"/>
+<line x1="0" y1="-1.188" x2="0.553" y2="0.529" stroke="#fff6d6" stroke-width="0.016" stroke-linecap="round" opacity="0.85"/>
+<circle cx="0" cy="-1.158" r="0.026" fill="#ffffff" opacity="0.9"/>
+</svg>

@@ -1,17 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="58" height="91" viewBox="-0.35 -1.07 7.22 11.42">
+<svg xmlns="http://www.w3.org/2000/svg" width="58" height="91" viewBox="-0.35 -1.07 7.217 11.42">
 <title>Question mark</title>
 <defs><path id="q" transform="matrix(0.007220,0,0,-0.007220,-0.8953,9.7906)" d="M445 -29Q375 -29 327.5 19.0Q280 67 280 137Q280 207 327.5 255.0Q375 303 445 303Q514 303 562.5 255.0Q611 207 611 137Q611 68 563.0 19.5Q515 -29 445 -29ZM491 390H388L331 703L426 728Q530 755 571.5 819.5Q613 884 613 994Q613 1131 565.0 1192.5Q517 1254 405 1254Q321 1254 256 1212L213 1018H124V1313Q290 1356 448 1356Q902 1356 902 1001Q902 856 824.5 756.0Q747 656 605 616L518 592Z"/><linearGradient id="qface" x1="0" y1="0" x2="0.7" y2="1"><stop offset="0" stop-color="#fffdf6"/><stop offset="0.55" stop-color="#efe6d6"/><stop offset="1" stop-color="#cbbfd9"/></linearGradient></defs>
 <use href="#q" transform="translate(0.9,-0.72)" fill="#5d576d"/>
-<use href="#q" transform="translate(0.82,-0.66)" fill="#615b72"/>
+<use href="#q" transform="translate(0.825,-0.66)" fill="#615b72"/>
 <use href="#q" transform="translate(0.75,-0.6)" fill="#655f77"/>
-<use href="#q" transform="translate(0.67,-0.54)" fill="#69637c"/>
+<use href="#q" transform="translate(0.675,-0.54)" fill="#69637c"/>
 <use href="#q" transform="translate(0.6,-0.48)" fill="#6e6781"/>
-<use href="#q" transform="translate(0.53,-0.42)" fill="#726b86"/>
+<use href="#q" transform="translate(0.525,-0.42)" fill="#726b86"/>
 <use href="#q" transform="translate(0.45,-0.36)" fill="#766f8b"/>
-<use href="#q" transform="translate(0.38,-0.3)" fill="#7a7290"/>
+<use href="#q" transform="translate(0.375,-0.3)" fill="#7a7290"/>
 <use href="#q" transform="translate(0.3,-0.24)" fill="#7e7694"/>
-<use href="#q" transform="translate(0.22,-0.18)" fill="#827a99"/>
+<use href="#q" transform="translate(0.225,-0.18)" fill="#827a99"/>
 <use href="#q" transform="translate(0.15,-0.12)" fill="#877e9e"/>
-<use href="#q" transform="translate(0.07,-0.06)" fill="#8b82a3"/>
+<use href="#q" transform="translate(0.075,-0.06)" fill="#8b82a3"/>
 <use href="#q" fill="url(#qface)"/><use href="#q" fill="none" stroke="#fffaf0" stroke-opacity="0.55" stroke-width="0.05"/>
 </svg>
