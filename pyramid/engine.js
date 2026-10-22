@@ -192,6 +192,7 @@
       state.lanes[l.id] = { paired: lanePaired(state, l), gem: false, spawnTurn: 0 };
     });
     SEATS.forEach(function (seat) { state.flush[seat] = { on: isFlush(state, seat), spawnTurn: 0 }; });
+    state.apex = { on: apexMatched(state), gem: false, spawnTurn: 0 };
     return state;
   }
 
@@ -218,6 +219,27 @@
     var t = trump(royalAt(state, lane.a), royalAt(state, lane.b));
     if (t > 0) return lane.a.seat;
     if (t < 0) return lane.b.seat;
+    return null;
+  }
+
+  // The apex: one gem node shared by all four courts. It forms a gem when
+  // all four centre subjects match (the six centre lanes all paired, so the
+  // four apexes are one point). The two peaks are pivots only; they make no
+  // gems of their own.
+  function apexMatched(state) {
+    return LANES.every(function (l) { return l.kind === 'corner' || lanePaired(state, l); });
+  }
+
+  // Who controls the apex: the seat whose centre royal trumps all three
+  // others. Usually nobody, until someone rearranges their royals.
+  function apexController(state) {
+    for (var i = 0; i < SEATS.length; i++) {
+      var me = state.courts[SEATS[i]].royals.C, all = true;
+      for (var j = 0; j < SEATS.length; j++) {
+        if (i !== j && trump(me, state.courts[SEATS[j]].royals.C) <= 0) { all = false; break; }
+      }
+      if (all) return SEATS[i];
+    }
     return null;
   }
 
@@ -333,8 +355,8 @@
       if (now && !st.paired) {
         events.push({ type: 'pair', lane: l.id });
         // One gem per lane per turn, so a pair can't be farmed by breaking
-        // and re-making it within a turn.
-        if (!st.gem && st.spawnTurn !== s.turn) {
+        // and re-making it within a turn. Peaks make no gems: the apex does.
+        if (l.kind !== 'peak' && !st.gem && st.spawnTurn !== s.turn) {
           st.gem = true;
           st.spawnTurn = s.turn;
           events.push({ type: 'spawn', lane: l.id });
@@ -344,6 +366,14 @@
       }
       st.paired = now;
     });
+
+    var ax = s.apex, axNow = apexMatched(s);
+    if (axNow && !ax.on && !ax.gem && ax.spawnTurn !== s.turn) {
+      ax.gem = true;
+      ax.spawnTurn = s.turn;
+      events.push({ type: 'spawn', lane: 'apex' });
+    }
+    ax.on = axNow;
 
     SEATS.forEach(function (seat) {
       var f = s.flush[seat];
@@ -379,6 +409,14 @@
       s.players[c].gems += 1;
       events.push({ type: 'collect', lane: l.id, seat: c });
     });
+    if (s.apex.gem) {
+      var a = apexController(s);
+      if (a) {
+        s.apex.gem = false;
+        s.players[a].gems += 1;
+        events.push({ type: 'collect', lane: 'apex', seat: a });
+      }
+    }
   }
 
   function endGame(s, reason, events) {
@@ -552,6 +590,8 @@
     lanesOf: lanesOf,
     isFlush: isFlush,
     pairedCount: pairedCount,
+    apexMatched: apexMatched,
+    apexController: apexController,
     canAfford: canAfford,
     legalActions: legalActions,
     whyIllegal: whyIllegal,

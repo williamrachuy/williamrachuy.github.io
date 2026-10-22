@@ -26,12 +26,13 @@
 
   const CW = 9, CH = 12.6;          // card size in units
   const ROT = { S: 0, E: -90, N: 180, W: 90 };
-  const CENTRE = 15;                // centre subjects: a cross around the apex
-  const CORNER = 17;                // base-corner nodes sit at (50 +- 17, 50 +- 17)
-  const CORNER_GAP = 3.9;           // from a corner card's top edge to its node
-  const ROYALS = 40;                // royal rows, as before
-  const COURT_NODE = 28.5;          // each court's gem node, between its subjects and royals
-  const RIDGE = CENTRE * 0.66;
+  const CENTRE = 13.5;              // centre subjects: a cross around the apex
+  const CORNER = 20;                // corner pairs meet head to head at (50 +- 20, 50 +- 20)
+  const CORNER_GAP = 0.9;           // half the gap between the two heads
+  const CORNER_OUT = 8.2;           // the corner gem node sits this far outside them, on the diagonal
+  const ROYALS = 41;                // royal rows
+  const COURT_NODE = 27;            // each court's gem node, between its subjects and royals
+  const RIDGE = 9;                  // ridge gem nodes, between neighbouring centre cards
 
   function rv(x, y, deg) {
     const t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
@@ -52,8 +53,8 @@
     // The centre subject: on the cross, square to its court.
     const [cx, cy] = seatPt(seat, 0, CENTRE);
     SLOT[seat].subjects.C = { x: cx, y: cy, rot: ROT[seat] };
-    // The left and right subjects lean 45 degrees, top toward the corner node
-    // they share with the neighbouring court.
+    // The left and right subjects lean 45 degrees, head to head with the
+    // neighbouring court's card across the diagonal (the pyramid's edge).
     [['R', 1, 45], ['L', -1, -45]].forEach(([pos, sx, lean]) => {
       const node = seatPt(seat, sx * CORNER, CORNER);
       const k = CH / 2 + CORNER_GAP;
@@ -62,18 +63,23 @@
     });
     COURT_AT[seat] = seatPt(seat, 0, COURT_NODE);
   });
-  // Each corner is one court's R end and the next court's L end.
-  NODE_AT.cSE = seatPt('S', CORNER, CORNER);
-  NODE_AT.cEN = seatPt('E', CORNER, CORNER);
-  NODE_AT.cNW = seatPt('N', CORNER, CORNER);
-  NODE_AT.cWS = seatPt('W', CORNER, CORNER);
+  // Each corner is one court's R end and the next court's L end; its gem
+  // node sits just outside the pair, on the diagonal.
+  const CO = CORNER + CORNER_OUT / Math.SQRT2;
+  NODE_AT.cSE = seatPt('S', CO, CO);
+  NODE_AT.cEN = seatPt('E', CO, CO);
+  NODE_AT.cNW = seatPt('N', CO, CO);
+  NODE_AT.cWS = seatPt('W', CO, CO);
   NODE_AT.rSE = seatPt('S', RIDGE, RIDGE);
   NODE_AT.rEN = seatPt('E', RIDGE, RIDGE);
   NODE_AT.rNW = seatPt('N', RIDGE, RIDGE);
   NODE_AT.rWS = seatPt('W', RIDGE, RIDGE);
-  NODE_AT.pSN = [50, 45.5];
-  NODE_AT.pEW = [54.5, 50];
+  // The apex: one gem node at the centre. The two peaks are pivots only,
+  // drawn as a cross beneath it (these points just anchor their tooltips).
   const APEX = [50, 50];
+  NODE_AT.apex = APEX;
+  NODE_AT.pSN = [50, 46];
+  NODE_AT.pEW = [54, 50];
 
   const BADGE_AT = [2.5, 105.5], BADGE_W = 24;
   const DECK_AT = [90, 90];
@@ -84,7 +90,7 @@
   const LANE_NAME = {
     cSE: 'south-east corner', cEN: 'north-east corner', cNW: 'north-west corner', cWS: 'south-west corner',
     rSE: 'South–East ridge', rEN: 'East–North ridge', rNW: 'North–West ridge', rWS: 'West–South ridge',
-    pSN: 'South–North peak', pEW: 'East–West peak'
+    pSN: 'South–North peak', pEW: 'East–West peak', apex: 'apex'
   };
   const SEAT_WORD = { S: 'South', E: 'East', N: 'North', W: 'West' };
   const POS_WORD = { L: 'left', C: 'centre', R: 'right' };
@@ -247,10 +253,10 @@
     built = true;
     const layer = $('layer');
 
-    // Lane nodes.
+    // Lane nodes. The peaks are arms of a cross under the apex.
     E.LANES.forEach((l) => {
       const b = document.createElement('button');
-      b.className = 'node';
+      b.className = l.kind === 'peak' ? 'arm ' + (l.id === 'pSN' ? 'arm-v' : 'arm-h') : 'node';
       b.type = 'button';
       b.dataset.lane = l.id;
       b.innerHTML = '<span class="ring"></span><span class="kind"></span>';
@@ -263,6 +269,19 @@
       layer.appendChild(b);
       app.nodes[l.id] = b;
     });
+
+    // The apex gem node: all four centre cards matching forms its gem.
+    const ax = document.createElement('button');
+    ax.className = 'node apex-node';
+    ax.type = 'button';
+    ax.innerHTML = '<span class="ring"></span><span class="kind"></span>';
+    ax.setAttribute('aria-label', 'The apex');
+    ax.addEventListener('click', (e) => { e.stopPropagation(); showApexTip(); });
+    ax.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showApexTip(); });
+    ax.addEventListener('pointerleave', () => hideTip());
+    ax.addEventListener('blur', () => hideTip());
+    layer.appendChild(ax);
+    app.apexNode = ax;
 
     // Court gem nodes: a flush (three of the court's own suit) forms a gem here.
     SEATS.forEach((seat) => {
@@ -354,7 +373,8 @@
     const u = stage.clientWidth / 100;
     app.u = u;
     stage.style.setProperty('--u', u + 'px');
-    E.LANES.forEach((l) => placeAt(app.nodes[l.id], NODE_AT[l.id]));
+    E.LANES.forEach((l) => placeAt(app.nodes[l.id], l.kind === 'peak' ? APEX : NODE_AT[l.id]));
+    placeAt(app.apexNode, APEX);
     SEATS.forEach((seat) => placeAt(app.courtNodes[seat], COURT_AT[seat]));
     placeAt(app.badge, BADGE_AT);
     app.badge.style.width = (BADGE_W * u) + 'px';
@@ -513,12 +533,14 @@
     return g;
   }
 
-  // Gems resting on stalemated lanes.
+  function gemAt(s, id) { return id === 'apex' ? s.apex.gem : s.lanes[id].gem; }
+
+  // Gems resting on stalemated lanes (and on the apex, until someone rules it).
   function renderGems(s) {
-    E.LANES.forEach((l) => {
-      const has = s.lanes[l.id].gem;
-      if (has && !app.gems[l.id]) app.gems[l.id] = makeRestingGem(NODE_AT[l.id]);
-      if (!has && app.gems[l.id]) { app.gems[l.id].remove(); delete app.gems[l.id]; }
+    E.LANES.map((l) => l.id).concat('apex').forEach((id) => {
+      const has = gemAt(s, id);
+      if (has && !app.gems[id]) app.gems[id] = makeRestingGem(NODE_AT[id]);
+      if (!has && app.gems[id]) { app.gems[id].remove(); delete app.gems[id]; }
     });
   }
 
@@ -528,12 +550,15 @@
       const n = app.nodes[l.id];
       const st = s.lanes[l.id];
       n.classList.toggle('paired', st.paired);
-      n.querySelector('.kind').textContent = st.paired ? String(laneValue(s, l)) : '';
+      if (l.kind !== 'peak') n.querySelector('.kind').textContent = st.paired ? String(laneValue(s, l)) : '';
       const open = mine && E.laneAccess(s, l.id, 'S').ok;
       n.classList.toggle('is-open', open);
       n.classList.toggle('is-dim', mine && !open);
       n.classList.toggle('is-armed', app.tollArm === l.id);
     });
+    const axOn = E.apexMatched(s);
+    app.apexNode.classList.toggle('paired', axOn);
+    app.apexNode.querySelector('.kind').textContent = axOn ? String(E.vertexValue(s, 'S', 'C')) : '';
     SEATS.forEach((seat) => {
       const n = app.courtNodes[seat];
       n.classList.toggle('flush', E.isFlush(s, seat));
@@ -692,6 +717,21 @@
       [sc.subjects[end.pos].id, sc.royals[end.pos].id].forEach((cid) => { const el = app.cards.get(cid); if (el) el.classList.add('is-lit'); });
     });
     app.nodes[id].classList.add('is-hot');
+  }
+
+  function showApexTip() {
+    const s = app.state;
+    if (!s) return;
+    const on = E.apexMatched(s), ctrl = E.apexController(s);
+    let html = '<div class="tip-head">The apex</div>' +
+      'Centres: ' + SEATS.map((seat) => cardHTML(s.courts[seat].subjects.C)).join(' ') + ' · ' +
+      (on ? '<b>all four match (' + E.vertexValue(s, 'S', 'C') + ')</b>' : 'not all matching') + '<br>' +
+      'When all four centre cards match, a gem forms here. It goes to whoever’s centre royal beats all three others: ' +
+      (ctrl ? whoB(ctrl) + ' (' + cardHTML(s.courts[ctrl].royals.C) + ').' : '<b>nobody</b> right now.');
+    if (s.apex.gem) html += '<br>A gem waits here.';
+    html += '<br>Swap opposite centres with the cross beneath it.';
+    placeTip(APEX, html);
+    SEATS.forEach((seat) => { const el = app.cards.get(s.courts[seat].subjects.C.id); if (el) el.classList.add('is-lit'); });
   }
 
   function showCourtTip(seat) {
@@ -926,7 +966,7 @@
         }));
         setTimeout(() => toast((e.seat === 'S' ? 'Your court' : who(e.seat) + '’s court') + ' is a flush: +1 gem', true), delay);
       }
-      if (e.type === 'spawn' && after.lanes[e.lane].gem) {
+      if (e.type === 'spawn' && gemAt(after, e.lane)) {
         // A gem on a stalemated lane forms and stays.
         const delay = step();
         jobs.push(new Promise((res) => setTimeout(() => {
@@ -1061,10 +1101,12 @@
         break;
       }
       case 'spawn':
-        if (s.lanes[e.lane].gem) log('The ' + LANE_NAME[e.lane] + ' pairs. Stalemate: its gem waits.', null);
+        if (e.lane === 'apex') log('All four centres match: a gem forms at the apex.' + (gemAt(s, 'apex') ? ' No centre royal rules it yet, so it waits.' : ''), null);
+        else if (gemAt(s, e.lane)) log('The ' + LANE_NAME[e.lane] + ' pairs. Stalemate: its gem waits.', null);
         break;
       case 'collect': {
-        const fresh = before.lanes[e.lane].gem === false;
+        const fresh = gemAt(before, e.lane) === false;
+        if (e.lane === 'apex') { log(W(e.seat) + ' ' + verb(e.seat, 'take', 'takes') + ' the apex gem.', e.seat); break; }
         log(fresh ? 'The ' + LANE_NAME[e.lane] + ' pairs: ' + W(e.seat) + ' ' + verb(e.seat, 'collect', 'collects') + ' a gem.'
           : W(e.seat) + ' ' + verb(e.seat, 'take', 'takes') + ' the gem waiting on the ' + LANE_NAME[e.lane] + '.', e.seat);
         break;

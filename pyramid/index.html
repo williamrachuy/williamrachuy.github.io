@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=3">
+<link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -124,7 +124,7 @@
         <ul>
           <li><b>Four base corners</b>: your right subject and East's left subject, and so on round the table.</li>
           <li><b>Four ridges</b>: your centre subject and each neighbour's centre subject.</li>
-          <li><b>Two peaks</b>: your centre and North's centre, and East's centre and West's.</li>
+          <li><b>Two peaks</b>: your centre and North's centre, and East's centre and West's. These are the cross beneath the apex. You can swap across them, but they make no gems.</li>
         </ul>
         <p>A lane is <b>paired</b> when its two subjects match in rank. Suits don't matter. Aces are wild: an ace pairs with anything, and two aces make one.</p>
       </section>
@@ -151,7 +151,7 @@
       </section>
       <section>
         <h3>Gems</h3>
-        <p>When a lane becomes paired, a gem forms on it (at most once per lane per turn). Whoever controls that lane collects it automatically, at once. A gem on a stalemated lane waits there until someone controls it. A court that holds three of its own suit (a flush) earns its owner a gem.</p>
+        <p>When a base corner or a ridge becomes paired, a gem forms on it (at most once per lane per turn). When <b>all four centre cards match</b>, one gem forms at <b>the apex</b>; it goes to whoever's centre royal beats all three others, and waits until someone's does. Whoever controls that lane collects it automatically, at once. A gem on a stalemated lane waits there until someone controls it. A court that holds three of its own suit (a flush) earns its owner a gem.</p>
       </section>
       <section>
         <h3>The end</h3>
@@ -180,10 +180,10 @@
 <div class="fx" id="fx" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="engine.js?v=3"></script>
-<script src="ai.js?v=3"></script>
-<script src="viz.js?v=3"></script>
-<script src="audio.js?v=3"></script>
-<script src="ui.js?v=3"></script>
+<script src="engine.js?v=4"></script>
+<script src="ai.js?v=4"></script>
+<script src="viz.js?v=4"></script>
+<script src="audio.js?v=4"></script>
+<script src="ui.js?v=4"></script>
 </body>
 </html>
