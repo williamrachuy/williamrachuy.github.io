@@ -957,19 +957,43 @@
       // Particles are never created or destroyed. A captured particle sits in a
       // live cell and rides the pattern: when its cell dies it moves into a
       // neighbour being born (so gliders carry their dust), else into a live
-      // neighbour, else it is let go. A free particle touched by a live cell is
-      // pulled in. Cells born without a particle are only light. When the VE
-      // leaves, births stop, empty cells die off, and each captured particle
-      // holds its cell until it is released, with a half-life.
+      // neighbour, else it is let go. A free particle touched by a live cell may
+      // be pulled in. Cells born without a particle are only light.
+      //
+      // Everything is governed by the VE's field at each cell: a radial falloff
+      // around the VE (Gaussian, scaled to its size) times a time factor that
+      // rises the longer the VE stays and fades once it is gone. Where the
+      // field is strong, capture is likely, births happen and both half-lives
+      // (empty cells, held particles) are long; out toward the edge, capture is
+      // rare and everything decays fast. So the crystal grows from the VE and
+      // frays away from it instead of spreading forever. When the VE leaves,
+      // births stop and held particles keep their cells until released.
       const CA_CELL = 3;                  // px; an ordinary orb spans about 8×8 cells
       const CA_STEP_MS = 95;              // one generation
       const CA_WARMUP_MS = 2500;          // VE presence before dust can crystallise
-      const CA_CELL_HALFLIFE = 1400;      // ms, empty live cells once the VE is gone
-      const CA_PARTICLE_HALFLIFE = 4500;  // ms, captured particles once the VE is gone
+      const CA_FIELD_RISE_MS = 8000;      // time factor: full after this long with the VE
+      const CA_FIELD_FADE_MS = 3000;      // time factor: half-life once the VE is gone
+      const CA_CELL_LIFE = [250, 16000];  // empty-cell half-life (ms): no field … full field
+      const CA_DUST_LIFE = [500, 30000];  // held-particle half-life (ms): no field … full field
       const CA_RECAPTURE_MS = 1500;       // a released particle is left alone this long
       const CA_MAX_LIVE = 9000;
       const ca = { gw: 0, gh: 0, cur: null, nxt: null, owner: null, live: 0,
-                   x0: 0, y0: 0, x1: -1, y1: -1, acc: 0, veMs: 0, veGoneMs: 0 };
+                   x0: 0, y0: 0, x1: -1, y1: -1, acc: 0, veMs: 0, veGoneMs: 0,
+                   T: 0, fx: 0, fy: 0, Rf: 60 };
+
+      // The VE's hold on cell i, 0..1: time factor × radial falloff.
+      function caField(i) {
+        const dx = (i % ca.gw + 0.5) * CA_CELL - ca.fx;
+        const dy = (((i / ca.gw) | 0) + 0.5) * CA_CELL - ca.fy;
+        return ca.T * Math.exp(-0.5 * (dx * dx + dy * dy) / (ca.Rf * ca.Rf));
+      }
+
+      // Chance per generation of decaying, for a half-life that runs from
+      // life[0] with no field to life[1] in a full one.
+      function caDecay(s, life) {
+        const h = life[0] + (life[1] - life[0]) * s * Math.sqrt(s);
+        return 1 - Math.pow(0.5, CA_STEP_MS / h);
+      }
 
       function caReset() {
         ca.gw = Math.ceil(stage.clientWidth / CA_CELL) + 2;
@@ -978,7 +1002,7 @@
         ca.cur = new Uint8Array(n);
         ca.nxt = new Uint8Array(n);
         ca.owner = new Array(n).fill(null);
-        ca.live = 0; ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; ca.acc = 0;
+        ca.live = 0; ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; ca.acc = 0; ca.T = 0;
       }
 
       function caGrow(gx, gy) {
@@ -1044,7 +1068,8 @@
           for (let x = x0; x <= x1; x++, i++) {
             const n = cur[i - gw - 1] + cur[i - gw] + cur[i - gw + 1] + cur[i - 1] + cur[i + 1]
                     + cur[i + gw - 1] + cur[i + gw] + cur[i + gw + 1];
-            nxt[i] = cur[i] ? (n === 2 || n === 3 ? 1 : 0) : (births && n === 3 ? 1 : 0);
+            nxt[i] = cur[i] ? (n === 2 || n === 3 ? 1 : 0)
+                   : (births && n === 3 && Math.random() < 2.5 * caField(i) ? 1 : 0);
           }
         }
         // Captured particles ride the pattern.
@@ -1065,18 +1090,16 @@
             else caRelease(p, now);
           }
         }
-        // With the VE gone, empty cells die off and particles drift out.
-        if (!veOn) {
-          const dieCell = 1 - Math.pow(0.5, CA_STEP_MS / CA_CELL_HALFLIFE);
-          const freeP = 1 - Math.pow(0.5, CA_STEP_MS / CA_PARTICLE_HALFLIFE);
-          for (let y = y0; y <= y1; y++) {
-            let i = y * gw + x0;
-            for (let x = x0; x <= x1; x++, i++) {
-              if (!nxt[i]) continue;
-              const p = owner[i];
-              if (p) { if (Math.random() < freeP) { owner[i] = null; nxt[i] = 0; caRelease(p, now); } }
-              else if (Math.random() < dieCell) nxt[i] = 0;
-            }
+        // Decay, by the field at each cell: empty cells die off and held
+        // particles drift out, slowly near the VE and fast away from it.
+        for (let y = y0; y <= y1; y++) {
+          let i = y * gw + x0;
+          for (let x = x0; x <= x1; x++, i++) {
+            if (!nxt[i]) continue;
+            const s = caField(i);
+            const p = owner[i];
+            if (p) { if (Math.random() < caDecay(s, CA_DUST_LIFE)) { owner[i] = null; nxt[i] = 0; caRelease(p, now); } }
+            else if (Math.random() < caDecay(s, CA_CELL_LIFE)) nxt[i] = 0;
           }
         }
         // Commit, and re-measure the live area.
@@ -1093,7 +1116,8 @@
         if (live) { ca.x0 = bx0; ca.x1 = bx1; ca.y0 = by0; ca.y1 = by1; } else { ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; }
       }
 
-      // Free particles touched by a live cell are pulled in.
+      // A free particle touched by a live cell is pulled in, with a chance per
+      // generation equal to the field where it is.
       function caCaptureTouching(now) {
         if (!ca.live) return;
         const { gw, cur } = ca;
@@ -1106,7 +1130,9 @@
           const i = caCellOf(px, py);
           if (i < 0) continue;
           if (cur[i] || cur[i - gw - 1] || cur[i - gw] || cur[i - gw + 1] || cur[i - 1] || cur[i + 1]
-              || cur[i + gw - 1] || cur[i + gw] || cur[i + gw + 1]) caCapture(p, i);
+              || cur[i + gw - 1] || cur[i + gw] || cur[i + gw + 1]) {
+            if (Math.random() < caField(i)) caCapture(p, i);
+          }
         }
       }
 
@@ -1116,6 +1142,15 @@
           && (ve.active || ve.voltaHeld || ve.alphaP > 0.16 || ve.scaleP > 0.16);
         if (veOn) { ca.veMs += dt; ca.veGoneMs = 0; }
         else { ca.veGoneMs += dt; if (ca.veGoneMs > 1200) ca.veMs = 0; }
+        // The field follows the VE while it lives and stays where it was last,
+        // fading, once it is gone.
+        if (veOn) {
+          ca.fx = ve.x; ca.fy = ve.y;
+          ca.Rf = Math.max(40, ve.scaleCurrent * 1.8);
+          ca.T = Math.max(ca.T, clamp(ca.veMs / CA_FIELD_RISE_MS, 0, 1));
+        } else {
+          ca.T *= Math.pow(0.5, dt / CA_FIELD_FADE_MS);
+        }
 
         // Crystallisation: more likely the longer the VE has stayed and the
         // more dust has gathered near its centre.
