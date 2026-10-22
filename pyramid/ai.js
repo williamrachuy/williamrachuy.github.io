@@ -1,405 +1,167 @@
-// PYR.AI — heuristic AI opponents for Pyramid.
-// Plain script (no ES modules). Attaches to window.PYR.AI.
-// Depends only on the PYR.Engine contract described in the spec (section 4).
-
-(function () {
+/*
+ * PYRAMID: AI houses.
+ *
+ * Plain script; attaches to PYR.AI. Uses only the public engine. Each AI
+ * scores the position after every legal action (and, on the harder levels,
+ * the best follow-up), adds a little noise by difficulty, and plays the best
+ * action until nothing beats ending its turn. It never peeks at the deck: a
+ * draw is valued by a flat estimate, not by the card it would turn up.
+ */
+(function (root) {
   'use strict';
 
-  window.PYR = window.PYR || {};
+  var PYR = root.PYR = root.PYR || {};
+  var E = PYR.Engine;
 
-  // ---------------------------------------------------------------------
-  // Personality archetypes.
-  //
-  // Bounds are a FLOOR on competence: every roll, at any archetype bias and
-  // any jitter, stays inside these ranges, which are themselves chosen so
-  // that even the extremes still play sanely (see chooseAction below, which
-  // always claims free gems and never passes while a +EV action exists).
-  // ---------------------------------------------------------------------
-  var BOUNDS = {
-    greed: [0.8, 1.3],
-    builder: [0.4, 1.2],
-    disruptor: [0.2, 1.0],
-    tempo: [0.1, 0.6],
-    patience: [0.2, 0.8]
+  var LEVELS = {
+    easy:   { noise: 6.0, depth: 1, label: 'Easy',   sub: 'loose and generous' },
+    normal: { noise: 2.5, depth: 1, label: 'Normal', sub: 'plays its own game' },
+    hard:   { noise: 0.8, depth: 2, label: 'Hard',   sub: 'plans two moves' },
+    master: { noise: 0.1, depth: 2, label: 'Master', sub: 'misses very little' }
   };
 
-  var DIFF = {
-    easy: { noise: 0.35, lookahead: 1 },
-    normal: { noise: 0.18, lookahead: 1 },
-    hard: { noise: 0.08, lookahead: 2 },
-    master: { noise: 0.02, lookahead: 2 }
-  };
-
-  // Three distinct archetype centers, spread well apart inside BOUNDS, so
-  // that jitter (kept small relative to the spread) can never make two
-  // archetypes collide. Rotated deterministically across successive calls
-  // (see makePersonality) so that any 3 consecutive AI personalities
-  // created for one game are guaranteed to be 3 different archetypes.
+  // Personalities weight the same evaluation differently.
+  //   gem:    value of a gem in hand (score)
+  //   deny:   how much rivals' gems hurt
+  //   build:  appetite for pairing lanes (scaled by whether it is winning)
+  //   rule:   value of controlling lanes
+  //   thrift: extra reluctance to spend banked gems
   var ARCHETYPES = [
-    {
-      name: 'the Architect',
-      flavor: 'builds toward the peak',
-      bias: { greed: 0.9, builder: 1.15, disruptor: 0.35, tempo: 0.25, patience: 0.65 }
-    },
-    {
-      name: 'the Hoarder',
-      flavor: 'claims every gem within reach',
-      bias: { greed: 1.25, builder: 0.55, disruptor: 0.3, tempo: 0.5, patience: 0.3 }
-    },
-    {
-      name: 'the Saboteur',
-      flavor: 'denies rivals their gems',
-      bias: { greed: 0.95, builder: 0.5, disruptor: 0.85, tempo: 0.4, patience: 0.45 }
-    }
+    { key: 'architect', title: 'the Architect', flavor: 'pairs lanes and wants the pyramid closed',
+      w: { gem: 10, deny: 3.0, build: 3.0, rule: 0.8, thrift: 0.5 } },
+    { key: 'hoarder', title: 'the Hoarder', flavor: 'counts every gem twice before spending one',
+      w: { gem: 12, deny: 2.5, build: 1.4, rule: 0.6, thrift: 3.0 } },
+    { key: 'usurper', title: 'the Usurper', flavor: 'shuffles royals to seize your lanes',
+      w: { gem: 10, deny: 5.0, build: 1.2, rule: 2.2, thrift: 1.0 } }
   ];
 
-  var _archCounter = 0;
-
-  function clamp(v, lo, hi) {
-    return v < lo ? lo : v > hi ? hi : v;
+  function persona(index) {
+    return ARCHETYPES[((index % ARCHETYPES.length) + ARCHETYPES.length) % ARCHETYPES.length];
   }
 
-  function makeDefaultPersonality(difficulty) {
-    var diffCfg = DIFF[difficulty] || DIFF.normal;
-    return {
-      name: 'the Architect',
-      descriptor: 'the Architect — builds toward the peak',
-      greed: 1.0,
-      builder: 0.8,
-      disruptor: 0.5,
-      tempo: 0.3,
-      patience: 0.5,
-      noise: diffCfg.noise,
-      lookahead: diffCfg.lookahead
-    };
-  }
-
-  function makePersonality(rng, difficulty) {
-    rng = typeof rng === 'function' ? rng : Math.random;
-    var arch = ARCHETYPES[_archCounter % ARCHETYPES.length];
-    _archCounter = (_archCounter + 1) % 999999937; // keep it from growing unbounded
-
-    var params = {};
-    Object.keys(BOUNDS).forEach(function (key) {
-      var b = BOUNDS[key];
-      var range = b[1] - b[0];
-      var jitterAmt = range * 0.22;
-      var v = arch.bias[key] + (rng() * 2 - 1) * jitterAmt;
-      params[key] = clamp(v, b[0], b[1]);
+  // Roughly how many subjects still have to change before the pyramid
+  // closes: each unpaired base corner, plus every centre that doesn't share
+  // the most common centre rank (aces fit anywhere). 0 means closed.
+  function distance(s) {
+    var d = 0, counts = {}, aces = 0, top = 0;
+    E.LANES.forEach(function (l) { if (l.kind === 'corner' && !s.lanes[l.id].paired) d++; });
+    E.SEATS.forEach(function (seat) {
+      var c = s.courts[seat].subjects.C;
+      if (c.r === 'A') aces++;
+      else { counts[c.r] = (counts[c.r] || 0) + 1; top = Math.max(top, counts[c.r]); }
     });
-
-    var diffCfg = DIFF[difficulty] || DIFF.normal;
-
-    return {
-      name: arch.name,
-      descriptor: arch.name + ' — ' + arch.flavor,
-      greed: params.greed,
-      builder: params.builder,
-      disruptor: params.disruptor,
-      tempo: params.tempo,
-      patience: params.patience,
-      noise: diffCfg.noise,
-      lookahead: diffCfg.lookahead
-    };
+    return d + (4 - aces - top);
   }
 
-  // ---------------------------------------------------------------------
-  // Small helpers
-  // ---------------------------------------------------------------------
+  function evaluate(s, seat, w) {
+    var me = s.players[seat].gems;
+    var others = E.SEATS.filter(function (x) { return x !== seat; }).map(function (x) { return s.players[x].gems; });
+    var maxOther = Math.max.apply(null, others);
+    var sumOther = others.reduce(function (a, b) { return a + b; }, 0);
 
-  function safeLegalActions(engine, state, suit) {
-    try {
-      var acts = engine.legalActions(state, suit);
-      return Array.isArray(acts) ? acts : [];
-    } catch (e) {
-      return [];
+    if (s.phase === 'over') {
+      var won = s.winners.indexOf(seat) >= 0;
+      if (won) return 1000 / s.winners.length + me;
+      return -500 + me - maxOther;
     }
-  }
 
-  function actionsEqual(a, b) {
-    if (!a || !b) return false;
-    if (a.type !== b.type) return false;
-    if (a.loc !== b.loc) return false;
-    if (a.key !== b.key) return false;
-    if (a.sub !== b.sub) return false;
-    if (a.handIndex !== b.handIndex) return false;
-    return true;
-  }
+    var v = w.gem * me - w.deny * (sumOther / 3 + maxOther) / 2;
 
-  function isLegal(action, legal) {
-    return legal.some(function (l) {
-      return actionsEqual(action, l);
+    // Closing the pyramid ends the game: good when ahead, bad when behind.
+    var lead = me - maxOther;
+    var close = 8 - distance(s);
+    var bias = lead > 0 ? 1 + Math.min(lead, 6) / 3 : (lead === 0 ? 0.3 : -0.35);
+    v += w.build * bias * close * (1 + close / 4);
+
+    // Lanes it controls (and stalemated gems it could reach).
+    E.LANES.forEach(function (l) {
+      var c = E.controller(s, l);
+      if (c === seat) v += w.rule * (l.kind === 'peak' ? 1.4 : 1);
+      else if (c && (l.a.seat === seat || l.b.seat === seat)) v -= w.rule * 0.6;
+      if (s.lanes[l.id].gem && !c && (l.a.seat === seat || l.b.seat === seat)) v += 2;
     });
+
+    // Toward a flush of its own suit.
+    var suit = E.SUIT_OF[seat], own = 0;
+    E.POS.forEach(function (p) { if (s.courts[seat].subjects[p].s === suit) own++; });
+    if (own >= 2) v += own === 2 ? 2 : 0;
+
+    return v;
   }
 
-  function gemValue(engine, loc, key, suit) {
-    var GV = (engine && engine.GEM_VALUES) || { base: 10, cap: 15, court: 25, peak: 60 };
-    var base = GV[loc] || 0;
-    if (loc === 'court' && key === suit) return base * 1.5;
-    return base;
+  function spendPenalty(before, after, seat, w) {
+    // Spending a banked gem (not the free action) is already in the gem term;
+    // thrift adds a personal reluctance on top.
+    var spent = before.players[seat].gems > after.players[seat].gems && before.free === 0;
+    return spent ? w.thrift : 0;
   }
 
-  function diffGems(engine, before, after, suit) {
-    var diffs = [];
-    ['base', 'cap', 'peak', 'court'].forEach(function (loc) {
-      if (!before.gems || !before.gems[loc] || !after.gems || !after.gems[loc]) return;
-      Object.keys(before.gems[loc]).forEach(function (key) {
-        var b = before.gems[loc][key];
-        var a = after.gems[loc][key];
-        if (!b || !a) return;
-        if (b.gem !== a.gem) {
-          diffs.push({ loc: loc, key: key, armed: a.gem, value: gemValue(engine, loc, key, suit) });
-        }
-      });
-    });
-    return diffs;
+  function noise(rng, amp) {
+    return (rng() + rng() + rng() - 1.5) * amp;
   }
 
-  function countMatch(subj, suit) {
-    if (!subj) return 0;
-    var c = 0;
-    ['left', 'right', 'center'].forEach(function (p) {
-      if (subj[p] && subj[p].suit === suit) c++;
-    });
-    return c;
+  function candidates(s, seat) {
+    return E.legalActions(s, seat).filter(function (a) { return a.type !== 'pass'; });
   }
 
-  function coherenceScore(coh) {
-    if (!coh) return 0;
-    var s = 0;
-    if (coh.corners) {
-      Object.keys(coh.corners).forEach(function (k) {
-        if (coh.corners[k]) s++;
-      });
-    }
-    if (coh.peak) s += 2;
-    if (coh.centersAgree) s += 3;
-    return s;
+  // Draws are valued without looking at the deck.
+  function drawValue(s, seat, w) {
+    var hand = s.players[seat].hand.length;
+    var base = evaluate(s, seat, w);
+    var cost = s.free > 0 ? 0 : w.gem;
+    return base - cost + (hand === 0 ? 4 : 1.5);
   }
 
-  function actionListHasClaim(engine, state, suit, loc, key) {
-    var acts = safeLegalActions(engine, state, suit);
-    return acts.some(function (a) {
-      return a.type === 'claim' && a.loc === loc && a.key === key;
-    });
-  }
-
-  // ---------------------------------------------------------------------
-  // Scoring
-  // ---------------------------------------------------------------------
-
-  function scorePivot(engine, state, suit, action, personality, diffCfg) {
-    var cloned;
-    var result;
-    try {
-      cloned = engine.cloneState(state);
-      result = engine.applyAction(cloned, action);
-    } catch (e) {
-      return -1e9;
-    }
-    if (!result || !result.state) return -1e9;
-    var after = result.state;
-    var score = 0;
-
-    var diffs = diffGems(engine, state, after, suit);
-    diffs.forEach(function (d) {
-      if (d.armed) {
-        var claimableNow = actionListHasClaim(engine, after, suit, d.loc, d.key);
-        if (claimableNow) {
-          score += d.value * personality.greed;
-          if (d.loc === 'cap' || d.loc === 'base' || d.loc === 'peak') {
-            score += d.value * personality.builder * 0.3;
-          }
-        } else if (d.loc === 'court' && d.key === suit) {
-          score += d.value * personality.greed * 0.6;
-        } else {
-          // Arms a gem someone else will benefit from.
-          score -= d.value * personality.disruptor * 0.4;
-        }
-      } else {
-        // A gem broke / went unmatched.
-        if (d.loc === 'court' && d.key === suit) {
-          score -= d.value * personality.greed * 0.5;
-        } else {
-          score += d.value * personality.disruptor * 0.5;
-        }
+  function valueOf(s, a, seat, w, depth) {
+    if (a.type === 'draw') return drawValue(s, seat, w);
+    var r = E.apply(s, a);
+    if (r.error) return -Infinity;
+    var v = evaluate(r.state, seat, w) - spendPenalty(s, r.state, seat, w);
+    if (depth > 1 && r.state.phase === 'play' && r.state.current === seat && E.canAfford(r.state, seat)) {
+      var best = v;
+      var next = candidates(r.state, seat);
+      for (var i = 0; i < next.length; i++) {
+        if (next[i].type === 'draw') continue;
+        var r2 = E.apply(r.state, next[i]);
+        if (r2.error) continue;
+        var v2 = evaluate(r2.state, seat, w) - spendPenalty(r.state, r2.state, seat, w) - spendPenalty(s, r.state, seat, w);
+        if (v2 > best) best = v2;
       }
-    });
-
-    try {
-      var cohBefore = engine.coherence(state);
-      var cohAfter = engine.coherence(after);
-      score += (coherenceScore(cohAfter) - coherenceScore(cohBefore)) * personality.builder * 18;
-    } catch (e) {
-      /* ignore */
+      // A plan is worth a little less than a sure thing.
+      v = v + (best - v) * 0.85;
     }
-
-    try {
-      var beforeSubj = state.board.subjects[suit];
-      var afterSubj = after.board.subjects[suit];
-      score += (countMatch(afterSubj, suit) - countMatch(beforeSubj, suit)) * personality.builder * 6;
-    } catch (e) {
-      /* ignore */
-    }
-
-    if (diffCfg.lookahead >= 2 && Array.isArray(engine.SUITS)) {
-      engine.SUITS.forEach(function (opp) {
-        if (opp === suit) return;
-        try {
-          var oppBefore = safeLegalActions(engine, state, opp).filter(function (a) {
-            return a.type === 'claim';
-          });
-          var oppAfter = safeLegalActions(engine, after, opp).filter(function (a) {
-            return a.type === 'claim';
-          });
-          var newClaims = oppAfter.filter(function (a) {
-            return !oppBefore.some(function (b) {
-              return actionsEqual(a, b);
-            });
-          });
-          newClaims.forEach(function (a) {
-            score -= gemValue(engine, a.loc, a.key, opp) * personality.disruptor * 0.6;
-          });
-        } catch (e) {
-          /* ignore */
-        }
-      });
-    }
-
-    return score;
+    return v;
   }
 
-  function evaluateBuyAction(engine, state, suit, personality, diffCfg) {
-    var sim;
-    try {
-      sim = engine.applyAction(engine.cloneState(state), { type: 'buyAction' });
-    } catch (e) {
-      return -1e9;
+  // Choose the next action for the current seat. `ctx` carries the persona,
+  // level, rng and how many actions it has already taken this turn.
+  function choose(s, ctx) {
+    var seat = s.current;
+    var w = ctx.persona.w;
+    var lvl = LEVELS[ctx.level] || LEVELS.normal;
+    var rng = ctx.rng || Math.random;
+    if (ctx.actionsThisTurn >= 8) return { type: 'pass' };
+
+    var base = evaluate(s, seat, w);
+    var acts = candidates(s, seat);
+    var best = null, bestV = -Infinity;
+    for (var i = 0; i < acts.length; i++) {
+      var v = valueOf(s, acts[i], seat, w, lvl.depth) + noise(rng, lvl.noise);
+      if (v > bestV) { best = acts[i]; bestV = v; }
     }
-    if (!sim || !sim.state) return -1e9;
-    var after = sim.state;
-    var legalAfter = safeLegalActions(engine, after, suit).filter(function (a) {
-      return a.type === 'pivot';
-    });
-    var best = -1e9;
-    legalAfter.forEach(function (a) {
-      var s = scorePivot(engine, after, suit, a, personality, diffCfg);
-      if (s > best) best = s;
-    });
-    if (best === -1e9) return -1e9;
-    var threshold = 25 * (1 - personality.tempo) + 8;
-    return best - threshold;
+    // With the free action in hand, passing throws it away: any action that
+    // doesn't hurt is worth taking. Spending a banked gem needs a real gain.
+    var bar = s.free > 0 ? -0.5 : 0.75;
+    if (best && bestV > base + bar) return best;
+    return { type: 'pass' };
   }
 
-  function validateOrPass(state, suit, action, legal) {
-    if (isLegal(action, legal)) return action;
-    var claims = legal.filter(function (a) {
-      return a.type === 'claim';
-    });
-    if (claims.length) return claims[0];
-    if (legal.some(function (a) { return a.type === 'pass'; })) return { type: 'pass' };
-    return legal[0];
-  }
-
-  // ---------------------------------------------------------------------
-  // chooseAction
-  // ---------------------------------------------------------------------
-
-  function chooseAction(state, suit, rng) {
-    try {
-      rng = typeof rng === 'function' ? rng : Math.random;
-      var engine = window.PYR && window.PYR.Engine;
-      if (!engine) return { type: 'pass' };
-
-      var legal = safeLegalActions(engine, state, suit);
-      if (!legal.length) return { type: 'pass' };
-
-      var house = (state.houses && state.houses[suit]) || {};
-      var personality = house.personality || makeDefaultPersonality(state.difficulty);
-      var diffCfg = DIFF[state.difficulty] || DIFF.normal;
-
-      // 1. Always claim free gems first — strictly positive EV.
-      var claims = legal.filter(function (a) {
-        return a.type === 'claim';
-      });
-      if (claims.length > 0) {
-        var bestClaim = claims[0];
-        var bestClaimVal = -Infinity;
-        claims.forEach(function (c) {
-          var v = gemValue(engine, c.loc, c.key, suit);
-          if (v > bestClaimVal) {
-            bestClaimVal = v;
-            bestClaim = c;
-          }
-        });
-        return validateOrPass(state, suit, bestClaim, legal);
-      }
-
-      var candidates = [];
-
-      legal.forEach(function (a) {
-        if (a.type === 'pivot') {
-          var s = scorePivot(engine, state, suit, a, personality, diffCfg);
-          candidates.push({ action: a, score: s });
-        }
-      });
-
-      var bestPivotScore = -Infinity;
-      candidates.forEach(function (c) {
-        if (c.score > bestPivotScore) bestPivotScore = c.score;
-      });
-
-      var hand = house.hand || [];
-      var hasDraw = legal.some(function (a) {
-        return a.type === 'draw';
-      });
-      if (hasDraw && hand.length < 3) {
-        var drawScore = (3 - hand.length) * personality.tempo * 8;
-        // Draw is most attractive when we don't already have a strong pivot.
-        if (bestPivotScore === -Infinity || bestPivotScore < drawScore) {
-          candidates.push({ action: { type: 'draw' }, score: drawScore });
-        } else {
-          candidates.push({ action: { type: 'draw' }, score: drawScore * 0.3 - 1 });
-        }
-      }
-
-      if (!candidates.length) {
-        return validateOrPass(state, suit, { type: 'pass' }, legal);
-      }
-
-      var noisy = candidates.map(function (c) {
-        var mult = 1 + (rng() * 2 - 1) * diffCfg.noise;
-        return { action: c.action, score: c.score * mult, raw: c.score };
-      });
-
-      noisy.sort(function (a, b) {
-        return b.score - a.score;
-      });
-
-      for (var i = 0; i < noisy.length; i++) {
-        if (noisy[i].raw > 0 && isLegal(noisy[i].action, legal)) {
-          return noisy[i].action;
-        }
-      }
-
-      // Nothing is positive EV: pass if we can.
-      if (legal.some(function (a) { return a.type === 'pass'; })) {
-        return { type: 'pass' };
-      }
-
-      // No pass available (shouldn't normally happen) — take the least-bad
-      // legal action rather than returning nothing.
-      for (var j = 0; j < noisy.length; j++) {
-        if (isLegal(noisy[j].action, legal)) return noisy[j].action;
-      }
-      return legal[0];
-    } catch (e) {
-      return { type: 'pass' };
-    }
-  }
-
-  window.PYR.AI = {
-    makePersonality: makePersonality,
-    chooseAction: chooseAction
+  PYR.AI = {
+    LEVELS: LEVELS,
+    ARCHETYPES: ARCHETYPES,
+    persona: persona,
+    evaluate: evaluate,
+    choose: choose
   };
-})();
+  if (typeof module !== 'undefined' && module.exports) module.exports = PYR.AI;
+})(typeof window !== 'undefined' ? window : globalThis);
