@@ -2,9 +2,9 @@
 window.ICON_ANIMS = {
  "combo-buttons": {
   "src": "assets/icons/anim/combo-buttons.svg",
-  "n": 32,
-  "cols": 8,
-  "rows": 4,
+  "n": 80,
+  "cols": 10,
+  "rows": 8,
   "ext": [
    0,
    0,
@@ -12,7 +12,7 @@ window.ICON_ANIMS = {
    0
   ],
   "aspect": 1.0,
-  "fps": 12
+  "fps": 30
  },
  "berzerk-robot": {
   "src": "assets/icons/anim/berzerk-robot.svg",
@@ -31,8 +31,8 @@ window.ICON_ANIMS = {
  "missile-command": {
   "src": "assets/icons/anim/missile-command.svg",
   "n": 36,
-  "cols": 8,
-  "rows": 5,
+  "cols": 10,
+  "rows": 4,
   "ext": [
    0,
    0,
@@ -45,22 +45,22 @@ window.ICON_ANIMS = {
  "chronicler-xi": {
   "src": "assets/icons/anim/chronicler-xi.svg",
   "n": 24,
-  "cols": 8,
+  "cols": 10,
   "rows": 3,
   "ext": [
    0,
-   0.06,
+   0.12,
    0,
-   0.06
+   0.12
   ],
-  "aspect": 1.206077188940092,
+  "aspect": 1.089360041623309,
   "fps": 12
  },
  "white-sable": {
   "src": "assets/icons/anim/white-sable.svg",
-  "n": 30,
-  "cols": 8,
-  "rows": 4,
+  "n": 48,
+  "cols": 10,
+  "rows": 5,
   "ext": [
    0.06,
    0.03,
@@ -68,13 +68,13 @@ window.ICON_ANIMS = {
    0.02
   ],
   "aspect": 0.7986554621848739,
-  "fps": 15
+  "fps": 24
  },
  "blog-quill": {
   "src": "assets/icons/anim/blog-quill.svg",
-  "n": 40,
-  "cols": 8,
-  "rows": 5,
+  "n": 80,
+  "cols": 10,
+  "rows": 8,
   "ext": [
    0.04,
    0.12,
@@ -82,13 +82,13 @@ window.ICON_ANIMS = {
    0
   ],
   "aspect": 0.5461672473867595,
-  "fps": 12
+  "fps": 24
  },
  "pyramid": {
   "src": "assets/icons/anim/pyramid.svg",
-  "n": 45,
-  "cols": 8,
-  "rows": 6,
+  "n": 90,
+  "cols": 10,
+  "rows": 9,
   "ext": [
    0,
    0,
@@ -96,13 +96,13 @@ window.ICON_ANIMS = {
    0
   ],
   "aspect": 1.565962048007968,
-  "fps": 15
+  "fps": 30
  },
  "brick-2x4": {
   "src": "assets/icons/anim/brick-2x4.svg",
-  "n": 48,
-  "cols": 8,
-  "rows": 6,
+  "n": 96,
+  "cols": 10,
+  "rows": 10,
   "ext": [
    0,
    0.62,
@@ -110,6 +110,6 @@ window.ICON_ANIMS = {
    0
   ],
   "aspect": 0.7729013789854541,
-  "fps": 15
+  "fps": 30
  }
 };

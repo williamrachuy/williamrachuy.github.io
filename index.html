@@ -2512,9 +2512,14 @@
       // ─── Icon animations ───────────────────────────────────────────────────
       // An icon with an animation (window.ICON_ANIMS, from make_icons.py) plays
       // it while it is zoomed into. Its sheet (one loop of frames in a grid) is
-      // loaded the first time, rasterised once at the zoomed size after the
-      // zoom-in has finished, played at the icon's own frame rate, and freed
-      // when the camera climbs back out.
+      // fetched when the zoom-in starts and split into one small SVG per frame:
+      // painting the whole sheet at once stalled a frame for 100-200 ms. Frames
+      // decode asynchronously and are rasterised at the zoomed size a few at a
+      // time within a small per-frame budget; playback starts once every frame
+      // is ready (frame 0 is the static icon, so there is no pop). Everything is
+      // freed when the camera climbs back out.
+      const ANIM_BUDGET_MS = 4;
+
       function iconAnim(ap) {
         return ap.anim && window.ICON_ANIMS ? window.ICON_ANIMS[ap.anim] || null : null;
       }
@@ -2524,27 +2529,53 @@
         if (!A) return null;
         let s = ap._anim;
         if (!s) {
-          s = ap._anim = { A, img: new Image(), canvas: null, fw: 0, fh: 0, t0: 0 };
-          s.img.src = A.src;
+          s = ap._anim = { A, parts: null, frames: [], started: 0, canvas: null, ctx: null, next: 0, ready: false, fw: 0, fh: 0, t0: 0 };
+          fetch(A.src).then(r => r.text()).then(text => {
+            if (ap._anim === s) s.parts = text.match(/<svg x="[\s\S]*?<\/svg>/g) || [];
+          }).catch(() => {});
         }
-        if (!s.canvas && focus.state === 'open' && s.img.complete && s.img.naturalWidth > 0) {
-          const { hw, hh } = cardHalfExtents(ap);
-          const [l, tp, r, b] = A.ext;
-          const H = 2 * hh * (1 + tp + b);
+        if (s.ready) return s;
+        if (!s.parts || s.parts.length < A.n) return null;
+        // keep a few frames decoding at a time (all at once floods the main thread)
+        while (s.started < A.n && s.started - s.next < 3) {
+          const svg = s.parts[s.started].replace(/^<svg x="[^"]*" y="[^"]*" width="[^"]*" height="[^"]*"/,
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${Math.round(100 * A.aspect)}" height="100"`);
+          const img = new Image();
+          const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+          img.src = url;
+          img.decode().then(() => { img._ok = true; }).catch(() => { img._ok = img.naturalWidth > 0; }).finally(() => URL.revokeObjectURL(url));
+          s.frames[s.started++] = img;
+        }
+        if (!s.canvas) {
+          const { hh } = cardHalfExtents(ap);
+          const H = 2 * hh * (1 + A.ext[1] + A.ext[3]);
           const scale = Math.min(window.devicePixelRatio || 1, 1.5) * focus.zMax;
           let fh = Math.min(420, Math.ceil(H * scale));
-          // keep the whole sheet under ~12M pixels
-          fh = Math.min(fh, Math.floor(Math.sqrt(12e6 / (A.cols * A.rows * A.aspect))));
-          const fw = Math.max(2, Math.round(fh * A.aspect));
-          const c = document.createElement('canvas');
-          c.width = A.cols * fw; c.height = A.rows * fh;
-          const cx = c.getContext('2d');
-          cx.imageSmoothingEnabled = true;
-          cx.drawImage(s.img, 0, 0, c.width, c.height);
-          s.canvas = c; s.fw = fw; s.fh = fh; s.t0 = now;
-          if (window.createImageBitmap) createImageBitmap(c).then(bm => { if (ap._anim === s) s.canvas = bm; }).catch(() => {});
+          fh = Math.min(fh, Math.floor(Math.sqrt(12e6 / (A.cols * A.rows * A.aspect)))); // sheet under ~12M px
+          s.fh = fh; s.fw = Math.max(2, Math.round(fh * A.aspect));
+          s.canvas = document.createElement('canvas');
+          s.canvas.width = A.cols * s.fw; s.canvas.height = A.rows * s.fh;
+          s.ctx = s.canvas.getContext('2d');
+          s.ctx.imageSmoothingEnabled = true;
         }
-        return s.canvas ? s : null;
+        const start = performance.now();
+        while (s.next < A.n && performance.now() - start < ANIM_BUDGET_MS) {
+          const img = s.frames[s.next];
+          if (!img || !img._ok) break; // wait for this frame to decode
+          const k = s.next++;
+          s.ctx.drawImage(img, (k % A.cols) * s.fw, Math.floor(k / A.cols) * s.fh, s.fw, s.fh);
+          s.frames[k] = null;
+        }
+        if (s.next >= A.n) {
+          s.ready = true;
+          s.frames = null; s.parts = null;
+          if (window.createImageBitmap) {
+            const c = s.canvas;
+            createImageBitmap(c).then(bm => { if (ap._anim === s) s.canvas = bm; }).catch(() => {});
+          }
+          return s;
+        }
+        return null;
       }
 
       function releaseAnim(ap) {
@@ -2605,8 +2636,11 @@
             pctx.globalAlpha = focused ? 1 : clamp(0.84 + t * 0.06 + local * 0.025, 0.62, 0.95);
             pctx.imageSmoothingEnabled = true;
             if ('imageSmoothingQuality' in pctx) pctx.imageSmoothingQuality = 'low'; // texture is already within 2x of screen size
-            const anim = focused && focus.p > 0.5 ? animSheet(ap, now) : null;
+            // build during the zoom-in; play once landed
+            const sheet = focused && focus.state !== 'out' ? animSheet(ap, now) : null;
+            const anim = sheet && focus.state === 'open' ? sheet : null;
             if (anim) {
+              if (!anim.playing) { anim.playing = true; anim.t0 = now; } // start on frame 0 = the static icon
               const A = anim.A, [l, tp, r, b] = A.ext;
               const k = Math.floor((now - anim.t0) * A.fps / 1000) % A.n;
               pctx.drawImage(anim.canvas, (k % A.cols) * anim.fw, Math.floor(k / A.cols) * anim.fh, anim.fw, anim.fh,
@@ -3627,7 +3661,7 @@
 
       let focusLastNow = 0;
       let viewCull = null; // world-space visible rect while zoomed; null when not
-      const FOCUS_IN_MS   = 520;
+      const FOCUS_IN_MS   = 640;
       const FOCUS_OUT_MS  = 420;
       const FOCUS_DIVE_MS = 320;
       const RESET_FADE_OUT_MS = 200;
@@ -3841,7 +3875,8 @@
       // the recentering is a by-product of the same accelerating zoom curve.
       function focusCamera() {
         if (focus.state === 'none' || !focus.ap) return null;
-        const z = Math.exp(Math.log(focus.zMax) * Math.pow(focus.p, 2.4))   // accelerating
+        const p = focus.p, e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+        const z = Math.exp(Math.log(focus.zMax) * e)   // eases in and settles (no abrupt stop)
                 * Math.exp(3.2 * focus.dive * focus.dive);
         const cx = stage.clientWidth * 0.5, cy = stage.clientHeight * 0.5;
         const ap = focus.ap;

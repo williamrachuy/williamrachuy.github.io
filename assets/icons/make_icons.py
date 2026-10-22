@@ -94,11 +94,12 @@ def voxels(rows, palette, u=1.0, depth=0.9, ox=0.0, oy=0.0, bevel=True):
 
 # ─── Berzerk: the arcade robot ───────────────────────────────────────────────
 # The 1980 robot is 8x12 pixels: a domed head, a visor row in which the eye
-# (a two-pixel gap) scans from side to side, a chest band with the arms hanging
-# at its sides, then thin legs and feet.
+# scans from side to side, a chest band with the arms hanging at its sides,
+# then thin legs and feet. (In the arcade the eye is a two-pixel gap; here it
+# is a glowing red two-pixel eye.)
 BERZERK_ROWS = [
     '..YYYY..',
-    '.YYYYYY.',   # visor: the eye is a gap here
+    '.YYYYYY.',   # visor: the eye travels along this row
     'YYYYYYYY',
     'Y.YYYY.Y',
     'Y.YYYY.Y',
@@ -110,16 +111,20 @@ BERZERK_ROWS = [
     '..Y..Y..',
     '.YY..YY.',
 ]
-BERZERK_EYE = [5, 4, 3, 2, 1, 2, 3, 4]   # gap start column, frame by frame (arcade-slow)
+BERZERK_EYE = [3, 2, 1, 2, 3, 4, 5, 4]   # eye start column, frame by frame (arcade-slow)
 
 
 def berzerk(t=None):
-    eye = 3 if t is None else BERZERK_EYE[int(t * len(BERZERK_EYE)) % len(BERZERK_EYE)]
+    eye = BERZERK_EYE[int((t or 0) * len(BERZERK_EYE)) % len(BERZERK_EYE)]
     rows = list(BERZERK_ROWS)
-    rows[1] = ''.join('.' if c in (eye, eye + 1) else ch for c, ch in enumerate(rows[1]))
-    body, (x0, y0, w, h) = voxels(rows, {'Y': trio('#e8c81a')}, depth=0.95)
+    rows[1] = ''.join('E' if c in (eye, eye + 1) else ch for c, ch in enumerate(rows[1]))
+    pal = {'Y': trio('#e8c81a'), 'E': ('#ff3a22', '#ff8a70', '#a8180c')}
+    body, (x0, y0, w, h) = voxels(rows, pal, depth=0.95)
+    body += f'\n<ellipse cx="{f(eye + 1)}" cy="1.5" rx="1.9" ry="1.2" fill="url(#eye)"/>'
+    defs = ('<radialGradient id="eye"><stop offset="0" stop-color="#ff6a50" stop-opacity="0.85"/>'
+            '<stop offset="0.5" stop-color="#ff3a20" stop-opacity="0.35"/><stop offset="1" stop-color="#ff2a10" stop-opacity="0"/></radialGradient>')
     pad = 0.3
-    return 'Berzerk robot', (x0 - pad, y0 - pad, w + 2 * pad, h + 2 * pad), body, ''
+    return 'Berzerk robot', (x0 - pad, y0 - pad, w + 2 * pad, h + 2 * pad), body, defs
 
 
 # ─── Missile Command: a city, incoming warheads, counter-missiles ───────────
@@ -165,7 +170,7 @@ def missile_command(t=None):
     ]
     oy = 7.4
     city, (x0, y0, w, h) = voxels(rows, {'G': trio('#e0b93c')}, u=1.0, depth=1.0, oy=oy)
-    tt = 0.45 if t is None else t
+    tt = t or 0.0
     a, da = _mc_event(tt % 1.0, False, 'a')
     b, db = _mc_event((tt + 0.5) % 1.0, True, 'b')
     defs = da + db + ('<radialGradient id="burst"><stop offset="0" stop-color="#ffffff"/><stop offset="0.35" stop-color="#a8dcff"/>'
@@ -182,7 +187,7 @@ def chronicler(t=None):
     bars = [(0, 'XXXXXXX', 0.0), (2, '.XXXXX.', 2.1), (4, 'XXXXXXX', 4.2)]
     parts, x1, y1 = [], 0, 0
     for row, s, phase in bars:
-        dy = 0.0 if t is None else CHRON_BOB * math.sin(2 * math.pi * t + phase)
+        dy = CHRON_BOB * (math.sin(2 * math.pi * (t or 0) + phase) - math.sin(phase))
         body, (bx, by, bw, bh) = voxels([s], {'X': trio('#d6b86e')}, u=1.0, depth=1.25, oy=row + dy)
         parts.append(body)
     # the static extent (as if no bob), so frames and the icon share a box
@@ -234,7 +239,7 @@ def sable(t=None):
     else:
         w = 2 * math.pi * t
         ta = 11 * math.sin(w)                                  # tail sway
-        ha = 6 * math.sin(w + 1.2) + 2.5 * math.sin(2 * w)     # head tilt, with a small nod
+        ha = 6 * (math.sin(w + 1.2) - math.sin(1.2)) + 2.5 * math.sin(2 * w)   # head tilt, with a small nod
     T = f'rotate({f(ta)} -8 -7)'      # tail pivots at its root
     Hd = f'rotate({f(ha)} 2 -55)'     # head pivots at the neck
 
@@ -300,47 +305,63 @@ def blog(t=None):
 # Real proportions: four equal round buttons (about 10.5 mm) in a diamond
 # about 33 mm across, so each button's radius is ~0.47 of its distance from
 # the centre.
-COMBO_PRESSES = [(1, 3), (5, 2), (8, 1), (12, 0), (17, 1), (20, 2), (23, 3), (27, 1)]  # (frame, button)
-COMBO_FRAMES = 32
-PRESS_DEPTH = [0.75, 1.0, 0.45]   # frame by frame after a press starts
+COMBO_FRAMES = 80                                  # 30 fps: 2.7 s loop
+COMBO_PRESSES = [(3, 3), (13, 2), (21, 1), (31, 0), (43, 1), (51, 2), (58, 3), (68, 1)]  # (frame, button)
+PRESS_IN, PRESS_HOLD, PRESS_OUT = 2, 3, 4          # frames
+
+
+def _press_depth(j):
+    if j < PRESS_IN:
+        return (j + 1) / (PRESS_IN + 1)
+    if j < PRESS_IN + PRESS_HOLD:
+        return 1.0
+    j -= PRESS_IN + PRESS_HOLD
+    return max(0.0, 1 - (j + 1) / (PRESS_OUT + 1))
 
 
 def snes_buttons(t=None):
+    # The view looks slightly down and forward, so height shows as an upward
+    # shift: each button's foot sits on its diamond point and its top face is
+    # raised by the wall height; the base is a disc with its own thickness.
     d = 2.95
     R = d * 0.47
+    wall, thick = 0.42, 0.55
     buttons = [(0, -d, '#3b5fd6'), (d, 0, '#d8262c'), (0, d, '#f2c414'), (-d, 0, '#2f9e48')]   # X, A, B, Y
     press = [0.0] * 4
     if t is not None:
         k = int(t * COMBO_FRAMES) % COMBO_FRAMES
         for start, bi in COMBO_PRESSES:
             j = (k - start) % COMBO_FRAMES
-            if j < len(PRESS_DEPTH):
-                press[bi] = max(press[bi], PRESS_DEPTH[j])
+            if j < PRESS_IN + PRESS_HOLD + PRESS_OUT:
+                press[bi] = max(press[bi], _press_depth(j))
     base_r = d + R + 1.15
+    lift = wall * 0.5           # centre the buttons' mass on the base
     defs = ('<radialGradient id="base" cx="0.42" cy="0.38" r="0.7"><stop offset="0" stop-color="#e9e6ee"/>'
             '<stop offset="0.7" stop-color="#c9c4d2"/><stop offset="1" stop-color="#9d97a8"/></radialGradient>')
-    body = [f'<circle cx="0.25" cy="0.35" r="{f(base_r)}" fill="#4a4652"/>',
+    body = [f'<circle cx="0.2" cy="{f(thick + 0.3)}" r="{f(base_r)}" fill="#3a3640" opacity="0.7"/>',            # shadow
+            f'<circle cx="0" cy="{f(thick)}" r="{f(base_r)}" fill="#8d879a"/>',                                    # base edge
+            f'<rect x="{f(-base_r)}" y="0" width="{f(2 * base_r)}" height="{f(thick)}" fill="#8d879a"/>',
             f'<circle cx="0" cy="0" r="{f(base_r)}" fill="url(#base)"/>',
             f'<circle cx="0" cy="0" r="{f(base_r)}" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="0.18"/>']
-    wall = 0.42
     for i, (x, y, c) in enumerate(buttons):
         p = press[i]
-        sink = wall * 0.8 * p
-        w = wall - sink
+        foot = y + lift                       # where the button meets the base
+        h = wall * (1 - 0.8 * p)              # visible wall height
+        ty = foot - h                         # top face
         top_c = shade(c, -0.12 * p)
         defs += (f'<linearGradient id="t{i}" x1="0.15" y1="0.1" x2="0.85" y2="0.95"><stop offset="0" stop-color="{shade(top_c, 0.22)}"/>'
                  f'<stop offset="0.6" stop-color="{top_c}"/><stop offset="1" stop-color="{shade(top_c, -0.12)}"/></linearGradient>')
-        ty = y + sink
-        body += [f'<circle cx="{f(x)}" cy="{f(y + wall)}" r="{f(R + 0.2)}" fill="#7d7788" opacity="0.6"/>',                 # the hole it sits in
-                 f'<circle cx="{f(x + 0.16)}" cy="{f(ty + w + 0.24)}" r="{f(R + 0.1)}" fill="#2a2630" opacity="{f(0.4 * (1 - p * 0.6))}"/>',
-                 f'<circle cx="{f(x)}" cy="{f(ty + w)}" r="{f(R)}" fill="{shade(c, -0.42)}"/>',
-                 f'<rect x="{f(x - R)}" y="{f(ty)}" width="{f(2 * R)}" height="{f(max(w, 0.001))}" fill="{shade(c, -0.42)}"/>',
+        body += [f'<circle cx="{f(x)}" cy="{f(foot)}" r="{f(R + 0.2)}" fill="#7d7788" opacity="0.6"/>',                     # the hole it sits in
+                 f'<circle cx="{f(x + 0.16)}" cy="{f(foot + 0.2)}" r="{f(R + 0.08)}" fill="#2a2630" opacity="{f(0.35 * (1 - p * 0.6))}"/>',
+                 f'<circle cx="{f(x)}" cy="{f(foot)}" r="{f(R)}" fill="{shade(c, -0.42)}"/>',
+                 f'<rect x="{f(x - R)}" y="{f(ty)}" width="{f(2 * R)}" height="{f(max(h, 0.001))}" fill="{shade(c, -0.42)}"/>',
                  f'<circle cx="{f(x)}" cy="{f(ty)}" r="{f(R)}" fill="url(#t{i})"/>',
                  f'<path d="M{f(x - R * 0.82)},{f(ty + R * 0.2)} A{f(R * 0.86)},{f(R * 0.86)} 0 0 1 {f(x + R * 0.35)},{f(ty - R * 0.8)}" '
                  f'fill="none" stroke="#ffffff" stroke-opacity="{f(0.45 * (1 - 0.5 * p))}" stroke-width="0.2" stroke-linecap="round"/>',
                  f'<circle cx="{f(x)}" cy="{f(ty)}" r="{f(R)}" fill="none" stroke="{shade(c, -0.3)}" stroke-opacity="0.6" stroke-width="0.12"/>']
     e = base_r + 0.5
-    return 'Super Famicom buttons', (-e, -e, 2 * e, 2 * e), '\n'.join(body), defs
+    # centre the whole object (top face of the base plus its thickness below)
+    return 'Super Famicom buttons', (-e, -e + thick * 0.5, 2 * e, 2 * e), '\n'.join(body), defs
 
 
 # ─── Pyramid: a golden square pyramid, turning slowly on its axis ───────────
@@ -495,15 +516,15 @@ def brick(t=None):
 # name: (function, frames, frames per second, extra room around the frame as
 # fractions of the icon's width/height: left, top, right, bottom)
 ICONS = {
-    'combo-buttons': (snes_buttons, COMBO_FRAMES, 12, (0, 0, 0, 0)),
+    'combo-buttons': (snes_buttons, COMBO_FRAMES, 30, (0, 0, 0, 0)),
     'berzerk-robot': (berzerk, len(BERZERK_EYE), 6, (0, 0, 0, 0)),
     'missile-command': (missile_command, 36, 12, (0, 0, 0, 0)),
-    'chronicler-xi': (chronicler, 24, 12, (0, 0.06, 0, 0.06)),
+    'chronicler-xi': (chronicler, 24, 12, (0, 0.12, 0, 0.12)),
     'about-question': (question, 0, 0, None),
-    'white-sable': (sable, 30, 15, (0.06, 0.03, 0.02, 0.02)),
-    'blog-quill': (blog, 40, 12, (0.04, 0.12, 0.1, 0)),
-    'pyramid': (pyramid, 45, 15, (0, 0, 0, 0)),
-    'brick-2x4': (brick, 48, 15, (0, 0.62, 0, 0)),
+    'white-sable': (sable, 48, 24, (0.06, 0.03, 0.02, 0.02)),
+    'blog-quill': (blog, 80, 24, (0.04, 0.12, 0.1, 0)),
+    'pyramid': (pyramid, 90, 30, (0, 0, 0, 0)),
+    'brick-2x4': (brick, 96, 30, (0, 0.62, 0, 0)),
 }
 
 
@@ -517,7 +538,7 @@ def sheet(name, fn, n, ext):
     title, (mx, my, w, h), _, _ = fn(None)
     l, tp, r, b = ext
     fx, fy, fw, fh = mx - l * w, my - tp * h, w * (1 + l + r), h * (1 + tp + b)
-    cols = min(n, 8)
+    cols = min(n, 10)
     rows = math.ceil(n / cols)
     frames = []
     for k in range(n):
