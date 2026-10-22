@@ -271,23 +271,28 @@
         spriteCache.set(key, c);
         return c;
       }
-      // A disc of radius r with a soft halo out to r + blur, in one gradient fill.
+      // A disc of radius r with a halo, in one gradient fill. Every glow on the
+      // page has the same feather: a bright core that falls off fast, then a
+      // faint tail that lingers (out to r + 1.6 blur).
       function fillGlowDisc(ctx, x, y, r, blur, color, haloAlpha) {
-        if (blur <= 0.05 || haloAlpha <= 0.002) return;
-        const R = r + blur;
+        if (blur <= 0.05 || haloAlpha <= 0.002 || color.length !== 7) return;
+        const R = r + blur * 1.6;
         const g = ctx.createRadialGradient(x, y, r * 0.6, x, y, R);
         const a = ctx.globalAlpha;
         ctx.globalAlpha = a * haloAlpha;
+        const at = d => clamp((r + blur * d) / R, 0, 1);
         g.addColorStop(0, color);
-        g.addColorStop(clamp(r / R, 0, 1), color);
-        g.addColorStop(clamp((r + blur * 0.35) / R, 0, 1), color.length === 7 ? color + '55' : color);
-        g.addColorStop(1, color.length === 7 ? color + '00' : 'rgba(0,0,0,0)');
+        g.addColorStop(at(0), color);
+        g.addColorStop(at(0.12), color + '80');   // 50%
+        g.addColorStop(at(0.32), color + '29');   // 16%
+        g.addColorStop(at(0.75), color + '0d');   //  5%
+        g.addColorStop(1, color + '00');
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
         ctx.globalAlpha = a;
       }
-      // Stroke a line as light: three ever-narrower faint halos (a stepped
-      // falloff, so the glow has no hard edge), then the bright core.
+      // Stroke a line as light: two wide faint halos (the tail) and one tight
+      // brighter one (the core), then the line itself.
       function strokeGlowLine(ctx, ax, ay, bx, by, width, blur, coreColor, glowColor, alpha) {
         const a = ctx.globalAlpha;
         ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by);
@@ -303,7 +308,7 @@
         ctx.stroke();
         ctx.globalAlpha = a;
       }
-      const GLOW_STEPS = [[0.025, 1.5], [0.045, 0.85], [0.09, 0.35]];
+      const GLOW_STEPS = [[0.014, 2.6], [0.028, 1.3], [0.17, 0.28]]; // [alpha, width × blur]: tight bright core, long faint tail
       let drawCamZ = 1; // camera zoom for the frame being drawn
 
       function desaturateColor(hex, amount) {
@@ -1262,6 +1267,12 @@
       // the few dust cells are drawn as rects with a soft glow.
       const caLayer = { canvas: document.createElement('canvas'), img: null, buf: null, px0: 0, py0: 0, px1: -1, py1: -1 };
       const CA_LIGHT_RGBA = ((180 << 24) | (255 << 16) | (226 << 8) | 159) >>> 0; // #9fe2ff at ~70%, little-endian
+      const CA_DUST_RGBA  = ((235 << 24) | (200 << 16) | (233 << 8) | 255) >>> 0; // #ffe9c8, the dust cells' glow colour
+      // The crystal's glow: its bitmap blurred twice, a tight blur for the core
+      // and a wide one for the tail, laid under the cells.
+      const caGlow = document.createElement('canvas');
+      const caGlowCtx = caGlow.getContext('2d');
+      const CA_GLOW = [['blur(1px)', 0.55], ['blur(5px)', 0.32]]; // [filter in cells, strength]
 
       function drawCA() {
         if (ca.embers.length) drawEmbers(performance.now());
@@ -1277,16 +1288,15 @@
         const buf = L.buf;
         // clear what was drawn last frame, then write the live area
         for (let y = L.py0; y <= L.py1; y++) buf.fill(0, y * gw + L.px0, y * gw + L.px1 + 1);
-        const dust = new Path2D(), glow = new Path2D();
-        const ds = CA_CELL * 0.9, gs = CA_CELL * 2.4;
+        const dust = new Path2D();
+        const ds = CA_CELL * 0.9;
         for (let y = ca.y0; y <= ca.y1; y++) {
           let i = y * gw + ca.x0;
           for (let x = ca.x0; x <= ca.x1; x++, i++) {
             if (!cur[i]) continue;
             if (owner[i]) {
-              const px = x * CA_CELL, py = y * CA_CELL;
-              dust.rect(px + CA_CELL * 0.05, py + CA_CELL * 0.05, ds, ds);
-              glow.rect(px - CA_CELL * 0.7, py - CA_CELL * 0.7, gs, gs);
+              dust.rect(x * CA_CELL + CA_CELL * 0.05, y * CA_CELL + CA_CELL * 0.05, ds, ds);
+              buf[i] = CA_DUST_RGBA;
             } else buf[i] = CA_LIGHT_RGBA;
           }
         }
@@ -1295,13 +1305,28 @@
         L.canvas.getContext('2d').putImageData(L.img, 0, 0, x0, y0, x1 - x0 + 1, y1 - y0 + 1);
         L.px0 = ca.x0; L.py0 = ca.y0; L.px1 = ca.x1; L.py1 = ca.y1;
         pctx.save();
+        if (quality.halos) {
+          const pad = 14;
+          const bx = Math.max(0, ca.x0 - pad), by = Math.max(0, ca.y0 - pad);
+          const bw = Math.min(gw, ca.x1 + pad + 1) - bx, bh = Math.min(ca.gh, ca.y1 + pad + 1) - by;
+          if (caGlow.width < bw || caGlow.height < bh) { caGlow.width = Math.max(caGlow.width, bw); caGlow.height = Math.max(caGlow.height, bh); }
+          pctx.globalCompositeOperation = 'lighter';
+          pctx.imageSmoothingEnabled = true;
+          for (const [filter, k] of CA_GLOW) {
+            caGlowCtx.clearRect(0, 0, bw, bh);
+            caGlowCtx.filter = filter;
+            caGlowCtx.drawImage(L.canvas, bx, by, bw, bh, 0, 0, bw, bh);
+            caGlowCtx.filter = 'none';
+            pctx.globalAlpha = k;
+            pctx.drawImage(caGlow, 0, 0, bw, bh, bx * CA_CELL, by * CA_CELL, bw * CA_CELL, bh * CA_CELL);
+          }
+          pctx.globalCompositeOperation = 'source-over';
+          pctx.globalAlpha = 1;
+        }
         pctx.imageSmoothingEnabled = false;
         const w = ca.x1 - ca.x0 + 1, h = ca.y1 - ca.y0 + 1;
         pctx.drawImage(L.canvas, ca.x0, ca.y0, w, h, ca.x0 * CA_CELL, ca.y0 * CA_CELL, w * CA_CELL, h * CA_CELL);
         pctx.imageSmoothingEnabled = true;
-        pctx.globalAlpha = 0.16;
-        pctx.fillStyle = '#ffe9c8';
-        pctx.fill(glow);
         pctx.globalAlpha = 0.95;
         pctx.fillStyle = '#fbf3e4';
         pctx.fill(dust);
@@ -1371,7 +1396,8 @@
           varying vec4 v_color; varying float v_pt;
           void main() {
             float d = length(gl_PointCoord - 0.5) * 2.0;          // 0 centre .. 1 edge
-            float a = v_color.a * exp(-d * d * 4.5) * (1.0 - d * d);
+            // fast core (Gaussian) + faint long tail (exponential), like every glow here
+            float a = v_color.a * (exp(-d * d * 120.0) + 0.5 * exp(-d * 2.4) * (1.0 - d) * (1.0 - d));
             if (d > 1.0) a = 0.0;
             gl_FragColor = vec4(v_color.rgb * a, a);
           }`;
@@ -1495,12 +1521,13 @@
           const twinkleBlur = twinkle > 0 ? baseBlur * (1 + twinkle * 1.25) + twinkle * 10 : baseBlur * clamp(1 + twinkle * 0.55, 0.35, 1);
           const blur = Math.min(28, Math.max(0, twinkleBlur)) / haloShrink;
           if (blur > 0.6 && gpu && haloBudget) {
-            PGL.halo(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs + blur * 2.6, HEAT_RGB[hi], headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85) * 0.9);
+            PGL.halo(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs + blur * 4.2, HEAT_RGB[hi], headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85) * 0.9);
           } else if (blur > 0.6 && haloBudget) {
             const k = headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85);
             const cx = p.x + p.vs * 0.5, cy = p.y + p.vs * 0.5;
-            const d = p.vs + blur * 0.8;
-            pushBucket(bloomBuckets, usedBloom, hi, k * 0.3, cx - d * 0.5, cy - d * 0.5, d);
+            const d1 = p.vs + blur * 0.35, d2 = p.vs + blur * 2.4;
+            pushBucket(bloomBuckets, usedBloom, hi, k * 0.07, cx - d2 * 0.5, cy - d2 * 0.5, d2);
+            pushBucket(bloomBuckets, usedBloom, hi, k * 0.5, cx - d1 * 0.5, cy - d1 * 0.5, d1);
           }
           if (gpu) PGL.core(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs, HEAT_RGB[hi], headAlpha);
           else pushBucket(coreBuckets, usedCore, hi, headAlpha, p.x, p.y, p.vs);
@@ -2728,6 +2755,25 @@
             const f = VE_SPRING_K * (d - VE_E_REST[ei]);
             if (infecting || ni.freedom > 0) { ni.fx += (dx/d)*f; ni.fy += (dy/d)*f; }
             if (infecting || nj.freedom > 0) { nj.fx -= (dx/d)*f; nj.fy -= (dy/d)*f; }
+          }
+          // The center is held like any vertex: its 12 spokes are springs at a
+          // third of an edge's stiffness (12 × 1/3 = a vertex's 4 edges, so the
+          // same net pull), each fading as its vertex's edges die; and it repels
+          // and is repelled like every other node. Without this it had no forces
+          // at all, random-walked under Volta's spasms and flew far out.
+          if (infecting) {
+            if (!center.spokeRest) center.spokeRest = ve.vertNodes.map(n => Math.hypot(n.x - center.x, n.y - center.y) || 1);
+            for (let i = 0; i < 12; i++) {
+              const n = ve.vertNodes[i];
+              const spokeE = VE_VERTEX_EDGES[i].reduce((s, ei) => s + (ve.destroyedEdges.has(ei) ? 0 : ve.edgeEnergies[ei]), 0) / VE_VERTEX_EDGES[i].length;
+              const dx = n.x - center.x, dy = n.y - center.y;
+              const d = Math.hypot(dx, dy) || 1;
+              const fs = VE_SPRING_K / 3 * spokeE * (d - center.spokeRest[i]);
+              const fr = VE_REP_STR / (d * d + 80);
+              const f = fs - fr;
+              center.fx += (dx / d) * f; center.fy += (dy / d) * f;
+              n.fx -= (dx / d) * f; n.fy -= (dy / d) * f;
+            }
           }
           // Node-pair repulsion — all nodes during infection; only free nodes pre-infection
           for (let i = 0; i < 12; i++) {
