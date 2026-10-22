@@ -979,13 +979,81 @@
       const CA_MAX_LIVE = 9000;
       const ca = { gw: 0, gh: 0, cur: null, nxt: null, owner: null, live: 0,
                    x0: 0, y0: 0, x1: -1, y1: -1, acc: 0, veMs: 0, veGoneMs: 0,
-                   T: 0, fx: 0, fy: 0, Rf: 60 };
+                   T: 0, fx: 0, fy: 0, Rf: 60, scorch: null, scars: [], embers: [] };
 
       // The VE's hold on cell i, 0..1: time factor × radial falloff.
       function caField(i) {
         const dx = (i % ca.gw + 0.5) * CA_CELL - ca.fx;
         const dy = (((i / ca.gw) | 0) + 0.5) * CA_CELL - ca.fy;
         return ca.T * Math.exp(-0.5 * (dx * dx + dy * dy) / (ca.Rf * ca.Rf));
+      }
+
+      // Volta and the crystal. Volta's arcs reach held particles as readily as
+      // free ones. A third of the way into an arc's life the particle is torn
+      // out of its cell and flung along the arc. The tear leaves a wound: a
+      // fracture front spreads from the empty cell over a few generations,
+      // stretched along the pull, killing cells with a feathered chance that
+      // falls off toward its edge and shaking a few other particles loose.
+      // Killed cells leave a brief, faint warm ember; the wound stays closed to
+      // births for a moment, then Life may grow back into it.
+      const CA_SCAR_SCORCH_MS = 700;
+      const CA_EMBER_MS = 420;
+
+      function caTear(p, toward, now) {
+        const i = caCellOf(p.x + p.vs * 0.5, p.y + p.vs * 0.5);
+        if (i >= 0 && ca.owner[i] === p) {
+          ca.owner[i] = null;
+          if (ca.cur[i]) { ca.cur[i] = 0; ca.live--; }
+          ca.scorch[i] = now + CA_SCAR_SCORCH_MS;
+          ca.embers.push(i, now);
+        }
+        p.bound = false;
+        p.tn = 0;
+        p.caCool = now + CA_RECAPTURE_MS * 1.6;
+        let ux = toward.x - p.x, uy = toward.y - p.y;
+        const ul = Math.hypot(ux, uy) || 1;
+        ux /= ul; uy /= ul;
+        const kick = rand(1.2, 2.2);
+        p.vx = ux * kick + rand(-0.3, 0.3);
+        p.vy = uy * kick + rand(-0.3, 0.3);
+        if (i >= 0) {
+          ca.scars.push({ gx: i % ca.gw, gy: (i / ca.gw) | 0, ux, uy, born: now,
+                          r: rand(2.2, 4.4), speed: rand(0.008, 0.014), done: 0 });
+        }
+      }
+
+      // Advance each wound's fracture front; cells in the newly reached band die
+      // with a feathered chance. The front runs faster along the pull than across it.
+      function caScars(now) {
+        const { gw, cur, owner, scorch } = ca;
+        for (let k = ca.scars.length - 1; k >= 0; k--) {
+          const sc = ca.scars[k];
+          const front = Math.min(sc.r, (now - sc.born) * sc.speed);
+          const R = Math.ceil(sc.r * 1.5);
+          for (let oy = -R; oy <= R; oy++) for (let ox = -R; ox <= R; ox++) {
+            const gx = sc.gx + ox, gy = sc.gy + oy;
+            if (gx < 1 || gy < 1 || gx > ca.gw - 2 || gy > ca.gh - 2) continue;
+            const along = ox * sc.ux + oy * sc.uy, across = -ox * sc.uy + oy * sc.ux;
+            const d = Math.hypot(along * 0.68, across);
+            if (d <= sc.done || d > front) continue;
+            const i = gy * gw + gx;
+            scorch[i] = Math.max(scorch[i], now + CA_SCAR_SCORCH_MS * (1 - d / sc.r));
+            if (!cur[i]) continue;
+            const feather = Math.pow(1 - d / (sc.r + 0.6), 1.4) * 0.9;
+            if (Math.random() >= feather) continue;
+            const q = owner[i];
+            if (q) {
+              if (Math.random() >= 0.45) continue; // most held dust rides it out
+              owner[i] = null;
+              caRelease(q, now);
+              q.vx += sc.ux * 0.5; q.vy += sc.uy * 0.5;
+            }
+            cur[i] = 0; ca.live--;
+            ca.embers.push(i, now);
+          }
+          sc.done = front;
+          if (front >= sc.r) ca.scars.splice(k, 1);
+        }
       }
 
       // Chance per generation of decaying, for a half-life that runs from
@@ -1002,6 +1070,8 @@
         ca.cur = new Uint8Array(n);
         ca.nxt = new Uint8Array(n);
         ca.owner = new Array(n).fill(null);
+        ca.scorch = new Float32Array(n); // no births here until this time (an open wound)
+        ca.scars.length = 0; ca.embers.length = 0;
         ca.live = 0; ca.x0 = ca.y0 = 0; ca.x1 = ca.y1 = -1; ca.acc = 0; ca.T = 0;
       }
 
@@ -1059,7 +1129,8 @@
       }
 
       function caStep(veOn, now) {
-        const { gw, cur, nxt, owner } = ca;
+        if (ca.scars.length) caScars(now);
+        const { gw, cur, nxt, owner, scorch } = ca;
         const x0 = Math.max(1, ca.x0 - 1), x1 = Math.min(ca.gw - 2, ca.x1 + 1);
         const y0 = Math.max(1, ca.y0 - 1), y1 = Math.min(ca.gh - 2, ca.y1 + 1);
         const births = veOn && ca.live < CA_MAX_LIVE;
@@ -1069,7 +1140,7 @@
             const n = cur[i - gw - 1] + cur[i - gw] + cur[i - gw + 1] + cur[i - 1] + cur[i + 1]
                     + cur[i + gw - 1] + cur[i + gw] + cur[i + gw + 1];
             nxt[i] = cur[i] ? (n === 2 || n === 3 ? 1 : 0)
-                   : (births && n === 3 && Math.random() < 2.5 * caField(i) ? 1 : 0);
+                   : (births && n === 3 && scorch[i] < now && Math.random() < 2.5 * caField(i) ? 1 : 0);
           }
         }
         // Captured particles ride the pattern.
@@ -1168,7 +1239,7 @@
           if (ratePerSec > 0 && Math.random() < 1 - Math.exp(-ratePerSec * dt / 1000)) caNucleate(ve.x, ve.y, R, now);
         }
 
-        if (!ca.live) { ca.acc = 0; return; }
+        if (!ca.live) { ca.acc = 0; ca.scars.length = 0; return; }
         ca.acc += dt;
         let steps = 0;
         while (ca.acc >= CA_STEP_MS && steps < 3) {
@@ -1182,6 +1253,7 @@
       }
 
       function drawCA() {
+        if (ca.embers.length) drawEmbers(performance.now());
         if (!ca.live) return;
         const { gw, cur, owner } = ca;
         const dust = new Path2D(), glow = new Path2D(), light = new Path2D();
@@ -1206,6 +1278,25 @@
         pctx.globalAlpha = 0.95;
         pctx.fillStyle = '#fbf3e4';
         pctx.fill(dust);
+        pctx.restore();
+      }
+
+      // The faint warm afterglow of cells killed by Volta's tearing.
+      function drawEmbers(now) {
+        const e = ca.embers;
+        let w = 0;
+        const s = CA_CELL - 0.6;
+        pctx.save();
+        pctx.fillStyle = '#ffcf9a';
+        for (let k = 0; k < e.length; k += 2) {
+          const age = (now - e[k + 1]) / CA_EMBER_MS;
+          if (age >= 1) continue;
+          e[w++] = e[k]; e[w++] = e[k + 1];
+          const i = e[k];
+          pctx.globalAlpha = 0.34 * (1 - age) * (1 - age);
+          pctx.fillRect((i % ca.gw) * CA_CELL + 0.3, ((i / ca.gw) | 0) * CA_CELL + 0.3, s, s);
+        }
+        e.length = w;
         pctx.restore();
       }
 
@@ -3090,9 +3181,16 @@
           }
         }
 
+        // An arc that has held a crystal particle for a third of its life tears it out.
+        for (const arc of volta.arcs) {
+          if (arc.veNode || now - arc.born < arc.maxAge * 0.33) continue;
+          if (arc.a.bound) caTear(arc.a, arc.b, now);
+          if (arc.b.bound) caTear(arc.b, arc.a, now);
+        }
+
         // Magnetic pull: particle arcs draw their two nodes together; force scales with strength
         for (const arc of volta.arcs) {
-          if (!arc.freeNode && !arc.veNode) {
+          if (!arc.freeNode && !arc.veNode && !arc.crystal) {
             const dx = arc.b.x - arc.a.x, dy = arc.b.y - arc.a.y;
             const d  = Math.hypot(dx, dy) || 1;
             const f  = (arc.strength || 0.6) * 0.00055 * dt;
@@ -3137,6 +3235,18 @@
                 if (d > 5 && d < ve.scaleCurrent * 1.9 && !volta.arcs.some(arc => arc.a === a && arc.b === b))
                   volta.arcs.push({ a, b, born: now, maxAge: rand(60, 200), veNode: true });
               }
+              // Now and then a node reaches into the crystal around it for a held
+              // particle (which the arc then tears out; see caTear).
+              if (ca.live && Math.random() < dt * 0.0026) {
+                const a = internalNodes[Math.floor(Math.random() * internalNodes.length)];
+                let best = null, bestD = VOLTA_ARC_DIST * 0.7;
+                for (const q of particles) {
+                  if (!q.bound) continue;
+                  const d = Math.hypot(q.x - a.x, q.y - a.y) * rand(0.8, 1.25);
+                  if (d < bestD) { bestD = d; best = q; }
+                }
+                if (best) volta.arcs.push({ a, b: best, born: now, maxAge: rand(110, 240), strength: 0.8, crystal: true });
+              }
             }
           }
           return; // never fall through to traversal arc code
@@ -3155,7 +3265,7 @@
         // Harvest nearby particles and orbs — orbs are especially attractive because they fight back.
         const nearby = [];
         for (const p of particles) {
-          if (p.r >= 0.05 && !p.bound) {
+          if (p.r >= 0.05) { // held (crystal) particles too: see caTear
             const dpx = p.x - volta.cx, dpy = p.y - volta.cy;
             const distFromVolta = Math.hypot(dpx, dpy) || 1;
             if (distFromVolta < VOLTA_SEARCH_R) {
