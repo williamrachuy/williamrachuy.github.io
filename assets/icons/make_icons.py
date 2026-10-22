@@ -233,19 +233,27 @@ def blog():
 def snes_buttons():
     # X top (blue), A right (red), B bottom (yellow), Y left (green): domed
     # buttons on a pale grey base, lit from the upper left like the brick studs.
-    R, d = 1.85, 3.0
+    R, d = 1.85, 2.95
     buttons = [(0, -d, '#3b5fd6'), (d, 0, '#d8262c'), (0, d, '#f2c414'), (-d, 0, '#2f9e48')]
     defs = ('<radialGradient id="base" cx="0.42" cy="0.38" r="0.7"><stop offset="0" stop-color="#e9e6ee"/>'
             '<stop offset="0.7" stop-color="#c9c4d2"/><stop offset="1" stop-color="#9d97a8"/></radialGradient>')
     body = [f'<circle cx="0.25" cy="0.35" r="{f(d + R + 1.0)}" fill="#4a4652"/>',
             f'<circle cx="0" cy="0" r="{f(d + R + 1.0)}" fill="url(#base)"/>',
             f'<circle cx="0" cy="0" r="{f(d + R + 1.0)}" fill="none" stroke="#ffffff" stroke-opacity="0.5" stroke-width="0.18"/>']
+    # Buttons, not marbles: a short side wall below (the button stands up from
+    # the base), a flat, barely domed top face with gentle shading, and a thin
+    # rim highlight on the lit side instead of a glossy spot.
+    wall = 0.42
     for i, (x, y, c) in enumerate(buttons):
-        defs += (f'<radialGradient id="b{i}" cx="0.36" cy="0.32" r="0.75"><stop offset="0" stop-color="{shade(c, 0.55)}"/>'
-                 f'<stop offset="0.45" stop-color="{c}"/><stop offset="1" stop-color="{shade(c, -0.45)}"/></radialGradient>')
-        body += [f'<circle cx="{f(x + 0.22)}" cy="{f(y + 0.32)}" r="{f(R)}" fill="#2a2630" opacity="0.55"/>',  # well / shadow
-                 f'<circle cx="{f(x)}" cy="{f(y)}" r="{f(R)}" fill="url(#b{i})"/>',
-                 f'<ellipse cx="{f(x - 0.7)}" cy="{f(y - 0.8)}" rx="0.75" ry="0.5" fill="#ffffff" opacity="0.55" transform="rotate(-30 {f(x - 0.7)} {f(y - 0.8)})"/>']
+        defs += (f'<linearGradient id="t{i}" x1="0.15" y1="0.1" x2="0.85" y2="0.95"><stop offset="0" stop-color="{shade(c, 0.22)}"/>'
+                 f'<stop offset="0.6" stop-color="{c}"/><stop offset="1" stop-color="{shade(c, -0.12)}"/></linearGradient>')
+        body += [f'<circle cx="{f(x + 0.18)}" cy="{f(y + wall + 0.28)}" r="{f(R + 0.12)}" fill="#2a2630" opacity="0.45"/>',   # contact shadow
+                 f'<circle cx="{f(x)}" cy="{f(y + wall)}" r="{f(R)}" fill="{shade(c, -0.42)}"/>',                         # side wall
+                 f'<rect x="{f(x - R)}" y="{f(y)}" width="{f(2 * R)}" height="{f(wall)}" fill="{shade(c, -0.42)}"/>',
+                 f'<circle cx="{f(x)}" cy="{f(y)}" r="{f(R)}" fill="url(#t{i})"/>',                                          # top face
+                 f'<path d="M{f(x - R * 0.82)},{f(y + R * 0.2)} A{f(R * 0.86)},{f(R * 0.86)} 0 0 1 {f(x + R * 0.35)},{f(y - R * 0.8)}" '
+                 f'fill="none" stroke="#ffffff" stroke-opacity="0.45" stroke-width="0.22" stroke-linecap="round"/>',          # rim highlight
+                 f'<circle cx="{f(x)}" cy="{f(y)}" r="{f(R)}" fill="none" stroke="{shade(c, -0.3)}" stroke-opacity="0.6" stroke-width="0.12"/>']
     e = d + R + 1.5
     return svg('Super Famicom buttons', -e, -e, 2 * e, 2 * e, '\n'.join(body), defs)
 

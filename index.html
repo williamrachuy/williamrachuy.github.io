@@ -919,6 +919,7 @@
       const coreBuckets  = Array.from({ length: (HEAT_STEPS + 1) * ALPHA_STEPS }, () => []);
       const bloomBuckets = Array.from({ length: (HEAT_STEPS + 1) * ALPHA_STEPS }, () => []);
       const usedCore = [], usedBloom = [];
+      const HALO_RINGS_2D = [[2.4, 0.022], [1.6, 0.026], [0.95, 0.034], [0.35, 0.45]]; // [diameter × blur, alpha]
 
       function pushBucket(buckets, used, heatIdx, a, x, y, s) {
         if (a < 0.004) return;
@@ -1288,16 +1289,37 @@
         const buf = L.buf;
         // clear what was drawn last frame, then write the live area
         for (let y = L.py0; y <= L.py1; y++) buf.fill(0, y * gw + L.px0, y * gw + L.px1 + 1);
-        const dust = new Path2D();
-        const ds = CA_CELL * 0.9;
+        // The grid is drawn as tissue rather than pixels: every live cell is a
+        // round cell body, side-by-side cells are joined by a narrower bridge
+        // and diagonal ones by a small pinch, so clusters read as rounded
+        // living shapes with necks between cells. Held dust sits on top as warm
+        // round cells; close up, each cell also shows a pale nucleus.
+        const C = CA_CELL, r = C * 0.56, b = C * 0.4, pinch = C * 0.32;
+        const tissue = new Path2D(), dust = new Path2D();
+        const nuclei = drawCamZ > 2 ? new Path2D() : null;
+        const TAU = Math.PI * 2;
         for (let y = ca.y0; y <= ca.y1; y++) {
           let i = y * gw + ca.x0;
           for (let x = ca.x0; x <= ca.x1; x++, i++) {
             if (!cur[i]) continue;
+            const cx = (x + 0.5) * C, cy = (y + 0.5) * C;
+            if (viewCull && (cx < viewCull.x0 || cx > viewCull.x1 || cy < viewCull.y0 || cy > viewCull.y1)) {
+              buf[i] = owner[i] ? CA_DUST_RGBA : CA_LIGHT_RGBA;
+              continue;
+            }
+            tissue.moveTo(cx + r, cy); tissue.arc(cx, cy, r, 0, TAU);
+            const right = cur[i + 1], down = cur[i + gw];
+            if (right) tissue.rect(cx, cy - b, C, b * 2);
+            if (down) tissue.rect(cx - b, cy, b * 2, C);
+            if (cur[i + gw + 1] && !right && !down) { tissue.moveTo(cx + C * 0.5 + pinch, cy + C * 0.5); tissue.arc(cx + C * 0.5, cy + C * 0.5, pinch, 0, TAU); }
+            if (cur[i + gw - 1] && !cur[i - 1] && !down) { tissue.moveTo(cx - C * 0.5 + pinch, cy + C * 0.5); tissue.arc(cx - C * 0.5, cy + C * 0.5, pinch, 0, TAU); }
             if (owner[i]) {
-              dust.rect(x * CA_CELL + CA_CELL * 0.05, y * CA_CELL + CA_CELL * 0.05, ds, ds);
+              dust.moveTo(cx + r * 0.95, cy); dust.arc(cx, cy, r * 0.95, 0, TAU);
               buf[i] = CA_DUST_RGBA;
-            } else buf[i] = CA_LIGHT_RGBA;
+            } else {
+              buf[i] = CA_LIGHT_RGBA;
+              if (nuclei) { nuclei.moveTo(cx + r * 0.36, cy - r * 0.12); nuclei.arc(cx - r * 0.12, cy - r * 0.12, r * 0.36, 0, TAU); }
+            }
           }
         }
         const x0 = Math.min(L.px1 >= 0 ? L.px0 : ca.x0, ca.x0), y0 = Math.min(L.px1 >= 0 ? L.py0 : ca.y0, ca.y0);
@@ -1323,10 +1345,14 @@
           pctx.globalCompositeOperation = 'source-over';
           pctx.globalAlpha = 1;
         }
-        pctx.imageSmoothingEnabled = false;
-        const w = ca.x1 - ca.x0 + 1, h = ca.y1 - ca.y0 + 1;
-        pctx.drawImage(L.canvas, ca.x0, ca.y0, w, h, ca.x0 * CA_CELL, ca.y0 * CA_CELL, w * CA_CELL, h * CA_CELL);
-        pctx.imageSmoothingEnabled = true;
+        pctx.globalAlpha = 0.7;
+        pctx.fillStyle = '#9fe2ff';
+        pctx.fill(tissue);
+        if (nuclei) {
+          pctx.globalAlpha = 0.45;
+          pctx.fillStyle = '#e6f8ff';
+          pctx.fill(nuclei);
+        }
         pctx.globalAlpha = 0.95;
         pctx.fillStyle = '#fbf3e4';
         pctx.fill(dust);
@@ -1525,9 +1551,11 @@
           } else if (blur > 0.6 && haloBudget) {
             const k = headAlpha * clamp(1.9 * p.vs / (blur + 1.5), 0.10, 0.85);
             const cx = p.x + p.vs * 0.5, cy = p.y + p.vs * 0.5;
-            const d1 = p.vs + blur * 0.35, d2 = p.vs + blur * 2.4;
-            pushBucket(bloomBuckets, usedBloom, hi, k * 0.07, cx - d2 * 0.5, cy - d2 * 0.5, d2);
-            pushBucket(bloomBuckets, usedBloom, hi, k * 0.5, cx - d1 * 0.5, cy - d1 * 0.5, d1);
+            // stepped rings: a faint tail in three shallow steps, then the core
+            for (const [ds, da] of HALO_RINGS_2D) {
+              const d = p.vs + blur * ds;
+              pushBucket(bloomBuckets, usedBloom, hi, k * da, cx - d * 0.5, cy - d * 0.5, d);
+            }
           }
           if (gpu) PGL.core(p.x + p.vs * 0.5, p.y + p.vs * 0.5, p.vs, HEAT_RGB[hi], headAlpha);
           else pushBucket(coreBuckets, usedCore, hi, headAlpha, p.x, p.y, p.vs);
