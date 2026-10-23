@@ -567,3 +567,14 @@ html.fast .card { transition-duration: .34s; }
 /* ---- the table talk, in the menu ---- */
 .menu-sub { font-family: var(--f-head); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin: 18px 0 8px; }
 #menu .log { max-height: 30dvh; }
+
+/* ---- whose turn: a pool of light over that player's court, and a line of light along their edge of the table.
+   It turns around the table's centre from court to court (transform only) and dims while gems form between turns. ---- */
+.turn-light { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; pointer-events: none;
+  transition: transform .9s cubic-bezier(.45, .05, .25, 1), opacity .5s; will-change: transform; }
+.turn-light.on { opacity: 1; }
+.turn-light.on.dim { opacity: .4; }
+.turn-light .pool { position: absolute; left: calc(var(--u) * -40); top: calc(var(--u) * 6); width: calc(var(--u) * 80); height: calc(var(--u) * 48); border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 228, 170, .30), rgba(255, 228, 170, .13) 55%, transparent); }
+.turn-light .edge { position: absolute; left: calc(var(--u) * -36); top: calc(var(--u) * 48.6); width: calc(var(--u) * 72); height: calc(var(--u) * 1.1); border-radius: 999px;
+  background: linear-gradient(90deg, transparent, rgba(255, 240, 200, 1) 30%, rgba(255, 240, 200, 1) 70%, transparent); box-shadow: 0 0 calc(var(--u) * 3) rgba(242, 201, 110, .9); }

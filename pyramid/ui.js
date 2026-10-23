@@ -581,6 +581,7 @@
     renderTop(s);
     renderViz(s);
     renderHint(s);
+    renderTurnLight(s);
   }
 
   // ---------------------------------------------------------------------
@@ -823,8 +824,11 @@
     const t = T();
     logPhase(events);
     if (!events.some((e) => e.type === 'spawn' || e.type === 'flush')) return;
+    const light = $('turn-light');
+    light.classList.add('dim');
     await wait(260 * t);
     await Promise.all(gemJobs(events, after, 0, 150 * t));
+    light.classList.remove('dim');
   }
 
   function logPhase(events) {
@@ -862,6 +866,7 @@
 
     const turn = turnEvents.find((e) => e.type === 'turn');
     if (turn) {
+      renderTurnLight(after);
       sweep();
       if (after.players[turn.seat].human) Sound.play('turn');
     }
@@ -878,6 +883,21 @@
       await wait(700 * t);
       showResults(after);
     }
+  }
+
+  // The turn light turns around the table to the player whose turn it is,
+  // always the way play goes (S, E, N, W: counter-clockwise on screen).
+  const LIGHT_ANGLE = { S: 0, E: -90, N: -180, W: -270 };
+  function renderTurnLight(s) {
+    const el = $('turn-light');
+    if (!el) return;
+    const on = s.phase === 'play';
+    el.classList.toggle('on', on);
+    if (!on) return;
+    const cur = app.lightAngle || 0;
+    const d = ((LIGHT_ANGLE[s.current] - cur) % 360 + 360) % 360;
+    app.lightAngle = cur + (d === 0 ? 0 : d - 360);
+    el.style.transform = 'rotate(' + app.lightAngle + 'deg)';
   }
 
   function sweep() {
