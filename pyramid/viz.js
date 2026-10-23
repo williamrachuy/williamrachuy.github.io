@@ -289,7 +289,7 @@
     }
     function move(e) {
       if (!drag) return;
-      cam.yaw = drag.yaw + (e.clientX - drag.x) * 0.01;
+      cam.yaw = drag.yaw - (e.clientX - drag.x) * 0.01;
       cam.tPitch = cam.pitch = Math.max(0.05, Math.min(1.5, drag.pitch + (e.clientY - drag.y) * 0.008));
       kick();
     }
