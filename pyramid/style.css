@@ -87,8 +87,8 @@ html.fx-off .glass { background: var(--glass-solid); -webkit-backdrop-filter: no
   background: linear-gradient(180deg, rgba(7,10,18,.92), rgba(7,10,18,.6) 65%, rgba(7,10,18,0));
 }
 .topbar > * { pointer-events: auto; }
-.back { font-family: var(--f-head); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; padding: 8px 6px; text-shadow: var(--emboss); }
-.back:hover { color: var(--gold); }
+.home-link { font-family: var(--f-head); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); text-decoration: none; padding: 8px 6px; text-shadow: var(--emboss); }
+.home-link:hover { color: var(--gold); }
 .topbar-mid { font-family: var(--f-head); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-2); text-shadow: var(--emboss); text-align: center; flex: 1; }
 .topbar-mid b { color: var(--ink); font-weight: 600; }
 .topbar-right { display: flex; gap: 8px; }
@@ -476,3 +476,94 @@ html.fx-off .glass { background: var(--glass-solid); -webkit-backdrop-filter: no
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
 }
 html.fast .card { transition-duration: .34s; }
+
+/* =====================================================================
+   One screen, no scrolling: the table with its tray, and the pyramid.
+   Portrait (a phone): stacked, the pyramid takes what the table leaves.
+   Landscape: side by side.
+   ===================================================================== */
+#screen-game { padding: 46px 6px 6px; min-height: 0; height: 100dvh; overflow: hidden; }
+.layout {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  height: 100%; max-width: none; margin: 0;
+}
+.stage-wrap { width: 100%; flex: none; display: flex; justify-content: center; }
+.stage { aspect-ratio: 100 / 118; width: min(100%, calc((100dvh - 52px - 170px) * 100 / 118)); max-width: none; }
+.tray { top: calc(var(--u) * 101.5); height: calc(var(--u) * 16); }
+.pyr-panel {
+  flex: 1; min-height: 0; width: 100%; max-width: 640px;
+  display: flex; flex-direction: column; border-radius: 18px; padding: 4px 10px 8px;
+}
+.pyr-canvas-wrap { flex: 1; min-height: 0; aspect-ratio: auto; margin: 0; cursor: grab; touch-action: none; }
+.pyr-foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; }
+.pyr-foot .pyr-bar { flex: 1; margin: 0; }
+.pyr-count { font-size: 12px; }
+@media (orientation: landscape) {
+  #screen-game { padding: 52px 14px 10px; }
+  .layout { flex-direction: row; justify-content: center; align-items: stretch; gap: 14px; }
+  .stage-wrap { width: auto; flex: none; align-items: flex-start; }
+  .stage { width: calc((100dvh - 64px) * 100 / 118); max-width: calc(100vw - 340px); }
+  .pyr-panel { flex: none; width: min(380px, 34vw); max-width: none; align-self: flex-start; }
+  .pyr-canvas-wrap { flex: none; aspect-ratio: 1; }
+}
+.topbar { padding: max(6px, env(safe-area-inset-top)) 10px 6px; }
+.topbar .icon-btn { width: 34px; height: 34px; border-radius: 10px; font-size: 14px; }
+.topbar-mid { font-size: 11px; letter-spacing: .12em; }
+.home-link { padding: 6px 4px; white-space: nowrap; }
+
+/* ---- player badges in the table corners ---- */
+.badge {
+  position: absolute; left: 0; top: 0; z-index: 5;
+  width: calc(var(--u) * 18); height: calc(var(--u) * 18); padding: 0;
+  display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; align-items: center; justify-items: center;
+  border-radius: calc(var(--u) * 3);
+  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.07), rgba(255,255,255,.015));
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.14);
+  font-size: calc(var(--u) * 3.2);
+  transition: border-color .4s, box-shadow .4s;
+}
+.badge.is-turn { border-color: color-mix(in srgb, var(--c) 70%, transparent); box-shadow: inset 0 1px 0 rgba(255,255,255,.25), 0 0 calc(var(--u) * 3) color-mix(in srgb, var(--c) 45%, transparent); }
+.badge-suit { color: var(--c); font-size: 1.25em; line-height: 1; text-shadow: 0 0 8px color-mix(in srgb, var(--c) 40%, transparent); }
+.badge .purse { font-size: 1em; gap: calc(var(--u) * .6); }
+.badge .purse-n { font-size: 1.05em; min-width: 0; }
+.badge-hand { display: flex; align-items: center; justify-content: center; min-height: calc(var(--u) * 4); }
+.badge-hand i {
+  width: calc(var(--u) * 2.6); height: calc(var(--u) * 3.7); border-radius: calc(var(--u) * .5); margin-left: calc(var(--u) * -1);
+  background: repeating-linear-gradient(45deg, rgba(242,201,110,.16) 0 1px, transparent 1px 3px), linear-gradient(180deg, #232b3d, #161c2a);
+  border: 1px solid rgba(242,201,110,.4); box-shadow: 0 1px 3px rgba(0,0,0,.5);
+}
+.badge-hand i:first-child { margin-left: 0; }
+.badge .free { color: var(--ink-3); opacity: .25; font-size: 1.1em; transition: opacity .3s, color .3s, text-shadow .3s; }
+.badge .free.on { color: var(--gold-hi); opacity: 1; text-shadow: 0 0 10px rgba(242,201,110,.9); }
+.badge .dots { width: 1.4em; height: .4em; }
+.badge.thinking .dots { background: radial-gradient(circle, var(--c) 40%, transparent 45%) 0 50% / .45em .4em repeat-x; animation: think 1s steps(3) infinite; }
+@keyframes think { 0% { clip-path: inset(0 66% 0 0); } 33% { clip-path: inset(0 33% 0 0); } 66%, 100% { clip-path: inset(0 0 0 0); } }
+
+/* ---- the deck: tap to draw; it breathes when you can ---- */
+.deck {
+  position: absolute; left: 0; top: 0; z-index: 4; border: 0; padding: 0; background: none; cursor: default;
+  width: calc(var(--u) * 9); height: calc(var(--u) * 12.6); margin: calc(var(--u) * -6.3) 0 0 calc(var(--u) * -4.5);
+  border-radius: calc(var(--u) * 1.2);
+}
+.deck .card { position: absolute; left: 0; top: 0; transition: none; }
+.deck .card:first-child { transform: translate(calc(var(--u) * -.5), calc(var(--u) * -.5)); }
+.deck .deck-n { position: absolute; right: calc(var(--u) * -1.2); bottom: calc(var(--u) * -1.2); z-index: 3; min-width: calc(var(--u) * 4.4); padding: 0 calc(var(--u) * .6); height: calc(var(--u) * 4.4); border-radius: 999px; display: flex; align-items: center; justify-content: center; font-family: var(--f-head); font-size: calc(var(--u) * 2.2); color: var(--ink-2); background: #121726; border: 1px solid rgba(255,255,255,.18); }
+.deck.can-draw { cursor: pointer; animation: deckGlow 2.2s ease-in-out infinite; }
+.deck.can-draw:hover .card .card-body { border-color: rgba(242,201,110,.8); }
+.deck.empty .card { opacity: .15; }
+@keyframes deckGlow { 0%, 100% { box-shadow: 0 0 calc(var(--u) * .8) rgba(242,201,110,.15); } 50% { box-shadow: 0 0 calc(var(--u) * 3.2) rgba(242,201,110,.65); } }
+
+.end-btn {
+  position: absolute; left: 0; top: 0; z-index: 5;
+  width: calc(var(--u) * 34); height: calc(var(--u) * 9); min-height: 0; margin-top: calc(var(--u) * -4.5);
+  padding: 0 8px; font-size: max(11px, calc(var(--u) * 2.6)); border-radius: calc(var(--u) * 2.2); white-space: nowrap;
+}
+
+/* ---- gem flights inside the table layer ---- */
+.layer .gem.fly { position: absolute; left: 0; top: 0; z-index: 9; pointer-events: none; }
+.layer .gem-burst { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; }
+
+/* ---- the table talk, in the menu ---- */
+.menu-sub { font-family: var(--f-head); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-3); margin: 18px 0 8px; }
+#menu .log { max-height: 30dvh; }

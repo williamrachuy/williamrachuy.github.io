@@ -11,13 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 
 <header class="topbar">
-  <a href="/" class="back">&larr; home</a>
+  <a href="/" class="home-link">&larr; home</a>
   <div class="topbar-mid" id="topbar-mid"></div>
   <div class="topbar-right">
     <button class="icon-btn glass" id="btn-rules" aria-label="How to play" title="How to play (?)">?</button>
@@ -30,7 +30,6 @@
 <section class="screen" id="screen-title">
   <div class="title-viz glass-well"><canvas id="title-canvas" aria-hidden="true"></canvas></div>
   <h1 class="wordmark">PYRAMID</h1>
-  <p class="tagline">Four courts. Ten lanes. Pair them all and the pyramid closes; the one who closes it takes the capstone.</p>
   <div class="setup glass">
     <div class="setup-row">
       <span class="setup-label">Opponents</span>
@@ -44,7 +43,6 @@
       <span class="setup-label">Pace</span>
       <div class="seg" id="seg-pace" role="radiogroup" aria-label="AI pace"></div>
     </div>
-    <div class="houses-preview" id="houses-preview"></div>
     <div class="setup-actions">
       <button class="btn btn-gold" id="btn-begin">Take your seat</button>
       <button class="btn btn-quiet" id="btn-rules-title">How to play</button>
@@ -62,34 +60,16 @@
         </div>
         <div class="tray glass" id="tray"></div>
         <div class="layer" id="layer"></div>
-        <div class="tip glass" id="tip" role="tooltip" hidden></div>
       </div>
     </div>
-    <div class="panel glass houses">
-      <div class="panel-head"><span class="panel-title">The Houses</span></div>
-      <div class="houses-list" id="houses-list"></div>
-    </div>
-    <aside class="rail">
-      <div class="panel glass pyr-panel">
-        <div class="panel-head">
-          <span class="panel-title">The Pyramid</span>
-          <span class="pyr-count" id="pyr-count">0 / 10</span>
-        </div>
-        <div class="pyr-canvas-wrap"><canvas id="pyr-canvas" aria-label="The live pyramid"></canvas></div>
+    <div class="pyr-panel glass">
+      <div class="pyr-canvas-wrap"><canvas id="pyr-canvas" aria-label="The live pyramid"></canvas></div>
+      <div class="pyr-foot">
         <div class="pyr-bar"><i id="pyr-bar-fill"></i></div>
-        <div class="pyr-foot">
-          <span class="pyr-note" id="pyr-note">An unfolded net.</span>
-          <button class="chip" id="btn-view" title="Switch between 3D and the plan view">Plan</button>
-        </div>
+        <span class="pyr-count" id="pyr-count">0/10</span>
+        <button class="chip" id="btn-view" title="3D or plan view" aria-label="Switch between 3D and the plan view">Plan</button>
       </div>
-      <div class="panel glass hint-panel">
-        <div class="hint" id="hint"></div>
-      </div>
-      <div class="panel glass log-panel">
-        <div class="panel-head"><span class="panel-title">Table talk</span></div>
-        <ol class="log" id="log" aria-live="polite"></ol>
-      </div>
-    </aside>
+    </div>
   </div>
 </section>
 
@@ -141,11 +121,11 @@
         <h3>Your turn</h3>
         <p>Every action costs one gem. Each turn begins with <b>one free action</b>.</p>
         <ul>
-          <li><b>Swap two of your subjects</b> (click one, then another). No lane needed.</li>
+          <li><b>Swap two of your subjects</b>: tap one, then the other. No lane needed.</li>
           <li><b>Swap two of your royals</b> to change who controls your lanes.</li>
-          <li><b>Swap across a lane you control</b>: click one card, then its partner across the lane (or click the lane's gem node).</li>
+          <li><b>Swap across a lane you control</b>: tap one card, then its partner across the lane.</li>
           <li><b>Swap across someone else's lane</b> by paying its controller: your gem goes to them.</li>
-          <li><b>Draw</b> a card (hand of up to 3), then <b>play</b> it onto one of your subjects. The replaced card goes to the bottom of the deck.</li>
+          <li><b>Draw</b>: tap the deck when it glows (hand of up to 3), then <b>play</b> a hand card by tapping it and then one of your subjects. The replaced card goes to the bottom of the deck.</li>
           <li><b>End your turn</b> when you're done.</li>
         </ul>
       </section>
@@ -175,16 +155,18 @@
       <button class="btn btn-quiet" id="btn-new">New game</button>
       <a class="btn btn-quiet" href="/">Leave the table</a>
     </div>
+    <h3 class="menu-sub">Table talk</h3>
+    <ol class="log" id="log" aria-live="polite"></ol>
   </div>
 </div>
 
 <div class="fx" id="fx" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="engine.js?v=6"></script>
-<script src="ai.js?v=6"></script>
-<script src="viz.js?v=6"></script>
-<script src="audio.js?v=6"></script>
-<script src="ui.js?v=6"></script>
+<script src="engine.js?v=7"></script>
+<script src="ai.js?v=7"></script>
+<script src="viz.js?v=7"></script>
+<script src="audio.js?v=7"></script>
+<script src="ui.js?v=7"></script>
 </body>
 </html>
