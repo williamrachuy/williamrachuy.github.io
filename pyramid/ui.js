@@ -31,7 +31,6 @@
   const CORNER_GAP = 0.9;           // half the gap between the two heads
   const CORNER_OUT = 8.2;           // the corner gem node sits this far outside them, on the diagonal
   const ROYALS = 41;                // royal rows
-  const COURT_NODE = 27;            // each court's gem node, between its subjects and royals
   const RIDGE = 9;                  // ridge gem nodes, between neighbouring centre cards
 
   function rv(x, y, deg) {
@@ -61,11 +60,13 @@
       const off = rv(-sx * k / Math.SQRT2, k / Math.SQRT2, ROT[seat]);
       SLOT[seat].subjects[pos] = { x: node[0] + off[0], y: node[1] + off[1], rot: ROT[seat] + lean };
     });
-    COURT_AT[seat] = seatPt(seat, 0, COURT_NODE);
   });
+  // Each court's gem node sits on the line through its two base-corner gem
+  // nodes: the midpoint of its face's base edge.
+  const CO = CORNER + CORNER_OUT / Math.SQRT2;
+  SEATS.forEach((seat) => { COURT_AT[seat] = seatPt(seat, 0, CO); });
   // Each corner is one court's R end and the next court's L end; its gem
   // node sits just outside the pair, on the diagonal.
-  const CO = CORNER + CORNER_OUT / Math.SQRT2;
   NODE_AT.cSE = seatPt('S', CO, CO);
   NODE_AT.cEN = seatPt('E', CO, CO);
   NODE_AT.cNW = seatPt('N', CO, CO);
@@ -74,8 +75,9 @@
   NODE_AT.rEN = seatPt('E', RIDGE, RIDGE);
   NODE_AT.rNW = seatPt('N', RIDGE, RIDGE);
   NODE_AT.rWS = seatPt('W', RIDGE, RIDGE);
-  // The apex: one gem node at the centre. The two peaks are pivots only,
-  // drawn as a cross beneath it (these points just anchor their tooltips).
+  // The apex: one gem node at the centre. The two peaks are pivots only and
+  // have no node: swap across one by clicking its two centre cards (these
+  // points just anchor their tooltips).
   const APEX = [50, 50];
   NODE_AT.apex = APEX;
   NODE_AT.pSN = [50, 46];
@@ -253,13 +255,14 @@
     built = true;
     const layer = $('layer');
 
-    // Lane nodes. The peaks are arms of a cross under the apex.
+    // Gem nodes for the base corners and ridges (the peaks have none).
     E.LANES.forEach((l) => {
+      if (l.kind === 'peak') return;
       const b = document.createElement('button');
-      b.className = l.kind === 'peak' ? 'arm ' + (l.id === 'pSN' ? 'arm-v' : 'arm-h') : 'node';
+      b.className = 'node';
       b.type = 'button';
       b.dataset.lane = l.id;
-      b.innerHTML = '<span class="ring"></span><span class="kind"></span>';
+      b.innerHTML = '<span class="ring"></span>';
       b.setAttribute('aria-label', LANE_NAME[l.id]);
       b.addEventListener('click', (e) => { e.stopPropagation(); onLane(l.id); });
       b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showLaneTip(l.id); });
@@ -274,7 +277,7 @@
     const ax = document.createElement('button');
     ax.className = 'node apex-node';
     ax.type = 'button';
-    ax.innerHTML = '<span class="ring"></span><span class="kind"></span>';
+    ax.innerHTML = '<span class="ring"></span>';
     ax.setAttribute('aria-label', 'The apex');
     ax.addEventListener('click', (e) => { e.stopPropagation(); showApexTip(); });
     ax.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showApexTip(); });
@@ -289,7 +292,7 @@
       b.className = 'node court-node';
       b.type = 'button';
       b.style.setProperty('--c', SEAT_COLOR[seat]);
-      b.innerHTML = '<span class="ring"></span><span class="kind">' + SUIT_GLYPH[E.SUIT_OF[seat]] + '</span>';
+      b.innerHTML = '<span class="ring"></span>';
       b.setAttribute('aria-label', SEAT_WORD[seat] + '’s court');
       b.addEventListener('click', (e) => { e.stopPropagation(); showCourtTip(seat); });
       b.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') showCourtTip(seat); });
@@ -373,7 +376,7 @@
     const u = stage.clientWidth / 100;
     app.u = u;
     stage.style.setProperty('--u', u + 'px');
-    E.LANES.forEach((l) => placeAt(app.nodes[l.id], l.kind === 'peak' ? APEX : NODE_AT[l.id]));
+    Object.keys(app.nodes).forEach((id) => placeAt(app.nodes[id], NODE_AT[id]));
     placeAt(app.apexNode, APEX);
     SEATS.forEach((seat) => placeAt(app.courtNodes[seat], COURT_AT[seat]));
     placeAt(app.badge, BADGE_AT);
@@ -500,21 +503,35 @@
     return s && s.phase === 'play' && s.players[s.current].human && !app.busy;
   }
 
+  // The lane joining two subjects, if there is one.
+  function laneBetween(a, b) {
+    return E.LANES.find((l) =>
+      (l.a.seat === a.seat && l.a.pos === a.pos && l.b.seat === b.seat && l.b.pos === b.pos) ||
+      (l.b.seat === a.seat && l.b.pos === a.pos && l.a.seat === b.seat && l.a.pos === b.pos)) || null;
+  }
+
   function updateCardStates() {
     const mine = myTurn();
-    const sel = app.sel;
+    const sel = app.sel && app.place.get(app.sel.id);
     app.place.forEach((p, id) => {
       const el = app.cards.get(id);
       if (!el) return;
       const own = p.seat === 'S';
-      el.classList.toggle('is-clickable', mine && own);
-      el.classList.toggle('is-selected', !!sel && sel.id === id);
+      // Any subject can start a swap across a lane; royals and the hand are yours only.
+      el.classList.toggle('is-clickable', mine && (own || p.zone === 'subject'));
+      el.classList.toggle('is-selected', !!sel && app.sel.id === id);
       let target = false;
-      if (mine && sel && sel.id !== id && own) {
-        if (sel.zone === 'subject' && p.zone === 'subject') target = true;
-        if (sel.zone === 'royal' && p.zone === 'royal') target = true;
-        if (sel.zone === 'hand' && p.zone === 'subject') target = true;
-        if (sel.zone === 'subject' && p.zone === 'hand') target = true;
+      if (mine && sel && app.sel.id !== id) {
+        if (own && sel.seat === 'S') {
+          if (sel.zone === 'subject' && p.zone === 'subject') target = true;
+          if (sel.zone === 'royal' && p.zone === 'royal') target = true;
+          if (sel.zone === 'hand' && p.zone === 'subject') target = true;
+          if (sel.zone === 'subject' && p.zone === 'hand') target = true;
+        }
+        if (sel.zone === 'subject' && p.zone === 'subject') {
+          const l = laneBetween(sel, p);
+          if (l && E.laneAccess(app.state, l.id, 'S').ok) target = true;
+        }
       }
       el.classList.toggle('is-target', target);
     });
@@ -548,9 +565,9 @@
     const mine = myTurn();
     E.LANES.forEach((l) => {
       const n = app.nodes[l.id];
+      if (!n) return;
       const st = s.lanes[l.id];
       n.classList.toggle('paired', st.paired);
-      if (l.kind !== 'peak') n.querySelector('.kind').textContent = st.paired ? String(laneValue(s, l)) : '';
       const open = mine && E.laneAccess(s, l.id, 'S').ok;
       n.classList.toggle('is-open', open);
       n.classList.toggle('is-dim', mine && !open);
@@ -558,7 +575,6 @@
     });
     const axOn = E.apexMatched(s);
     app.apexNode.classList.toggle('paired', axOn);
-    app.apexNode.querySelector('.kind').textContent = axOn ? String(E.vertexValue(s, 'S', 'C')) : '';
     SEATS.forEach((seat) => {
       const n = app.courtNodes[seat];
       n.classList.toggle('flush', E.isFlush(s, seat));
@@ -619,7 +635,8 @@
   function renderTop(s) {
     const r = s.rules.maxRounds ? 'Round <b>' + s.round + '</b> / ' + s.rules.maxRounds : 'Round <b>' + s.round + '</b>';
     let t;
-    if (s.phase !== 'play') t = 'Game over';
+    if (s.phase === 'deal') t = 'The deal';
+    else if (s.phase !== 'play') t = 'Game over';
     else if (s.players[s.current].human) t = '<b>Your turn</b>';
     else t = '<b style="color:' + SEAT_COLOR[s.current] + '">' + who(s.current) + '</b>';
     $('topbar-mid').innerHTML = r + ' · ' + t;
@@ -639,7 +656,9 @@
 
   function renderHint(s) {
     let h;
-    if (s.phase !== 'play') {
+    if (s.phase === 'deal') {
+      h = 'The cards are dealt. Before the first turn, gems form on any pairs already on the table.';
+    } else if (s.phase !== 'play') {
       h = 'The game is over. Open the menu to deal again.';
     } else if (!s.players[s.current].human) {
       h = whoB(s.current) + ' is playing.';
@@ -647,15 +666,16 @@
       h = 'Your move plays out\u2026';
     } else if (app.tollArm) {
       const acc = E.laneAccess(s, app.tollArm, 'S');
-      h = 'Click the ' + LANE_NAME[app.tollArm] + ' again to pay ' + whoB(acc.controller) + ' one gem and make the swap.';
+      h = 'Click again to pay ' + whoB(acc.controller) + ' one gem and swap across the ' + LANE_NAME[app.tollArm] + '.';
     } else if (app.sel) {
       const p = app.place.get(app.sel.id);
-      if (p.zone === 'subject') h = 'Swap ' + cardHTML(p.card) + ' with another of your subjects, or play a card from your hand onto it.';
+      if (p.zone === 'subject' && p.seat !== 'S') h = 'Now click the card across a lane from ' + cardHTML(p.card) + ' to swap them (lit cards are ones you can reach).';
+      else if (p.zone === 'subject') h = 'Swap ' + cardHTML(p.card) + ' with another of your subjects, with the card across a lane from it, or play a card from your hand onto it.';
       else if (p.zone === 'royal') h = 'Swap ' + cardHTML(p.card) + ' with another of your royals. Royals decide who controls your lanes.';
       else h = 'Play ' + cardHTML(p.card) + ' onto one of your subjects. The card it replaces goes to the bottom of the deck.';
     } else {
       const cost = s.free > 0 ? 'Your <b>free action</b> is ready.' : 'Each action now costs <b>1 gem</b> (you have ' + s.players.S.gems + ').';
-      h = cost + ' Swap two of your subjects or royals, or click a lit lane to swap across it. Close the pyramid for <b>+' + (s.rules.capstone || 0) + '</b>.';
+      h = cost + ' Swap two of your subjects or royals, or click a card and then its partner across a lane (or a lit gem node). Close the pyramid for <b>+' + (s.rules.capstone || 0) + '</b>.';
     }
     $('hint').innerHTML = h;
   }
@@ -716,7 +736,7 @@
       const sc = s.courts[end.seat];
       [sc.subjects[end.pos].id, sc.royals[end.pos].id].forEach((cid) => { const el = app.cards.get(cid); if (el) el.classList.add('is-lit'); });
     });
-    app.nodes[id].classList.add('is-hot');
+    if (app.nodes[id]) app.nodes[id].classList.add('is-hot');
   }
 
   function showApexTip() {
@@ -729,7 +749,7 @@
       'When all four centre cards match, a gem forms here. It goes to whoever’s centre royal beats all three others: ' +
       (ctrl ? whoB(ctrl) + ' (' + cardHTML(s.courts[ctrl].royals.C) + ').' : '<b>nobody</b> right now.');
     if (s.apex.gem) html += '<br>A gem waits here.';
-    html += '<br>Swap opposite centres with the cross beneath it.';
+    html += '<br>To swap opposite centres, click one centre card, then the one across from it.';
     placeTip(APEX, html);
     SEATS.forEach((seat) => { const el = app.cards.get(s.courts[seat].subjects.C.id); if (el) el.classList.add('is-lit'); });
   }
@@ -773,16 +793,23 @@
       if (app.state.phase === 'play' && !app.busy) toast(who(app.state.current) + ' is playing.');
       return;
     }
-    if (p.seat !== 'S') { toast('That card belongs to ' + who(p.seat) + '. Click a lane to swap across it.'); return; }
-    app.tollArm = null;
+    if (p.seat !== 'S' && p.zone !== 'subject') { toast('That card belongs to ' + who(p.seat) + '.'); return; }
     const sel = app.sel && app.place.get(app.sel.id);
     if (sel && app.sel.id === id) { clearSel(); return; }
     if (sel) {
-      if (sel.zone === 'subject' && p.zone === 'subject') return act({ type: 'court', a: sel.pos, b: p.pos });
-      if (sel.zone === 'royal' && p.zone === 'royal') return act({ type: 'royal', a: sel.pos, b: p.pos });
-      if (sel.zone === 'hand' && p.zone === 'subject') return act({ type: 'play', hand: sel.index, pos: p.pos });
-      if (sel.zone === 'subject' && p.zone === 'hand') return act({ type: 'play', hand: p.index, pos: sel.pos });
+      if (sel.seat === 'S' && p.seat === 'S') {
+        if (sel.zone === 'subject' && p.zone === 'subject') return act({ type: 'court', a: sel.pos, b: p.pos });
+        if (sel.zone === 'royal' && p.zone === 'royal') return act({ type: 'royal', a: sel.pos, b: p.pos });
+        if (sel.zone === 'hand' && p.zone === 'subject') return act({ type: 'play', hand: sel.index, pos: p.pos });
+        if (sel.zone === 'subject' && p.zone === 'hand') return act({ type: 'play', hand: p.index, pos: sel.pos });
+      }
+      // Two subjects across a lane (a corner, a ridge or a peak): swap them.
+      if (sel.zone === 'subject' && p.zone === 'subject') {
+        const l = laneBetween(sel, p);
+        if (l) return onLane(l.id, true);
+      }
     }
+    app.tollArm = null;
     app.sel = { id, zone: p.zone };
     Sound.play('click');
     updateCardStates();
@@ -790,19 +817,21 @@
     renderHint(app.state);
   }
 
-  function onLane(id) {
+  // A swap across a lane, from its gem node or from its two cards (keepSel:
+  // the toll confirmation is a second click on the same card).
+  function onLane(id, keepSel) {
     Sound.resume && Sound.resume();
     if (!app.state) return;
     if (!myTurn()) { if (app.state.phase === 'play' && !app.busy) toast(who(app.state.current) + ' is playing.'); return; }
     const acc = E.laneAccess(app.state, id, 'S');
-    if (!acc.ok) { showLaneTip(id); toast(acc.reason); Sound.play('error'); return; }
+    if (!acc.ok) { if (!keepSel) showLaneTip(id); toast(acc.reason); Sound.play('error'); return; }
     if (acc.toll && app.tollArm !== id) {
       app.tollArm = id;
-      app.sel = null;
+      if (!keepSel) app.sel = null;
       updateCardStates();
       renderNodes(app.state);
       renderHint(app.state);
-      toast('Click again to pay ' + who(acc.toll) + ' one gem for this swap.', true);
+      toast((keepSel ? 'Click that card again' : 'Click again') + ' to pay ' + who(acc.toll) + ' one gem for this swap.', true);
       clearTimeout(app.tollTimer);
       app.tollTimer = setTimeout(() => { if (app.tollArm === id) clearSel(); }, 5000);
       return;
@@ -914,27 +943,13 @@
     return gemFlight({ fromClient: from, toClient: [from[0], from[1] - 40], hold: 0, fade: true });
   }
 
-  async function animate(before, after, events) {
+  // Animate the gem events in `events` (formed, collected, flushed, paid),
+  // one after another from `at`, `gap` apart. Returns the jobs' promises.
+  function gemJobs(events, after, at, gap) {
     const t = T();
     const jobs = [];
-
-    events.forEach((e) => logEvent(e, before, after));
-    const moved = renderCards(after);
-    renderNodes(after);
-    renderHouses(after);
-    renderTray(after);
-    renderTop(after);
-    renderViz(after);
-    renderHint(after);
-
-    if (events.some((e) => e.type === 'swap' || e.type === 'play')) Sound.play('pivot');
-    if (events.some((e) => e.type === 'draw')) Sound.play('draw');
-
     const spawned = new Set(events.filter((e) => e.type === 'spawn').map((e) => e.lane));
-    // Gems form once the cards have landed, one after another.
-    let at = moved ? 640 * t : 160 * t;
-    const step = () => { const d = at; at += 380 * t; return d; };
-
+    const step = () => { const d = at; at += gap; return d; };
     events.forEach((e) => {
       if (e.type === 'pay' && !e.free && !e.to) jobs.push(gemSpend(e.seat));
       if (e.type === 'toll') {
@@ -964,10 +979,9 @@
           onDepart: () => node.classList.remove('is-forming'),
           onArrive: () => { setShown(e.seat, app.shown[e.seat] + 1, true); Sound.play('claim'); }
         }));
-        setTimeout(() => toast((e.seat === 'S' ? 'Your court' : who(e.seat) + '’s court') + ' is a flush: +1 gem', true), delay);
       }
       if (e.type === 'spawn' && gemAt(after, e.lane)) {
-        // A gem on a stalemated lane forms and stays.
+        // A gem on a stalemated node forms and stays.
         const delay = step();
         jobs.push(new Promise((res) => setTimeout(() => {
           const g = makeRestingGem(NODE_AT[e.lane]);
@@ -986,17 +1000,73 @@
         }
       }
     });
+    return jobs;
+  }
 
+  // The generation phase between turns: every paired node, the apex and
+  // every flush court forms its gem together; then they fly to whoever
+  // controls them (stalemated ones stay).
+  async function runPhase(after, events) {
+    const t = T();
+    logPhase(events);
+    if (!events.some((e) => e.type === 'spawn' || e.type === 'flush')) return;
+    $('table').classList.add('phase');
+    $('hint').innerHTML = 'Between turns, <b>gems form</b> on every paired node and every flush court, and go to whoever controls them.';
+    await wait(260 * t);
+    await Promise.all(gemJobs(events, after, 0, 150 * t));
+    $('table').classList.remove('phase');
+  }
+
+  function logPhase(events) {
+    const got = {}, waits = [];
+    events.forEach((e) => {
+      if (e.type === 'collect' || e.type === 'flush') got[e.seat] = (got[e.seat] || 0) + 1;
+    });
+    const spawned = events.filter((e) => e.type === 'spawn').map((e) => e.lane);
+    const collected = new Set(events.filter((e) => e.type === 'collect').map((e) => e.lane));
+    spawned.forEach((l) => { if (!collected.has(l)) waits.push(l); });
+    const parts = SEATS.filter((x) => got[x]).map((x) => whoB(x) + ' +' + got[x]);
+    if (!parts.length && !waits.length) return;
+    let line = 'Gems form: ' + (parts.length ? parts.join(' · ') : 'none collected');
+    if (waits.length) line += '. ' + waits.length + ' wait' + (waits.length > 1 ? '' : 's') + ' on ' + (waits.length > 1 ? 'stalemated nodes' : (waits[0] === 'apex' ? 'the apex' : 'the ' + LANE_NAME[waits[0]])) + '.';
+    log(line, null);
+  }
+
+  async function animate(before, after, events) {
+    const t = T();
+    // A turn's own events, then (after a pass) the generation phase.
+    const g = events.findIndex((e) => e.type === 'generate');
+    const turnEvents = g < 0 ? events : events.slice(0, g);
+    const phaseEvents = g < 0 ? [] : events.slice(g);
+
+    turnEvents.forEach((e) => logEvent(e, before, after));
+    const moved = renderCards(after);
+    renderNodes(after);
+    renderHouses(after);
+    renderTray(after);
+    renderTop(after);
+    renderViz(after);
+    if (!phaseEvents.length) renderHint(after);
+
+    if (turnEvents.some((e) => e.type === 'swap' || e.type === 'play')) Sound.play('pivot');
+    if (turnEvents.some((e) => e.type === 'draw')) Sound.play('draw');
+
+    const jobs = gemJobs(turnEvents, after, moved ? 640 * t : 160 * t, 380 * t);
     const minWait = moved ? 700 * t : 220 * t;
     await Promise.all([Promise.all(jobs), wait(minWait)]);
-    renderGems(after);
-    renderPurses(after, true);
 
-    const turn = events.find((e) => e.type === 'turn');
+    const turn = turnEvents.find((e) => e.type === 'turn');
     if (turn) {
       sweep();
       if (after.players[turn.seat].human) Sound.play('turn');
     }
+    if (phaseEvents.length) {
+      await runPhase(after, phaseEvents);
+      renderHint(after);
+    }
+    renderGems(after);
+    renderPurses(after, true);
+
     const end = events.find((e) => e.type === 'end');
     if (end) {
       render(after);
@@ -1025,7 +1095,7 @@
     } else if (action.type === 'lane') {
       const l = E.LANE_BY_ID[action.lane];
       ids.push(s.courts[l.a.seat].subjects[l.a.pos].id, s.courts[l.b.seat].subjects[l.b.pos].id);
-      app.nodes[action.lane].classList.toggle('is-hot', on);
+      if (app.nodes[action.lane]) app.nodes[action.lane].classList.toggle('is-hot', on);
     } else if (action.type === 'play') {
       ids.push(s.courts[seat].subjects[action.pos].id);
     }
@@ -1221,8 +1291,22 @@
         el.classList.toggle('down', !!p.down);
       }, 40 + ids.indexOf(id) * 45);
     });
-    log('<b>The table is dealt.</b> You play South (♠). Your free action is ready.', 'S');
-    setTimeout(sweep, 900);
+    log('<b>The table is dealt.</b> You play South (♠).', 'S');
+    // Before the first turn: the opening generation phase.
+    app.busy = true;
+    const token = app.token;
+    setTimeout(async () => {
+      if (token !== app.token) return;
+      sweep();
+      const r = E.start(app.state);
+      const before = app.state;
+      app.state = r.state;
+      await animate(before, r.state, r.events);
+      if (token !== app.token) return;
+      app.busy = false;
+      log('Your turn. Your free action is ready.', 'S');
+      render(app.state);
+    }, 40 + app.place.size * 45 + 900);
   }
 
   function showGame() {

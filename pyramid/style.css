@@ -336,41 +336,16 @@ html.fx-off .glass { background: var(--glass-solid); -webkit-backdrop-filter: no
 .node:hover .ring, .node.is-hot .ring { transform: scale(1.14); }
 .node.is-armed .ring { animation: armPulse 1s ease-in-out infinite; }
 @keyframes armPulse { 50% { box-shadow: 0 0 0 calc(var(--u) * .6) rgba(242,201,110,.5), 0 0 calc(var(--u) * 3) rgba(242,201,110,.6); } }
-.node .kind { position: relative; font-family: var(--f-head); font-weight: 600; font-size: calc(var(--u) * 2.1); color: rgba(255,255,255,.65); pointer-events: none; }
-.node.paired .kind { color: #3b2a08; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
 /* a court's gem node: smaller, marked with its suit, lit when the court is a flush */
-.node.court-node { width: calc(var(--u) * 5.4); height: calc(var(--u) * 5.4); margin: calc(var(--u) * -2.7) 0 0 calc(var(--u) * -2.7); cursor: help; }
-.node.court-node .ring { border-color: rgba(255,255,255,.18); border-style: solid; }
-.node.court-node .kind { font-family: var(--f-body); font-size: calc(var(--u) * 2.1); color: var(--c); opacity: .55; }
-.node.court-node.flush .ring { border-color: color-mix(in srgb, var(--c) 80%, white); box-shadow: 0 0 calc(var(--u) * 1.8) color-mix(in srgb, var(--c) 50%, transparent); }
-.node.court-node.flush .kind { opacity: 1; }
+.node.court-node { cursor: help; }
+.node.court-node.flush .ring { background: radial-gradient(circle at 35% 30%, #fff1c4, #f2c96e 55%, #9d6a1c); border-color: rgba(255,240,200,.85); box-shadow: 0 0 calc(var(--u) * 1.6) rgba(242,201,110,.45); }
 .node.court-node.is-forming .ring { transform: scale(1.3); border-color: #fff1c4; box-shadow: 0 0 calc(var(--u) * 3) rgba(242,201,110,.8); }
 
-/* the apex: one gem node where all four faces meet, drawn as a faceted diamond seen from above */
-.node.apex-node { width: calc(var(--u) * 6.8); height: calc(var(--u) * 6.8); margin: calc(var(--u) * -3.4) 0 0 calc(var(--u) * -3.4); cursor: help; z-index: 5; }
-.node.apex-node .ring {
-  inset: calc(var(--u) * 1.1); border-radius: 16%; transform: rotate(45deg);
-  background: conic-gradient(from 45deg, rgba(255,255,255,.16), rgba(10,14,24,.85) 25%, rgba(255,255,255,.07) 50%, rgba(10,14,24,.9) 75%, rgba(255,255,255,.16));
-}
-.node.apex-node:hover .ring { transform: rotate(45deg) scale(1.1); }
-.node.apex-node.paired .ring { background: conic-gradient(from 45deg, #fff1c4, #c58e2c 25%, #f2c96e 50%, #8f5f17 75%, #fff1c4); border-color: rgba(255,240,200,.9); }
-/* the two peaks: pivots only, a cross of rods beneath the apex */
-.arm {
-  position: absolute; left: 0; top: 0; z-index: 3; border: 0; padding: 0; cursor: pointer;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255,255,255,.10), rgba(10,14,24,.85) 50%, rgba(255,255,255,.10));
-  box-shadow: inset 0 0 0 calc(var(--u) * .3) rgba(255,255,255,.26), 0 2px 6px rgba(0,0,0,.45);
-  transition: opacity .3s, box-shadow .3s, background .4s;
-}
-.arm-v { width: calc(var(--u) * 2.6); height: calc(var(--u) * 14); margin: calc(var(--u) * -7) 0 0 calc(var(--u) * -1.3); }
-.arm-h { width: calc(var(--u) * 14); height: calc(var(--u) * 2.6); margin: calc(var(--u) * -1.3) 0 0 calc(var(--u) * -7); background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(10,14,24,.85) 50%, rgba(255,255,255,.10)); }
-.arm.paired { background: linear-gradient(90deg, #fff1c4, #d9a23e 50%, #fff1c4); box-shadow: inset 0 0 0 calc(var(--u) * .3) rgba(255,240,200,.85), 0 0 calc(var(--u) * 1.4) rgba(242,201,110,.45); }
-.arm-h.paired { background: linear-gradient(180deg, #fff1c4, #d9a23e 50%, #fff1c4); }
-.arm.is-open { box-shadow: inset 0 0 0 calc(var(--u) * .3) rgba(255,255,255,.75), 0 0 calc(var(--u) * 1.4) rgba(255,255,255,.22); }
-.arm.is-dim { opacity: .5; cursor: default; }
-.arm:hover, .arm.is-hot { box-shadow: inset 0 0 0 calc(var(--u) * .35) rgba(255,255,255,.9), 0 0 calc(var(--u) * 1.8) rgba(255,255,255,.3); }
-.arm.is-armed { animation: armPulse 1s ease-in-out infinite; }
-.arm .ring, .arm .kind { display: none; }
+/* the apex: the one gem node where all four faces meet */
+.node.apex-node { cursor: help; z-index: 5; }
+/* the generation phase: paired nodes glow as their gems form */
+#table.phase ~ .layer .node.paired .ring, #table.phase ~ .layer .node.flush .ring { animation: phaseGlow .9s ease-in-out infinite alternate; }
+@keyframes phaseGlow { to { box-shadow: 0 0 calc(var(--u) * 3.2) rgba(255,236,170,.85); } }
 
 /* ---- gems: cut stones ---- */
 .gem svg { width: 100%; height: 100%; display: block; overflow: visible; }

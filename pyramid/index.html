@@ -11,7 +11,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -143,7 +143,7 @@
         <ul>
           <li><b>Swap two of your subjects</b> (click one, then another). No lane needed.</li>
           <li><b>Swap two of your royals</b> to change who controls your lanes.</li>
-          <li><b>Swap across a lane you control</b> (click the lane).</li>
+          <li><b>Swap across a lane you control</b>: click one card, then its partner across the lane (or click the lane's gem node).</li>
           <li><b>Swap across someone else's lane</b> by paying its controller: your gem goes to them.</li>
           <li><b>Draw</b> a card (hand of up to 3), then <b>play</b> it onto one of your subjects. The replaced card goes to the bottom of the deck.</li>
           <li><b>End your turn</b> when you're done.</li>
@@ -151,7 +151,8 @@
       </section>
       <section>
         <h3>Gems</h3>
-        <p>When a base corner or a ridge becomes paired, a gem forms on it (at most once per lane per turn). When <b>all four centre cards match</b>, one gem forms at <b>the apex</b>; it goes to whoever's centre royal beats all three others, and waits until someone's does. Whoever controls that lane collects it automatically, at once. A gem on a stalemated lane waits there until someone controls it. A court that holds three of its own suit (a flush) earns its owner a gem.</p>
+        <p>Gems never form during a turn. They form in a <b>generation phase</b>: at the start of the game, and between every two turns. In each phase, every paired base corner and ridge forms a gem, and so does <b>the apex</b> when all four centre cards match, and every court holding a flush. A node holds at most one gem.</p>
+        <p>Whoever controls a node collects its gem automatically, at once (the apex goes to whoever's centre royal beats all three others). A gem on a stalemated node waits until someone controls it, even mid-turn.</p>
       </section>
       <section>
         <h3>The end</h3>
@@ -180,10 +181,10 @@
 <div class="fx" id="fx" aria-hidden="true"></div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<script src="engine.js?v=4"></script>
-<script src="ai.js?v=4"></script>
-<script src="viz.js?v=4"></script>
-<script src="audio.js?v=4"></script>
-<script src="ui.js?v=4"></script>
+<script src="engine.js?v=5"></script>
+<script src="ai.js?v=5"></script>
+<script src="viz.js?v=5"></script>
+<script src="audio.js?v=5"></script>
+<script src="ui.js?v=5"></script>
 </body>
 </html>

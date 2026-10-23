@@ -181,19 +181,52 @@
       players: players,
       lanes: {},
       flush: {},
-      phase: 'play',
+      phase: 'deal',
       winners: [],
       endReason: null
     };
     if (rules.freeGemBanks) { state.free = 0; players[SEATS[0]].gems += 1; }
-    // Pairs and flushes already on the table at the deal are recorded but do
-    // not spawn gems: gems come from pairs the players make.
     LANES.forEach(function (l) {
-      state.lanes[l.id] = { paired: lanePaired(state, l), gem: false, spawnTurn: 0 };
+      state.lanes[l.id] = { paired: lanePaired(state, l), gem: false };
     });
-    SEATS.forEach(function (seat) { state.flush[seat] = { on: isFlush(state, seat), spawnTurn: 0 }; });
-    state.apex = { on: apexMatched(state), gem: false, spawnTurn: 0 };
+    SEATS.forEach(function (seat) { state.flush[seat] = { on: isFlush(state, seat) }; });
+    state.apex = { on: apexMatched(state), gem: false };
+    // The game opens with a generation phase (see start), before South's
+    // first turn.
     return state;
+  }
+
+  // Open the dealt table: the first generation phase, then South's turn.
+  function start(state) {
+    var s = clone(state), events = [];
+    if (s.phase !== 'deal') return { state: s, events: events };
+    s.phase = 'play';
+    generate(s, events);
+    return { state: s, events: events };
+  }
+
+  // The generation phase, between turns (and before the first): every paired
+  // base corner and ridge, the apex when all four centres match, and every
+  // court holding a flush forms a gem. A node holds at most one gem. Gems go
+  // at once to whoever controls their node; on a stalemate they wait.
+  function generate(s, events) {
+    events.push({ type: 'generate', seat: s.current, round: s.round });
+    LANES.forEach(function (l) {
+      var st = s.lanes[l.id];
+      if (l.kind === 'peak' || !st.paired || st.gem) return;
+      st.gem = true;
+      events.push({ type: 'spawn', lane: l.id });
+    });
+    if (s.apex.on && !s.apex.gem) {
+      s.apex.gem = true;
+      events.push({ type: 'spawn', lane: 'apex' });
+    }
+    SEATS.forEach(function (seat) {
+      if (!s.flush[seat].on) return;
+      s.players[seat].gems += 1;
+      events.push({ type: 'flush', seat: seat });
+    });
+    collect(s, events);
   }
 
   // ---------------------------------------------------------------------
@@ -345,46 +378,19 @@
     events.push({ type: 'pay', seat: seat, free: usedFree, to: toll || null });
   }
 
-  // After the board changes: spawn gems on newly paired lanes, pay court
-  // flushes, hand sitting gems to whoever controls their lane, and check
-  // for the completed pyramid.
+  // After the board changes during a turn: record which nodes are paired
+  // (gems only form in the generation phase), hand waiting gems to whoever
+  // now controls their node, and check for the completed pyramid.
   function settle(s, events) {
     LANES.forEach(function (l) {
       var st = s.lanes[l.id];
       var now = lanePaired(s, l);
-      if (now && !st.paired) {
-        events.push({ type: 'pair', lane: l.id });
-        // One gem per lane per turn, so a pair can't be farmed by breaking
-        // and re-making it within a turn. Peaks make no gems: the apex does.
-        if (l.kind !== 'peak' && !st.gem && st.spawnTurn !== s.turn) {
-          st.gem = true;
-          st.spawnTurn = s.turn;
-          events.push({ type: 'spawn', lane: l.id });
-        }
-      } else if (!now && st.paired) {
-        events.push({ type: 'unpair', lane: l.id });
-      }
+      if (now && !st.paired) events.push({ type: 'pair', lane: l.id });
+      else if (!now && st.paired) events.push({ type: 'unpair', lane: l.id });
       st.paired = now;
     });
-
-    var ax = s.apex, axNow = apexMatched(s);
-    if (axNow && !ax.on && !ax.gem && ax.spawnTurn !== s.turn) {
-      ax.gem = true;
-      ax.spawnTurn = s.turn;
-      events.push({ type: 'spawn', lane: 'apex' });
-    }
-    ax.on = axNow;
-
-    SEATS.forEach(function (seat) {
-      var f = s.flush[seat];
-      var now = isFlush(s, seat);
-      if (now && !f.on && f.spawnTurn !== s.turn) {
-        f.spawnTurn = s.turn;
-        s.players[seat].gems += 1;
-        events.push({ type: 'flush', seat: seat });
-      }
-      f.on = now;
-    });
+    s.apex.on = apexMatched(s);
+    SEATS.forEach(function (seat) { s.flush[seat].on = isFlush(s, seat); });
 
     collect(s, events);
 
@@ -506,6 +512,7 @@
     if (s.rules.freeGemBanks) s.players[next].gems += 1;
     else s.free = 1;
     events.push({ type: 'turn', seat: next, round: s.round });
+    generate(s, events);
   }
 
   // ---------------------------------------------------------------------
@@ -584,6 +591,7 @@
     nextSeat: nextSeat,
     oppositeSeat: oppositeSeat,
     newGame: newGame,
+    start: start,
     clone: clone,
     controller: controller,
     laneAccess: laneAccess,

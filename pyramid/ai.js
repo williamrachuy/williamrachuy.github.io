@@ -53,6 +53,18 @@
     return d + (4 - aces - top);
   }
 
+  function income(s) {
+    var inc = { S: 0, E: 0, N: 0, W: 0 };
+    E.LANES.forEach(function (l) {
+      if (l.kind === 'peak' || !s.lanes[l.id].paired) return;
+      var c = E.controller(s, l);
+      if (c) inc[c] += 1;
+    });
+    if (s.apex.on) { var a = E.apexController(s); if (a) inc[a] += 1; }
+    E.SEATS.forEach(function (x) { if (s.flush[x].on) inc[x] += 1; });
+    return inc;
+  }
+
   function evaluate(s, seat, w) {
     var me = s.players[seat].gems;
     var others = E.SEATS.filter(function (x) { return x !== seat; }).map(function (x) { return s.players[x].gems; });
@@ -74,6 +86,12 @@
     var close = 8 - distance(s);
     var bias = lead > 0 ? 1 + Math.min(lead, 6) / 3 : (lead === 0 ? 0.3 : -0.35);
     v += w.build * bias * close * (1 + close / 4);
+
+    // Income: in every generation phase each paired node pays its
+    // controller, and a flush pays its owner. Count next phase's take.
+    var inc = income(s);
+    var others2 = E.SEATS.filter(function (x) { return x !== seat; }).map(function (x) { return inc[x]; });
+    v += 1.5 * (w.gem * inc[seat] - w.deny * (others2.reduce(function (a, b) { return a + b; }, 0) / 3 + Math.max.apply(null, others2)) / 2);
 
     // Lanes it controls (and stalemated gems it could reach).
     E.LANES.forEach(function (l) {
